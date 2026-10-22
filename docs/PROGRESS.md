@@ -8,8 +8,8 @@ This checklist tracks the ongoing development progress of the Habit Tracker proj
 
 | Phase | Milestone | Status | Completed Steps |
 |---|---|:---:|:---:|
-| **Phase 0** | Project Setup & Tooling | `[ ]` Not Started | 0 / 4 |
-| **Phase 1** | MVP: Core Domain, Streaks & REST API | `[ ]` Not Started | 0 / 7 |
+| **Phase 0** | Project Setup & Tooling | `[x]` Completed | 4 / 4 |
+| **Phase 1** | MVP: Core Domain, Streaks & REST API | `[x]` Completed | 7 / 7 |
 | **Phase 2** | JWT Authentication & User Isolation | `[ ]` Not Started | 0 / 5 |
 | **Phase 3** | Habit Scheduling & Frequency | `[ ]` Not Started | 0 / 4 |
 | **Phase 4** | Statistics & Analytics | `[ ]` Not Started | 0 / 4 |
@@ -22,53 +22,53 @@ This checklist tracks the ongoing development progress of the Habit Tracker proj
 ## Detailed Task Breakdown
 
 ### Phase 0: Project Setup & Tooling
-- [ ] **0.1 Virtual Environment & Dependencies**
-  - [ ] Initialize Python virtual environment.
-  - [ ] Create `requirements/base.txt`, `requirements/local.txt`, `requirements/production.txt`.
-  - [ ] Add `Django~=5.0`, `djangorestframework`, `django-environ`, `pytest`, `pytest-django`, `freezegun`.
-- [ ] **0.2 Django Project Scaffolding**
-  - [ ] Initialize Django project with `config` layout.
-  - [ ] Split settings into `config/settings/base.py` and `local.py`.
-  - [ ] Configure `django-environ` with `.env.example` (ensure `SECRET_KEY` is loaded from environment).
-- [ ] **0.3 Pytest Configuration**
-  - [ ] Create `pytest.ini` with `DJANGO_SETTINGS_MODULE = config.settings.local`.
-  - [ ] Add basic smoke test to confirm test runner is operating.
-- [ ] **0.4 Documentation Verification**
-  - [ ] Validate `docs/PLAN.md` and initial git commit.
+- [x] **0.1 Virtual Environment & Dependencies**
+  - [x] Initialize Python virtual environment.
+  - [x] Create `requirements/base.txt`, `requirements/local.txt`, `requirements/production.txt`.
+  - [x] Add `Django~=5.0`, `djangorestframework`, `django-environ`, `drf-spectacular`, `pytest`, `pytest-django`, `freezegun`.
+- [x] **0.2 Django Project Scaffolding**
+  - [x] Initialize Django project with `config` layout.
+  - [x] Split settings into `config/settings/base.py` and `local.py`.
+  - [x] Configure `django-environ` with `.env.example` (ensure `SECRET_KEY` is loaded from environment).
+- [x] **0.3 Pytest Configuration**
+  - [x] Create `pytest.ini` with `DJANGO_SETTINGS_MODULE = config.settings.local`.
+  - [x] Add basic smoke test to confirm test runner is operating.
+- [x] **0.4 Documentation Verification**
+  - [x] Validate `docs/PLAN.md` and initial git commit.
 
 ---
 
 ### Phase 1: MVP — Core Domain, Streaks & REST API (TDD)
-- [ ] **1.1 Core Models & Migrations (TDD)**
-  - [ ] **Test**: Write model unit tests (`test_models.py`) verifying `Habit` fields, `HabitCheckIn` fields, and `UniqueConstraint(habit, date)`.
-  - [ ] **Impl**: Implement `Habit` and `HabitCheckIn` models in `apps/habits/models.py`.
-  - [ ] Generate and apply initial database migrations.
-  - [ ] Verify test suite passes.
-- [ ] **1.2 Streak Calculation Service (TDD)**
-  - [ ] **Test**: Write algorithmic unit tests (`test_services.py`) covering edge cases:
+- [x] **1.1 Core Models & Migrations (TDD)**
+  - [x] **Test**: Write model unit tests (`test_models.py`) verifying `Habit` fields, `HabitCheckIn` fields, and `UniqueConstraint(habit, date)`.
+  - [x] **Impl**: Implement `Habit` and `HabitCheckIn` models in `apps/habits/models.py`.
+  - [x] Generate and apply initial database migrations.
+  - [x] Verify test suite passes.
+- [x] **1.2 Streak Calculation Service (TDD)**
+  - [x] **Test**: Write algorithmic unit tests (`test_services.py`) covering edge cases:
     - Empty check-in history.
     - Checked today vs checked yesterday (unbroken streak).
     - Lapsed streak (missed yesterday).
     - Consecutive multi-day streaks.
     - Longest historical streak calculation with gaps.
-  - [ ] **Impl**: Implement pure calculation function in `apps/habits/services/streaks.py`.
-  - [ ] Verify 100% test coverage on streak logic.
-- [ ] **1.3 Serializers & Input Validation (TDD)**
-  - [ ] **Test**: Test rejection of future check-in dates.
-  - [ ] **Test**: Test serialization of habit data including computed `current_streak` and `longest_streak`.
-  - [ ] **Impl**: Implement `HabitListSerializer`, `HabitDetailSerializer`, `HabitWriteSerializer`, and `CheckInSerializer`.
-- [ ] **1.4 Habits CRUD API Endpoints (TDD)**
-  - [ ] **Test**: API integration tests (`test_views.py`) for `GET /api/v1/habits/`, `POST`, `GET /id/`, `PUT`, `PATCH`, `DELETE`.
-  - [ ] **Impl**: Implement `HabitViewSet` with DRF `DefaultRouter`.
-- [ ] **1.5 Check-In & Undo Endpoints (TDD)**
-  - [ ] **Test**: Test `POST /api/v1/habits/{id}/check/` (success, duplicate idempotency, future date rejection).
-  - [ ] **Test**: Test `POST /api/v1/habits/{id}/uncheck/` (undo existing check-in, 404/400 for non-existent check-in).
-  - [ ] **Impl**: Implement `@action(detail=True, methods=['post'])` endpoints in `HabitViewSet`.
-- [ ] **1.6 Archive / Unarchive Actions (TDD)**
-  - [ ] **Test**: Test soft-archiving habits and filtering active habits by default.
-  - [ ] **Impl**: Add `archive` and `unarchive` actions to `HabitViewSet`.
-- [ ] **1.7 Django Admin Registration**
-  - [ ] Register `Habit` and `HabitCheckIn` in `apps/habits/admin.py` with custom list displays, filters, and search fields.
+  - [x] **Impl**: Implement pure calculation function in `apps/habits/services/streaks.py`.
+  - [x] Verify 100% test coverage on streak logic.
+- [x] **1.3 Serializers & Input Validation (TDD)**
+  - [x] **Test**: Test rejection of future check-in dates.
+  - [x] **Test**: Test serialization of habit data including computed `current_streak` and `longest_streak`.
+  - [x] **Impl**: Implement `HabitSerializer`, `HabitCheckInSerializer`, and `CheckInActionSerializer`.
+- [x] **1.4 Habits CRUD API Endpoints (TDD)**
+  - [x] **Test**: API integration tests (`test_views.py`) for `GET /api/v1/habits/`, `POST`, `GET /id/`, `PUT`, `PATCH`, `DELETE`.
+  - [x] **Impl**: Implement `HabitViewSet` with DRF `DefaultRouter`.
+- [x] **1.5 Check-In & Undo Endpoints (TDD)**
+  - [x] **Test**: Test `POST /api/v1/habits/{id}/check/` (success, duplicate idempotency, future date rejection).
+  - [x] **Test**: Test `POST /api/v1/habits/{id}/uncheck/` (undo existing check-in, 404/400 for non-existent check-in).
+  - [x] **Impl**: Implement `@action(detail=True, methods=['post'])` endpoints in `HabitViewSet`.
+- [x] **1.6 Archive / Unarchive Actions (TDD)**
+  - [x] **Test**: Test soft-archiving habits and filtering active habits by default.
+  - [x] **Impl**: Add `archive` and `unarchive` actions to `HabitViewSet`.
+- [x] **1.7 Django Admin Registration**
+  - [x] Register `Habit` and `HabitCheckIn` in `apps/habits/admin.py` with custom list displays, filters, and search fields.
 
 ---
 
