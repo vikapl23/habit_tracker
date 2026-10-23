@@ -10,7 +10,7 @@ This checklist tracks the ongoing development progress of the Habit Tracker proj
 |---|---|:---:|:---:|
 | **Phase 0** | Project Setup & Tooling | `[x]` Completed | 4 / 4 |
 | **Phase 1** | MVP: Core Domain, Streaks & REST API | `[x]` Completed | 7 / 7 |
-| **Phase 2** | JWT Authentication & User Isolation | `[ ]` In Progress | 4 / 5 |
+| **Phase 2** | JWT Authentication & User Isolation | `[x]` Completed | 5 / 5 |
 | **Phase 3** | Habit Scheduling & Frequency | `[ ]` Not Started | 0 / 4 |
 | **Phase 4** | Statistics & Analytics | `[ ]` Not Started | 0 / 4 |
 | **Phase 5** | Mobile-First React Frontend (Vite) | `[ ]` Not Started | 0 / 6 |
@@ -89,8 +89,8 @@ This checklist tracks the ongoing development progress of the Habit Tracker proj
   - [x] **Test**: Ensure User A cannot view, edit, check, or delete User B's habits (`404` or `403`).
   - [x] **Impl**: Restrict `get_queryset()` in `HabitViewSet` to `user=self.request.user`.
   - [x] Automatically assign `user` from request context in serializer `create()`.
-- [ ] **2.5 Update Test Suite with Authenticated APIClient**
-  - [ ] Provide pytest fixtures for registered/authenticated user and client.
+- [x] **2.5 Update Test Suite with Authenticated APIClient**
+  - [x] Provide pytest fixtures for registered/authenticated user and client.
 
 ---
 
