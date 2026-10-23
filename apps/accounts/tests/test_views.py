@@ -31,6 +31,7 @@ class TestAuthEndpoints:
     token_url = "/api/v1/auth/token/"
     refresh_url = "/api/v1/auth/token/refresh/"
     logout_url = "/api/v1/auth/logout/"
+    profile_url = "/api/v1/auth/profile/"
 
     # Registration Tests
     def test_register_success(self, api_client):
@@ -341,6 +342,53 @@ class TestAuthEndpoints:
         # 6th request should be throttled
         res = api_client.post(self.logout_url, {"refresh": tokens[5]})
         assert res.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+
+    # Timezone & Profile Tests
+    def test_register_with_custom_timezone_success(self, api_client):
+        data = {
+            "email": "nyuser@example.com",
+            "password": "StrongPassword123!",
+            "timezone": "America/New_York",
+        }
+        res = api_client.post(self.register_url, data)
+        assert res.status_code == status.HTTP_201_CREATED
+        user = User.objects.get(email="nyuser@example.com")
+        assert user.timezone == "America/New_York"
+
+    def test_register_with_invalid_timezone_fails(self, api_client):
+        data = {
+            "email": "invalidtz@example.com",
+            "password": "StrongPassword123!",
+            "timezone": "Not/A_Real_Timezone",
+        }
+        res = api_client.post(self.register_url, data)
+        assert res.status_code == status.HTTP_400_BAD_REQUEST
+        assert "timezone" in res.data
+
+    def test_profile_endpoint_requires_authentication(self, api_client):
+        res = api_client.get(self.profile_url)
+        assert res.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_profile_endpoint_retrieve_profile(self, api_client, existing_user):
+        api_client.force_authenticate(user=existing_user)
+        res = api_client.get(self.profile_url)
+        assert res.status_code == status.HTTP_200_OK
+        assert res.data["email"] == existing_user.email
+        assert res.data["timezone"] == "Europe/Kyiv"
+
+    def test_profile_endpoint_update_timezone_success(self, api_client, existing_user):
+        api_client.force_authenticate(user=existing_user)
+        res = api_client.patch(self.profile_url, {"timezone": "Asia/Tokyo"})
+        assert res.status_code == status.HTTP_200_OK
+        assert res.data["timezone"] == "Asia/Tokyo"
+        existing_user.refresh_from_db()
+        assert existing_user.timezone == "Asia/Tokyo"
+
+    def test_profile_endpoint_update_invalid_timezone_fails(self, api_client, existing_user):
+        api_client.force_authenticate(user=existing_user)
+        res = api_client.patch(self.profile_url, {"timezone": "Invalid/Timezone"})
+        assert res.status_code == status.HTTP_400_BAD_REQUEST
+        assert "timezone" in res.data
 
 
 @pytest.mark.django_db

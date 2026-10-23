@@ -1,5 +1,14 @@
+import zoneinfo
+
 from django.contrib.auth.models import AbstractUser, BaseUserManager
+from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils import timezone
+
+
+def validate_iana_timezone(value):
+    if not value or value not in zoneinfo.available_timezones():
+        raise ValidationError(f"'{value}' is not a valid IANA time zone.")
 
 
 class UserManager(BaseUserManager):
@@ -49,16 +58,30 @@ class User(AbstractUser):
 
     username = None
     email = models.EmailField("email address", unique=True)
+    timezone = models.CharField(
+        max_length=64,
+        default="Europe/Kyiv",
+        validators=[validate_iana_timezone],
+    )
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = []
 
     objects = UserManager()
 
+    def get_today(self):
+        try:
+            tz = zoneinfo.ZoneInfo(self.timezone)
+        except Exception:
+            tz = zoneinfo.ZoneInfo("Europe/Kyiv")
+        return timezone.now().astimezone(tz).date()
+
     def clean(self):
         super().clean()
         if self.email:
             self.email = self.email.lower()
+        if self.timezone and self.timezone not in zoneinfo.available_timezones():
+            raise ValidationError({"timezone": f"'{self.timezone}' is not a valid IANA time zone."})
 
     def save(self, *args, **kwargs):
         if self.email:

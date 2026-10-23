@@ -93,6 +93,13 @@ def calculate_habit_streaks(
     Convenience helper calculating streaks directly for a Habit model instance.
     Uses prefetched check_ins if available, otherwise queries values_list('date', flat=True).
     """
+    if reference_date is None:
+        user = getattr(habit, "user", None)
+        if user and hasattr(user, "get_today"):
+            reference_date = user.get_today()
+        else:
+            reference_date = timezone.localdate()
+
     if (
         hasattr(habit, "_prefetched_objects_cache")
         and "check_ins" in habit._prefetched_objects_cache

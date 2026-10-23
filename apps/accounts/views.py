@@ -7,7 +7,7 @@ from rest_framework_simplejwt.views import (
     TokenObtainPairView as SimpleJWTTokenObtainPairView,
 )
 
-from .serializers import RegisterSerializer
+from .serializers import RegisterSerializer, UserProfileSerializer
 from .throttling import AuthRateThrottle
 
 
@@ -24,6 +24,14 @@ class RegisterView(generics.CreateAPIView):
             {"detail": "User registered successfully."},
             status=status.HTTP_201_CREATED,
         )
+
+
+class UserProfileView(generics.RetrieveUpdateAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = UserProfileSerializer
+
+    def get_object(self):
+        return self.request.user
 
 
 class TokenObtainPairView(SimpleJWTTokenObtainPairView):

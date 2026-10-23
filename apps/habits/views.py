@@ -1,6 +1,6 @@
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema
-from rest_framework import permissions, status, viewsets
+from rest_framework import permissions, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
@@ -19,6 +19,15 @@ from .services.streaks import calculate_habit_streaks
 class HabitViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = HabitSerializer
+
+    def initial(self, request, *args, **kwargs):
+        super().initial(request, *args, **kwargs)
+        if "date" in request.query_params:
+            date_param = request.query_params.get("date")
+            try:
+                serializers.DateField().to_internal_value(date_param)
+            except serializers.ValidationError as exc:
+                raise serializers.ValidationError({"date": exc.detail}) from exc
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
@@ -39,7 +48,7 @@ class HabitViewSet(viewsets.ModelViewSet):
         if not user or not user.is_authenticated:
             return Habit.objects.none()
 
-        qs = Habit.objects.filter(user=user).prefetch_related("check_ins")
+        qs = Habit.objects.filter(user=user).select_related("user").prefetch_related("check_ins")
         if getattr(self, "detail", False) or self.action != "list":
             return qs
 
@@ -79,9 +88,14 @@ class HabitViewSet(viewsets.ModelViewSet):
                 {"detail": "Cannot check in on an archived habit."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        serializer = CheckInActionSerializer(data=request.data)
+        serializer = CheckInActionSerializer(
+            data=request.data,
+            context={**self.get_serializer_context(), "habit": habit},
+        )
         serializer.is_valid(raise_exception=True)
-        target_date = serializer.validated_data.get("date") or timezone.localdate()
+        user = request.user if request.user and request.user.is_authenticated else habit.user
+        today = user.get_today() if (user and hasattr(user, "get_today")) else timezone.localdate()
+        target_date = serializer.validated_data.get("date") or today
 
         _, created = HabitCheckIn.objects.get_or_create(habit=habit, date=target_date)
         if hasattr(habit, "_prefetched_objects_cache"):
@@ -100,9 +114,14 @@ class HabitViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"])
     def uncheck(self, request, pk=None):
         habit = self.get_object()
-        serializer = CheckInActionSerializer(data=request.data)
+        serializer = CheckInActionSerializer(
+            data=request.data,
+            context={**self.get_serializer_context(), "habit": habit},
+        )
         serializer.is_valid(raise_exception=True)
-        target_date = serializer.validated_data.get("date") or timezone.localdate()
+        user = request.user if request.user and request.user.is_authenticated else habit.user
+        today = user.get_today() if (user and hasattr(user, "get_today")) else timezone.localdate()
+        target_date = serializer.validated_data.get("date") or today
 
         checkin = HabitCheckIn.objects.filter(habit=habit, date=target_date).first()
         if not checkin:

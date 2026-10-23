@@ -14,8 +14,23 @@ class HabitCheckInSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "created_at"]
 
     def validate_date(self, value):
-        if value is not None and value > timezone.localdate():
-            raise serializers.ValidationError("Check-ins cannot be recorded for future dates.")
+        if value is not None:
+            user = None
+            request = self.context.get("request")
+            if request and getattr(request, "user", None) and request.user.is_authenticated:
+                user = request.user
+            elif (
+                self.instance
+                and getattr(self.instance, "habit", None)
+                and getattr(self.instance.habit, "user", None)
+            ):
+                user = self.instance.habit.user
+
+            max_date = (
+                user.get_today() if (user and hasattr(user, "get_today")) else timezone.localdate()
+            )
+            if value > max_date:
+                raise serializers.ValidationError("Check-ins cannot be recorded for future dates.")
         return value
 
 
@@ -54,17 +69,26 @@ class HabitSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
 
-    def _get_target_date(self) -> date:
+    def _get_target_date(self, obj=None) -> date:
         request = self.context.get("request")
         if request and "date" in request.query_params:
             try:
-                return date.fromisoformat(request.query_params["date"])
-            except (ValueError, TypeError):
+                return serializers.DateField().to_internal_value(request.query_params["date"])
+            except serializers.ValidationError:
                 pass
+        if (
+            request
+            and getattr(request, "user", None)
+            and request.user.is_authenticated
+            and hasattr(request.user, "get_today")
+        ):
+            return request.user.get_today()
+        if obj and getattr(obj, "user", None) and hasattr(obj.user, "get_today"):
+            return obj.user.get_today()
         return timezone.localdate()
 
     def get_is_checked_today(self, obj) -> bool:
-        target_date = self._get_target_date()
+        target_date = self._get_target_date(obj)
         if (
             hasattr(obj, "_prefetched_objects_cache")
             and "check_ins" in obj._prefetched_objects_cache
@@ -88,8 +112,23 @@ class CheckInActionSerializer(serializers.Serializer):
     date = serializers.DateField(required=False, default=None)
 
     def validate_date(self, value):
-        if value is not None and value > timezone.localdate():
-            raise serializers.ValidationError("Check-ins cannot be recorded for future dates.")
+        if value is not None:
+            user = None
+            request = self.context.get("request")
+            if request and getattr(request, "user", None) and request.user.is_authenticated:
+                user = request.user
+            elif (
+                self.instance
+                and getattr(self.instance, "habit", None)
+                and getattr(self.instance.habit, "user", None)
+            ):
+                user = self.instance.habit.user
+
+            max_date = (
+                user.get_today() if (user and hasattr(user, "get_today")) else timezone.localdate()
+            )
+            if value > max_date:
+                raise serializers.ValidationError("Check-ins cannot be recorded for future dates.")
         return value
 
 

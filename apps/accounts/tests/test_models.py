@@ -70,3 +70,15 @@ class TestCustomUserModel:
             User.objects.create_superuser(
                 email="admin@example.com", password="adminpassword123", is_superuser=False
             )
+
+    def test_user_timezone_default_is_kyiv(self):
+        user = User.objects.create_user(email="tz@example.com", password="password123")
+        assert user.timezone == "Europe/Kyiv"
+        assert hasattr(user, "get_today")
+
+    def test_user_invalid_timezone_raises_validation_error(self):
+        from django.core.exceptions import ValidationError
+
+        user = User(email="invalidtz@example.com", timezone="Invalid/Timezone")
+        with pytest.raises(ValidationError):
+            user.full_clean()

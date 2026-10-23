@@ -43,7 +43,14 @@ class HabitCheckIn(models.Model):
 
     def clean(self):
         super().clean()
-        if self.date and self.date > timezone.localdate():
+        max_date = timezone.localdate()
+        if (
+            hasattr(self, "habit")
+            and getattr(self.habit, "user", None)
+            and hasattr(self.habit.user, "get_today")
+        ):
+            max_date = self.habit.user.get_today()
+        if self.date and self.date > max_date:
             raise ValidationError({"date": "Check-ins cannot be recorded for future dates."})
 
     def save(self, *args, **kwargs):
