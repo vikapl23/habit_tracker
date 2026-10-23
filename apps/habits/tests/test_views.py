@@ -112,6 +112,16 @@ def test_archive_and_unarchive_habit(api_client, habit):
     assert habit.is_archived is False
 
 
+@pytest.mark.django_db
+@freeze_time("2026-10-23")
+def test_check_in_on_archived_habit_returns_400(api_client):
+    archived_habit = Habit.objects.create(name="Archived Habit", is_archived=True)
+    res = api_client.post(f"/api/v1/habits/{archived_habit.id}/check/", {})
+    assert res.status_code == status.HTTP_400_BAD_REQUEST
+    assert "detail" in res.data
+    assert res.data["detail"] == "Cannot check in on an archived habit."
+
+
 # ---------------------------------------------------------------------------
 # MVP Step 2: CheckIn API Tests (Mark done, Undo, List check-ins, Rules)
 # ---------------------------------------------------------------------------

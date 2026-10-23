@@ -100,9 +100,11 @@ def test_safer_archived_filtering_on_detail_views(api_client):
     assert res.data["id"] == archived_habit.id
     assert res.data["is_archived"] is True
 
-    # Check action on archived habit should succeed
+    # Check action on archived habit should fail with 400
     res = api_client.post(f"/api/v1/habits/{archived_habit.id}/check/")
-    assert res.status_code in [status.HTTP_200_OK, status.HTTP_201_CREATED]
+    assert res.status_code == status.HTTP_400_BAD_REQUEST
+    assert "detail" in res.data
+    assert res.data["detail"] == "Cannot check in on an archived habit."
 
 
 def test_custom_actions_openapi_schema(api_client):

@@ -60,6 +60,11 @@ class HabitViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def check(self, request, pk=None):
         habit = self.get_object()
+        if habit.is_archived:
+            return Response(
+                {'detail': 'Cannot check in on an archived habit.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         serializer = CheckInActionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         target_date = serializer.validated_data.get('date') or timezone.localdate()
