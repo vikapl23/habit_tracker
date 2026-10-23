@@ -2,9 +2,8 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.utils import timezone
-from .models import Habit, HabitCheckIn
+from .models import Habit, HabitCheckIn, CheckIn
 from .serializers import HabitSerializer, HabitCheckInSerializer, CheckInActionSerializer
-from .services.streaks import calculate_streaks
 
 class HabitViewSet(viewsets.ModelViewSet):
     queryset = Habit.objects.all()
@@ -12,7 +11,7 @@ class HabitViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = Habit.objects.all()
-        # In detail routes (like archive/unarchive), allow accessing archived habit
+        # In detail routes (like archive/unarchive, check/uncheck/check-ins), allow accessing habit
         if self.action in ['retrieve', 'update', 'partial_update', 'destroy', 'archive', 'unarchive', 'check', 'uncheck', 'check_ins']:
             return qs
 
@@ -44,16 +43,11 @@ class HabitViewSet(viewsets.ModelViewSet):
 
         checkin, created = HabitCheckIn.objects.get_or_create(habit=habit, date=target_date)
 
-        all_dates = set(habit.check_ins.values_list('date', flat=True))
-        current_streak, longest_streak = calculate_streaks(all_dates, reference_date=timezone.localdate())
-
         return Response(
             {
                 'status': 'checked',
                 'habit_id': habit.id,
                 'date': str(target_date),
-                'current_streak': current_streak,
-                'longest_streak': longest_streak,
             },
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
         )
@@ -74,16 +68,11 @@ class HabitViewSet(viewsets.ModelViewSet):
 
         checkin.delete()
 
-        all_dates = set(habit.check_ins.values_list('date', flat=True))
-        current_streak, longest_streak = calculate_streaks(all_dates, reference_date=timezone.localdate())
-
         return Response(
             {
                 'status': 'unchecked',
                 'habit_id': habit.id,
                 'date': str(target_date),
-                'current_streak': current_streak,
-                'longest_streak': longest_streak,
             },
             status=status.HTTP_200_OK,
         )

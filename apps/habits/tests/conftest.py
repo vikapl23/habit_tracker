@@ -1,6 +1,6 @@
 import pytest
 from rest_framework.test import APIClient
-from apps.habits.models import Habit, HabitCheckIn
+from apps.habits.models import Habit
 
 @pytest.fixture
 def api_client():

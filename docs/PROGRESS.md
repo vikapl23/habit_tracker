@@ -9,7 +9,7 @@ This checklist tracks the ongoing development progress of the Habit Tracker proj
 | Phase | Milestone | Status | Completed Steps |
 |---|---|:---:|:---:|
 | **Phase 0** | Project Setup & Tooling | `[x]` Completed | 4 / 4 |
-| **Phase 1** | MVP: Core Domain, Streaks & REST API | `[x]` Completed | 7 / 7 |
+| **Phase 1** | MVP: Core Domain, Streaks & REST API | `[/]` In Progress (MVP Step 2 done, Streaks next) | 6 / 7 |
 | **Phase 2** | JWT Authentication & User Isolation | `[ ]` Not Started | 0 / 5 |
 | **Phase 3** | Habit Scheduling & Frequency | `[ ]` Not Started | 0 / 4 |
 | **Phase 4** | Statistics & Analytics | `[ ]` Not Started | 0 / 4 |
@@ -44,26 +44,27 @@ This checklist tracks the ongoing development progress of the Habit Tracker proj
   - [x] **Impl**: Implement `Habit` and `HabitCheckIn` models in `apps/habits/models.py`.
   - [x] Generate and apply initial database migrations.
   - [x] Verify test suite passes.
-- [x] **1.2 Streak Calculation Service (TDD)**
-  - [x] **Test**: Write algorithmic unit tests (`test_services.py`) covering edge cases:
+- [ ] **1.2 Streak Calculation Service (TDD)** *(Pending - MVP Step 3)*
+  - [ ] **Test**: Write algorithmic unit tests (`test_services.py`) covering edge cases:
     - Empty check-in history.
     - Checked today vs checked yesterday (unbroken streak).
     - Lapsed streak (missed yesterday).
     - Consecutive multi-day streaks.
     - Longest historical streak calculation with gaps.
-  - [x] **Impl**: Implement pure calculation function in `apps/habits/services/streaks.py`.
-  - [x] Verify 100% test coverage on streak logic.
+  - [ ] **Impl**: Implement pure calculation function in `apps/habits/services/streaks.py`.
+  - [ ] Verify 100% test coverage on streak logic.
 - [x] **1.3 Serializers & Input Validation (TDD)**
   - [x] **Test**: Test rejection of future check-in dates.
-  - [x] **Test**: Test serialization of habit data including computed `current_streak` and `longest_streak`.
+  - [ ] **Test**: Test serialization of habit data including computed `current_streak` and `longest_streak` *(Pending - MVP Step 3)*.
   - [x] **Impl**: Implement `HabitSerializer`, `HabitCheckInSerializer`, and `CheckInActionSerializer`.
 - [x] **1.4 Habits CRUD API Endpoints (TDD)**
   - [x] **Test**: API integration tests (`test_views.py`) for `GET /api/v1/habits/`, `POST`, `GET /id/`, `PUT`, `PATCH`, `DELETE`.
   - [x] **Impl**: Implement `HabitViewSet` with DRF `DefaultRouter`.
 - [x] **1.5 Check-In & Undo Endpoints (TDD)**
-  - [x] **Test**: Test `POST /api/v1/habits/{id}/check/` (success, duplicate idempotency, future date rejection).
-  - [x] **Test**: Test `POST /api/v1/habits/{id}/uncheck/` (undo existing check-in, 404/400 for non-existent check-in).
-  - [x] **Impl**: Implement `@action(detail=True, methods=['post'])` endpoints in `HabitViewSet`.
+  - [x] **Test**: Test `POST /api/v1/habits/{id}/check/` (success, duplicate idempotency, future date rejection, 404 on missing habit).
+  - [x] **Test**: Test `POST /api/v1/habits/{id}/uncheck/` (undo existing check-in, default today, 404 for non-existent check-in / habit).
+  - [x] **Test**: Test `GET /api/v1/habits/{id}/check-ins/` (list check-ins, date range filtering `?from=&to=`, 404 on missing habit).
+  - [x] **Impl**: Implement `@action(detail=True)` endpoints (`check`, `uncheck`, `check_ins`) in `HabitViewSet`.
 - [x] **1.6 Archive / Unarchive Actions (TDD)**
   - [x] **Test**: Test soft-archiving habits and filtering active habits by default.
   - [x] **Impl**: Add `archive` and `unarchive` actions to `HabitViewSet`.

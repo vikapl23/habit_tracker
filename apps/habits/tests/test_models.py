@@ -2,7 +2,8 @@ import pytest
 from datetime import date, timedelta
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
-from apps.habits.models import Habit, HabitCheckIn
+from django.contrib import admin
+from apps.habits.models import Habit, CheckIn, HabitCheckIn
 
 @pytest.mark.django_db
 def test_create_habit():
@@ -24,9 +25,9 @@ def test_create_habit():
 
 
 @pytest.mark.django_db
-def test_create_habit_checkin(habit):
+def test_create_checkin(habit):
     checkin_date = date.today()
-    checkin = HabitCheckIn.objects.create(habit=habit, date=checkin_date)
+    checkin = CheckIn.objects.create(habit=habit, date=checkin_date)
     assert checkin.id is not None
     assert checkin.habit == habit
     assert checkin.date == checkin_date
@@ -37,22 +38,27 @@ def test_create_habit_checkin(habit):
 @pytest.mark.django_db
 def test_unique_checkin_per_date_constraint(habit):
     checkin_date = date.today()
-    HabitCheckIn.objects.create(habit=habit, date=checkin_date)
+    CheckIn.objects.create(habit=habit, date=checkin_date)
     with pytest.raises(IntegrityError):
-        HabitCheckIn.objects.create(habit=habit, date=checkin_date)
+        CheckIn.objects.create(habit=habit, date=checkin_date)
 
 
 @pytest.mark.django_db
 def test_cannot_create_future_checkin_validation(habit):
     future_date = date.today() + timedelta(days=1)
-    checkin = HabitCheckIn(habit=habit, date=future_date)
+    checkin = CheckIn(habit=habit, date=future_date)
     with pytest.raises(ValidationError):
         checkin.full_clean()
 
 
 @pytest.mark.django_db
 def test_cascade_delete_habit_deletes_checkins(habit):
-    HabitCheckIn.objects.create(habit=habit, date=date.today())
-    assert HabitCheckIn.objects.filter(habit=habit).count() == 1
+    CheckIn.objects.create(habit=habit, date=date.today())
+    assert CheckIn.objects.filter(habit=habit).count() == 1
     habit.delete()
-    assert HabitCheckIn.objects.filter(habit_id=habit.id).count() == 0
+    assert CheckIn.objects.filter(habit_id=habit.id).count() == 0
+
+
+def test_admin_registration():
+    assert Habit in admin.site._registry
+    assert HabitCheckIn in admin.site._registry

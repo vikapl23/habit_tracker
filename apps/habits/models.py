@@ -57,3 +57,7 @@ class HabitCheckIn(models.Model):
 
     def __str__(self):
         return f"{self.habit.name} - {self.date}"
+
+
+# Alias CheckIn to HabitCheckIn for clean API / import compatibility
+CheckIn = HabitCheckIn

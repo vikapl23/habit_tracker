@@ -1,7 +1,7 @@
 import pytest
 from datetime import date, timedelta
 from rest_framework import status
-from apps.habits.models import Habit, HabitCheckIn
+from apps.habits.models import Habit
 
 @pytest.mark.django_db
 def test_list_habits(api_client, habit):
@@ -12,9 +12,6 @@ def test_list_habits(api_client, habit):
     assert response.status_code == status.HTTP_200_OK
     assert len(response.data) == 1
     assert response.data[0]["id"] == habit.id
-    assert "current_streak" in response.data[0]
-    assert "longest_streak" in response.data[0]
-    assert "is_checked_today" in response.data[0]
 
     # With include_archived=true
     response = api_client.get("/api/v1/habits/?include_archived=true")
@@ -36,9 +33,6 @@ def test_create_habit(api_client):
     assert response.data["color"] == "#10B981"
     assert response.data["emoji"] == "🧘"
     assert response.data["is_archived"] is False
-    assert response.data["current_streak"] == 0
-    assert response.data["longest_streak"] == 0
-    assert response.data["is_checked_today"] is False
 
 
 @pytest.mark.django_db
@@ -100,30 +94,43 @@ def test_archive_and_unarchive_habit(api_client, habit):
     assert habit.is_archived is False
 
 
+# ---------------------------------------------------------------------------
+# MVP Step 2: CheckIn API Tests (Mark done, Undo, List check-ins, Rules)
+# ---------------------------------------------------------------------------
+
 @pytest.mark.django_db
-def test_check_in_today(api_client, habit):
+def test_check_in_default_today(api_client, habit):
     today = date.today()
     response = api_client.post(f"/api/v1/habits/{habit.id}/check/", {})
     assert response.status_code == status.HTTP_201_CREATED
     assert response.data["status"] == "checked"
     assert response.data["habit_id"] == habit.id
     assert response.data["date"] == str(today)
-    assert response.data["current_streak"] == 1
-    assert response.data["longest_streak"] == 1
-    assert HabitCheckIn.objects.filter(habit=habit, date=today).exists()
+    assert habit.check_ins.filter(date=today).exists()
+
+
+@pytest.mark.django_db
+def test_check_in_explicit_date(api_client, habit):
+    past_date = date.today() - timedelta(days=2)
+    response = api_client.post(f"/api/v1/habits/{habit.id}/check/", {"date": str(past_date)})
+    assert response.status_code == status.HTTP_201_CREATED
+    assert response.data["status"] == "checked"
+    assert response.data["habit_id"] == habit.id
+    assert response.data["date"] == str(past_date)
+    assert habit.check_ins.filter(date=past_date).exists()
 
 
 @pytest.mark.django_db
 def test_check_in_idempotency(api_client, habit):
     today = date.today()
-    # First check
     res1 = api_client.post(f"/api/v1/habits/{habit.id}/check/", {"date": str(today)})
     assert res1.status_code == status.HTTP_201_CREATED
-    # Second check (idempotent)
+
+    # Second check-in on the same date should be idempotent (200 OK, no duplicate)
     res2 = api_client.post(f"/api/v1/habits/{habit.id}/check/", {"date": str(today)})
     assert res2.status_code == status.HTTP_200_OK
     assert res2.data["status"] == "checked"
-    assert HabitCheckIn.objects.filter(habit=habit, date=today).count() == 1
+    assert habit.check_ins.filter(date=today).count() == 1
 
 
 @pytest.mark.django_db
@@ -135,37 +142,107 @@ def test_cannot_check_in_future_date(api_client, habit):
 
 
 @pytest.mark.django_db
+def test_check_in_nonexistent_habit_404(api_client):
+    response = api_client.post("/api/v1/habits/99999/check/", {})
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+@pytest.mark.django_db
 def test_uncheck_existing_checkin(api_client, habit):
     today = date.today()
-    HabitCheckIn.objects.create(habit=habit, date=today)
+    habit.check_ins.create(date=today)
     response = api_client.post(f"/api/v1/habits/{habit.id}/uncheck/", {"date": str(today)})
     assert response.status_code == status.HTTP_200_OK
     assert response.data["status"] == "unchecked"
     assert response.data["habit_id"] == habit.id
     assert response.data["date"] == str(today)
-    assert not HabitCheckIn.objects.filter(habit=habit, date=today).exists()
+    assert not habit.check_ins.filter(date=today).exists()
 
 
 @pytest.mark.django_db
-def test_uncheck_nonexistent_checkin(api_client, habit):
+def test_uncheck_default_today(api_client, habit):
+    today = date.today()
+    habit.check_ins.create(date=today)
+    response = api_client.post(f"/api/v1/habits/{habit.id}/uncheck/", {})
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data["status"] == "unchecked"
+    assert response.data["habit_id"] == habit.id
+    assert response.data["date"] == str(today)
+    assert not habit.check_ins.filter(date=today).exists()
+
+
+@pytest.mark.django_db
+def test_uncheck_nonexistent_checkin_404(api_client, habit):
     today = date.today()
     response = api_client.post(f"/api/v1/habits/{habit.id}/uncheck/", {"date": str(today)})
     assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
 @pytest.mark.django_db
-def test_get_habit_checkins_history(api_client, habit):
+def test_uncheck_nonexistent_habit_404(api_client):
+    response = api_client.post("/api/v1/habits/99999/uncheck/", {})
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+@pytest.mark.django_db
+def test_list_checkins(api_client, habit):
     today = date.today()
     yesterday = today - timedelta(days=1)
-    HabitCheckIn.objects.create(habit=habit, date=yesterday)
-    HabitCheckIn.objects.create(habit=habit, date=today)
-    
+    habit.check_ins.create(date=yesterday)
+    habit.check_ins.create(date=today)
+
     response = api_client.get(f"/api/v1/habits/{habit.id}/check-ins/")
     assert response.status_code == status.HTTP_200_OK
     assert len(response.data) == 2
+    dates = [item["date"] for item in response.data]
+    assert str(today) in dates
+    assert str(yesterday) in dates
 
-    # Filter with ?from=&to=
-    response = api_client.get(f"/api/v1/habits/{habit.id}/check-ins/?from={today}&to={today}")
+
+@pytest.mark.django_db
+def test_list_checkins_date_range_filter(api_client, habit):
+    today = date.today()
+    d1 = today - timedelta(days=5)
+    d2 = today - timedelta(days=3)
+    d3 = today
+    habit.check_ins.create(date=d1)
+    habit.check_ins.create(date=d2)
+    habit.check_ins.create(date=d3)
+
+    # Filter with both 'from' and 'to'
+    response = api_client.get(f"/api/v1/habits/{habit.id}/check-ins/?from={d2}&to={d3}")
+    assert response.status_code == status.HTTP_200_OK
+    assert len(response.data) == 2
+    dates = [item["date"] for item in response.data]
+    assert str(d2) in dates
+    assert str(d3) in dates
+    assert str(d1) not in dates
+
+    # Filter with only 'from'
+    response = api_client.get(f"/api/v1/habits/{habit.id}/check-ins/?from={d2}")
+    assert response.status_code == status.HTTP_200_OK
+    assert len(response.data) == 2
+
+    # Filter with only 'to'
+    response = api_client.get(f"/api/v1/habits/{habit.id}/check-ins/?to={d2}")
+    assert response.status_code == status.HTTP_200_OK
+    assert len(response.data) == 2
+
+
+@pytest.mark.django_db
+def test_list_checkins_nonexistent_habit_404(api_client):
+    response = api_client.get("/api/v1/habits/99999/check-ins/")
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+@pytest.mark.django_db
+def test_list_checkins_isolated_to_habit(api_client, habit):
+    other_habit = Habit.objects.create(name="Other Habit")
+    today = date.today()
+    habit.check_ins.create(date=today)
+    other_habit.check_ins.create(date=today)
+
+    response = api_client.get(f"/api/v1/habits/{habit.id}/check-ins/")
     assert response.status_code == status.HTTP_200_OK
     assert len(response.data) == 1
     assert response.data[0]["date"] == str(today)
@@ -178,4 +255,3 @@ def test_swagger_docs_accessible(api_client):
     assert response_no_slash.status_code in [status.HTTP_200_OK, status.HTTP_301_MOVED_PERMANENTLY]
     schema_response = api_client.get("/api/schema/")
     assert schema_response.status_code == status.HTTP_200_OK
-
