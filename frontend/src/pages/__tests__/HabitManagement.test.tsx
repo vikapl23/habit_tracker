@@ -45,7 +45,12 @@ const mockArchivedHabit: Habit = {
 
 const renderDashboard = () => {
   return render(
-    <MemoryRouter>
+    <MemoryRouter
+      future={{
+        v7_startTransition: true,
+        v7_relativeSplatPath: true,
+      }}
+    >
       <AuthProvider>
         <DashboardPage />
       </AuthProvider>
@@ -55,7 +60,12 @@ const renderDashboard = () => {
 
 const renderArchivedPage = () => {
   return render(
-    <MemoryRouter>
+    <MemoryRouter
+      future={{
+        v7_startTransition: true,
+        v7_relativeSplatPath: true,
+      }}
+    >
       <AuthProvider>
         <ArchivedHabitsPage />
       </AuthProvider>
@@ -362,6 +372,44 @@ describe('Habit Management (Step 5.4)', () => {
     await user.keyboard('{Escape}');
 
     expect(screen.queryByRole('dialog', { name: /new habit/i })).not.toBeInTheDocument();
+  });
+
+  it('scrolls first validation error into view on submit error', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(habitsApi, 'getAllHabits').mockResolvedValue([]);
+    const scrollIntoViewMock = vi.fn();
+    window.HTMLElement.prototype.scrollIntoView = scrollIntoViewMock;
+
+    renderDashboard();
+
+    const fabButton = await screen.findByRole('button', { name: /new habit/i });
+    await user.click(fabButton);
+
+    // Click Specific days without picking weekdays
+    const specificDaysBtn = screen.getByRole('button', { name: /specific days/i });
+    await user.click(specificDaysBtn);
+
+    // Type a name to pass name validation
+    await user.type(screen.getByLabelText(/habit name/i), 'Custom Habit');
+
+    // Submit form
+    await user.click(screen.getByRole('button', { name: /create habit/i }));
+
+    await waitFor(() => {
+      expect(scrollIntoViewMock).toHaveBeenCalled();
+    });
+  });
+
+  it('renders dashboard with bottom padding ensuring FAB does not obscure content on mobile', async () => {
+    vi.spyOn(habitsApi, 'getAllHabits').mockResolvedValue([mockHabit]);
+
+    renderDashboard();
+
+    expect(await screen.findByText('Read Books')).toBeInTheDocument();
+
+    // Verify main element has bottom padding
+    const mainEl = screen.getByRole('main');
+    expect(mainEl.className).toContain('pb-28');
   });
 
   it('renders archived screen and allows unarchiving a habit', async () => {

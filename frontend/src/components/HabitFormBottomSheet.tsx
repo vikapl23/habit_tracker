@@ -56,6 +56,7 @@ export const HabitFormBottomSheet: React.FC<HabitFormBottomSheetProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const nameInputRef = useRef<HTMLInputElement>(null);
+  const weekdaySectionRef = useRef<HTMLDivElement>(null);
   const touchStartY = useRef<number | null>(null);
 
   // Sync form state when habit changes or sheet opens
@@ -115,6 +116,24 @@ export const HabitFormBottomSheet: React.FC<HabitFormBottomSheetProps> = ({
     touchStartY.current = null;
   };
 
+  const scrollToFirstError = () => {
+    setTimeout(() => {
+      const errorEl = document.querySelector('[data-form-error="true"]');
+      if (errorEl && typeof errorEl.scrollIntoView === 'function') {
+        errorEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 50);
+  };
+
+  const handleSelectSpecificDays = () => {
+    setFrequencyType('custom');
+    setTimeout(() => {
+      if (weekdaySectionRef.current && typeof weekdaySectionRef.current.scrollIntoView === 'function') {
+        weekdaySectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }, 50);
+  };
+
   const toggleWeekday = (day: number) => {
     setFrequencyDays((prev) => {
       if (prev.includes(day)) {
@@ -147,6 +166,7 @@ export const HabitFormBottomSheet: React.FC<HabitFormBottomSheetProps> = ({
 
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
+      scrollToFirstError();
       return;
     }
 
@@ -178,6 +198,7 @@ export const HabitFormBottomSheet: React.FC<HabitFormBottomSheetProps> = ({
       } else {
         setGeneralError(err?.message || 'Something went wrong. Please check your inputs.');
       }
+      scrollToFirstError();
     } finally {
       setIsSubmitting(false);
     }
@@ -220,7 +241,10 @@ export const HabitFormBottomSheet: React.FC<HabitFormBottomSheetProps> = ({
         {/* Scrollable Form Body */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
           {generalError && (
-            <div className="p-3 rounded-xl bg-red-50 text-red-700 text-xs font-medium border border-red-200">
+            <div
+              data-form-error="true"
+              className="p-3 rounded-xl bg-red-50 text-red-700 text-xs font-medium border border-red-200"
+            >
               {generalError}
             </div>
           )}
@@ -252,7 +276,7 @@ export const HabitFormBottomSheet: React.FC<HabitFormBottomSheetProps> = ({
               }`}
             />
             {fieldErrors.name && (
-              <p className="text-[11px] font-medium text-red-600 animate-in fade-in">
+              <p data-form-error="true" className="text-[11px] font-medium text-red-600 animate-in fade-in">
                 {fieldErrors.name}
               </p>
             )}
@@ -272,7 +296,7 @@ export const HabitFormBottomSheet: React.FC<HabitFormBottomSheetProps> = ({
               className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-sm text-slate-900 bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition resize-none"
             />
             {fieldErrors.description && (
-              <p className="text-[11px] font-medium text-red-600 animate-in fade-in">
+              <p data-form-error="true" className="text-[11px] font-medium text-red-600 animate-in fade-in">
                 {fieldErrors.description}
               </p>
             )}
@@ -311,7 +335,7 @@ export const HabitFormBottomSheet: React.FC<HabitFormBottomSheetProps> = ({
               })}
             </div>
             {fieldErrors.color && (
-              <p className="text-[11px] font-medium text-red-600 animate-in fade-in">
+              <p data-form-error="true" className="text-[11px] font-medium text-red-600 animate-in fade-in">
                 {fieldErrors.color}
               </p>
             )}
@@ -374,14 +398,14 @@ export const HabitFormBottomSheet: React.FC<HabitFormBottomSheetProps> = ({
               />
             </div>
             {fieldErrors.emoji && (
-              <p className="text-[11px] font-medium text-red-600 animate-in fade-in">
+              <p data-form-error="true" className="text-[11px] font-medium text-red-600 animate-in fade-in">
                 {fieldErrors.emoji}
               </p>
             )}
           </div>
 
           {/* Frequency Selector */}
-          <div className="space-y-2.5">
+          <div className="space-y-2.5 pb-6">
             <label className="block text-xs font-bold text-slate-700">
               Frequency
             </label>
@@ -408,7 +432,7 @@ export const HabitFormBottomSheet: React.FC<HabitFormBottomSheetProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => setFrequencyType('custom')}
+                onClick={handleSelectSpecificDays}
                 aria-pressed={frequencyType === 'custom'}
                 className={`min-h-[40px] text-xs font-semibold rounded-lg transition-all ${
                   frequencyType === 'custom'
@@ -421,7 +445,7 @@ export const HabitFormBottomSheet: React.FC<HabitFormBottomSheetProps> = ({
             </div>
 
             {frequencyType === 'custom' && (
-              <div className="space-y-2 animate-in fade-in duration-150 pt-1">
+              <div ref={weekdaySectionRef} className="space-y-2 animate-in fade-in duration-150 pt-1">
                 <p className="text-[11px] text-slate-500">Choose days of the week:</p>
                 <div className="flex items-center justify-between gap-1">
                   {WEEKDAYS.map(({ day, label }) => {
@@ -447,7 +471,7 @@ export const HabitFormBottomSheet: React.FC<HabitFormBottomSheetProps> = ({
               </div>
             )}
             {(fieldErrors.frequency_days || fieldErrors.frequency) && (
-              <p className="text-[11px] font-medium text-red-600 animate-in fade-in">
+              <p data-form-error="true" className="text-[11px] font-medium text-red-600 animate-in fade-in">
                 {fieldErrors.frequency_days || fieldErrors.frequency}
               </p>
             )}

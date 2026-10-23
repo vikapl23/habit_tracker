@@ -73,7 +73,7 @@ export const ArchivedHabitsPage: React.FC = () => {
         </header>
 
         {/* Content */}
-        <main className="flex-1 p-4 sm:p-5 space-y-4">
+        <main className="flex-1 p-4 sm:p-5 pb-28 sm:pb-8 space-y-4">
           {isLoading ? (
             <div className="space-y-3 animate-pulse">
               <div className="h-16 bg-slate-100 rounded-2xl" />

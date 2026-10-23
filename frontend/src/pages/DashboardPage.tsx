@@ -300,7 +300,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onCreateHabit }) =
         </header>
 
         {/* Main Content Area */}
-        <main className="flex-1 p-4 sm:p-5 space-y-5">
+        <main className="flex-1 p-4 sm:p-5 pb-28 sm:pb-8 space-y-5">
           {isLoading ? (
             <DashboardSkeleton />
           ) : fetchError ? (

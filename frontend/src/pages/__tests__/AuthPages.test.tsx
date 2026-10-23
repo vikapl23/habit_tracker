@@ -7,6 +7,20 @@ import { RegisterPage } from '../RegisterPage';
 import { AuthProvider } from '../../context/AuthContext';
 import { apiClient, ApiError } from '../../api/client';
 
+const renderWithRouter = (ui: React.ReactElement, initialEntries = ['/']) => {
+  return render(
+    <MemoryRouter
+      initialEntries={initialEntries}
+      future={{
+        v7_startTransition: true,
+        v7_relativeSplatPath: true,
+      }}
+    >
+      <AuthProvider>{ui}</AuthProvider>
+    </MemoryRouter>
+  );
+};
+
 describe('Auth Forms (Login and Register)', () => {
   beforeEach(() => {
     localStorage.clear();
@@ -15,13 +29,7 @@ describe('Auth Forms (Login and Register)', () => {
 
   describe('LoginPage', () => {
     it('renders login form elements with 375px mobile-friendly design', () => {
-      render(
-        <MemoryRouter>
-          <AuthProvider>
-            <LoginPage />
-          </AuthProvider>
-        </MemoryRouter>
-      );
+      renderWithRouter(<LoginPage />);
 
       expect(screen.getByRole('heading', { name: /sign in to your account/i })).toBeInTheDocument();
       expect(screen.getByLabelText(/email address/i)).toBeInTheDocument();
@@ -33,13 +41,7 @@ describe('Auth Forms (Login and Register)', () => {
     it('shows client-side validation errors when submitting empty fields', async () => {
       const user = userEvent.setup();
 
-      render(
-        <MemoryRouter>
-          <AuthProvider>
-            <LoginPage />
-          </AuthProvider>
-        </MemoryRouter>
-      );
+      renderWithRouter(<LoginPage />);
 
       await user.click(screen.getByRole('button', { name: /sign in/i }));
 
@@ -59,15 +61,12 @@ describe('Auth Forms (Login and Register)', () => {
         timezone: 'Europe/Kyiv',
       });
 
-      render(
-        <MemoryRouter initialEntries={['/login']}>
-          <AuthProvider>
-            <Routes>
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/" element={<div>Dashboard Screen</div>} />
-            </Routes>
-          </AuthProvider>
-        </MemoryRouter>
+      renderWithRouter(
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/" element={<div>Dashboard Screen</div>} />
+        </Routes>,
+        ['/login']
       );
 
       await user.type(screen.getByLabelText(/email address/i), 'test@example.com');
@@ -89,13 +88,7 @@ describe('Auth Forms (Login and Register)', () => {
         })
       );
 
-      render(
-        <MemoryRouter>
-          <AuthProvider>
-            <LoginPage />
-          </AuthProvider>
-        </MemoryRouter>
-      );
+      renderWithRouter(<LoginPage />);
 
       await user.type(screen.getByLabelText(/email address/i), 'wrong@example.com');
       await user.type(screen.getByLabelText(/^password$/i), 'wrongpass');
@@ -109,13 +102,7 @@ describe('Auth Forms (Login and Register)', () => {
 
   describe('RegisterPage', () => {
     it('renders registration form elements', () => {
-      render(
-        <MemoryRouter>
-          <AuthProvider>
-            <RegisterPage />
-          </AuthProvider>
-        </MemoryRouter>
-      );
+      renderWithRouter(<RegisterPage />);
 
       expect(screen.getByRole('heading', { name: /create your account/i })).toBeInTheDocument();
       expect(screen.getByLabelText(/email address/i)).toBeInTheDocument();
@@ -128,13 +115,7 @@ describe('Auth Forms (Login and Register)', () => {
     it('validates password mismatch on client-side', async () => {
       const user = userEvent.setup();
 
-      render(
-        <MemoryRouter>
-          <AuthProvider>
-            <RegisterPage />
-          </AuthProvider>
-        </MemoryRouter>
-      );
+      renderWithRouter(<RegisterPage />);
 
       await user.type(screen.getByLabelText(/email address/i), 'newuser@example.com');
       await user.type(screen.getByLabelText(/^password$/i), 'SuperSecret123!');
@@ -153,13 +134,7 @@ describe('Auth Forms (Login and Register)', () => {
         })
       );
 
-      render(
-        <MemoryRouter>
-          <AuthProvider>
-            <RegisterPage />
-          </AuthProvider>
-        </MemoryRouter>
-      );
+      renderWithRouter(<RegisterPage />);
 
       await user.type(screen.getByLabelText(/email address/i), 'invalid-email');
       await user.type(screen.getByLabelText(/^password$/i), 'short123');
@@ -182,15 +157,12 @@ describe('Auth Forms (Login and Register)', () => {
         timezone: 'UTC',
       });
 
-      render(
-        <MemoryRouter initialEntries={['/register']}>
-          <AuthProvider>
-            <Routes>
-              <Route path="/register" element={<RegisterPage />} />
-              <Route path="/" element={<div>Dashboard Screen</div>} />
-            </Routes>
-          </AuthProvider>
-        </MemoryRouter>
+      renderWithRouter(
+        <Routes>
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/" element={<div>Dashboard Screen</div>} />
+        </Routes>,
+        ['/register']
       );
 
       await user.type(screen.getByLabelText(/email address/i), 'registered@example.com');
