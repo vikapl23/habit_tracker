@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from datetime import date
 from typing import Any
 
 from django.db.models import QuerySet
+from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import permissions, serializers, status, viewsets
 from rest_framework.decorators import action
@@ -45,6 +47,44 @@ class HabitViewSet(viewsets.ModelViewSet):
         """Format a CheckInResult into a serialized dictionary."""
         return CheckInResponseSerializer(result).data
 
+    def _get_target_date(self) -> date:
+        """Resolve evaluation target date from query parameters or default to user's today."""
+        if "date" in self.request.query_params:
+            try:
+                return serializers.DateField().to_internal_value(self.request.query_params["date"])
+            except serializers.ValidationError:
+                pass
+        user = self.request.user
+        if user and hasattr(user, "get_today"):
+            return user.get_today()
+        return timezone.localdate()
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="include_archived",
+                description="Include archived habits in results (default false)",
+                required=False,
+                type=bool,
+            ),
+            OpenApiParameter(
+                name="scheduled_today",
+                description="Filter habits scheduled today (true/false)",
+                required=False,
+                type=bool,
+            ),
+            OpenApiParameter(
+                name="date",
+                description="Evaluation date for is_checked_today and is_scheduled_today (YYYY-MM-DD)",
+                required=False,
+                type=str,
+            ),
+        ]
+    )
+    def list(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        """List active habits for the user with streak and schedule metadata."""
+        return super().list(request, *args, **kwargs)
+
     def get_queryset(self) -> QuerySet[Habit]:
         """Return queryset filtered to the authenticated user's active or all habits."""
         user = self.request.user
@@ -61,6 +101,28 @@ class HabitViewSet(viewsets.ModelViewSet):
         ]
         if not include_archived:
             qs = qs.filter(is_archived=False)
+
+        if "scheduled_today" in self.request.query_params:
+            param = self.request.query_params.get("scheduled_today", "").lower()
+            if param in ["true", "1", "false", "0"]:
+                target_date = self._get_target_date()
+                target_weekday = target_date.weekday()
+                want_scheduled = param in ["true", "1"]
+
+                candidates = Habit.objects.filter(user=user)
+                if not include_archived:
+                    candidates = candidates.filter(is_archived=False)
+
+                matching_ids = []
+                for item in candidates.values("id", "frequency_type", "frequency_days"):
+                    freq_type = item["frequency_type"]
+                    freq_days = item["frequency_days"] or []
+                    is_scheduled = True if freq_type == "daily" else target_weekday in freq_days
+                    if is_scheduled == want_scheduled:
+                        matching_ids.append(item["id"])
+
+                qs = qs.filter(id__in=matching_ids)
+
         return qs
 
     @extend_schema(request=None, responses={200: ArchiveResponseSerializer})

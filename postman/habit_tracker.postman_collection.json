@@ -285,6 +285,55 @@
           ]
         },
         {
+          "name": "Create weekday-only habit",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/habits/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "habits",
+                ""
+              ]
+            },
+            "description": "Створює звичку тільки на будні дні (0-4, Mon-Fri).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Спортзал у будні\",\n  \"description\": \"Тренування з понеділка по п'ятницю\",\n  \"color\": \"#10B981\",\n  \"emoji\": \"🏋️\",\n  \"frequency_type\": \"custom\",\n  \"frequency_days\": [0, 1, 2, 3, 4]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"Frequency is custom weekdays\", () => {",
+                  "  const data = pm.response.json();",
+                  "  pm.expect(data.frequency_type).to.eql(\"custom\");",
+                  "  pm.expect(data.frequency_days).to.eql([0, 1, 2, 3, 4]);",
+                  "  pm.expect(data).to.have.property(\"is_scheduled_today\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Get habit",
           "request": {
             "method": "GET",

@@ -11,7 +11,7 @@ This checklist tracks the ongoing development progress of the Habit Tracker proj
 | **Phase 0** | Project Setup & Tooling | `[x]` Completed | 4 / 4 |
 | **Phase 1** | MVP: Core Domain, Streaks & REST API | `[x]` Completed | 7 / 7 |
 | **Phase 2** | JWT Authentication & User Isolation | `[x]` Completed | 5 / 5 |
-| **Phase 3** | Habit Scheduling & Frequency | `[ ]` Not Started | 0 / 4 |
+| **Phase 3** | Habit Scheduling & Frequency | `[x]` Completed | 4 / 4 |
 | **Phase 4** | Statistics & Analytics | `[ ]` Not Started | 0 / 4 |
 | **Phase 5** | Mobile-First React Frontend (Vite) | `[ ]` Not Started | 0 / 6 |
 | **Phase 6** | Docker & PostgreSQL Environment | `[ ]` Not Started | 0 / 4 |
@@ -102,8 +102,10 @@ This checklist tracks the ongoing development progress of the Habit Tracker proj
   - [x] **Impl**: Update `apps.habits.services.streaks` algorithm to evaluate only scheduled dates.
 - [x] **3.3 Validation & Serializer Support (TDD)**
   - [x] Validate valid weekday combinations.
-- [ ] **3.4 API Integration Verification**
-  - [ ] Confirm habit list and detail endpoints return frequency data correctly.
+- [x] **3.4 API Integration Verification**
+  - [x] Confirm habit list and detail endpoints return frequency data correctly.
+  - [x] Support filtering habit list with `?scheduled_today=true` and `?scheduled_today=false`.
+  - [x] Add weekday-only habit request to Postman collection.
 
 ---
 

@@ -453,3 +453,117 @@ def test_checkin_race_condition_integrity_error_returns_200(api_client, habit, m
     assert response.data["habit_id"] == habit.id
     assert response.data["date"] == str(today)
     assert response.data["current_streak"] == 1
+
+
+# ============================================================================
+# Phase 3.4: Frequency API Integration and Filter Verification Tests
+# ============================================================================
+
+
+@pytest.mark.django_db
+def test_create_weekday_only_habit_api(api_client):
+    payload = {
+        "name": "Gym Weekdays",
+        "description": "Workout Monday through Friday",
+        "color": "#10B981",
+        "emoji": "🏋️",
+        "frequency_type": "custom",
+        "frequency_days": [0, 1, 2, 3, 4],
+    }
+    response = api_client.post("/api/v1/habits/", payload, format="json")
+    assert response.status_code == status.HTTP_201_CREATED
+    assert response.data["name"] == "Gym Weekdays"
+    assert response.data["frequency_type"] == "custom"
+    assert response.data["frequency_days"] == [0, 1, 2, 3, 4]
+    assert "is_scheduled_today" in response.data
+
+
+@pytest.mark.django_db
+def test_filter_habits_scheduled_today(api_client, user):
+    # 1. Daily habit
+    Habit.objects.create(
+        user=user,
+        name="Daily Habit",
+        frequency_type="daily",
+        frequency_days=[],
+    )
+    # 2. Weekday habit (Mon-Fri: 0-4)
+    Habit.objects.create(
+        user=user,
+        name="Weekday Habit",
+        frequency_type="custom",
+        frequency_days=[0, 1, 2, 3, 4],
+    )
+    # 3. Weekend habit (Sat-Sun: 5, 6)
+    Habit.objects.create(
+        user=user,
+        name="Weekend Habit",
+        frequency_type="custom",
+        frequency_days=[5, 6],
+    )
+
+    # Test on Friday 2026-10-23 (weekday 4):
+    # Scheduled today: Daily (1) and Weekday (2) -> count = 2
+    # Not scheduled today: Weekend (3) -> count = 1
+    with freeze_time("2026-10-23 12:00:00"):
+        res_scheduled = api_client.get("/api/v1/habits/?scheduled_today=true")
+        assert res_scheduled.status_code == status.HTTP_200_OK
+        assert res_scheduled.data["count"] == 2
+        names_scheduled = [h["name"] for h in res_scheduled.data["results"]]
+        assert "Daily Habit" in names_scheduled
+        assert "Weekday Habit" in names_scheduled
+
+        res_unscheduled = api_client.get("/api/v1/habits/?scheduled_today=false")
+        assert res_unscheduled.status_code == status.HTTP_200_OK
+        assert res_unscheduled.data["count"] == 1
+        assert res_unscheduled.data["results"][0]["name"] == "Weekend Habit"
+
+    # Test on Saturday 2026-10-24 (weekday 5):
+    # Scheduled today: Daily (1) and Weekend (3) -> count = 2
+    # Not scheduled today: Weekday (2) -> count = 1
+    with freeze_time("2026-10-24 12:00:00"):
+        res_scheduled = api_client.get("/api/v1/habits/?scheduled_today=true")
+        assert res_scheduled.status_code == status.HTTP_200_OK
+        assert res_scheduled.data["count"] == 2
+        names_scheduled = [h["name"] for h in res_scheduled.data["results"]]
+        assert "Daily Habit" in names_scheduled
+        assert "Weekend Habit" in names_scheduled
+
+        res_unscheduled = api_client.get("/api/v1/habits/?scheduled_today=false")
+        assert res_unscheduled.status_code == status.HTTP_200_OK
+        assert res_unscheduled.data["count"] == 1
+        assert res_unscheduled.data["results"][0]["name"] == "Weekday Habit"
+
+
+@pytest.mark.django_db
+def test_filter_habits_scheduled_today_with_date_override(api_client, user):
+    Habit.objects.create(
+        user=user,
+        name="Daily Habit",
+        frequency_type="daily",
+    )
+    Habit.objects.create(
+        user=user,
+        name="Weekend Habit",
+        frequency_type="custom",
+        frequency_days=[5, 6],
+    )
+
+    # Current freeze is Friday 2026-10-23, but query overrides date=2026-10-24 (Saturday)
+    with freeze_time("2026-10-23 12:00:00"):
+        res = api_client.get("/api/v1/habits/?scheduled_today=true&date=2026-10-24")
+        assert res.status_code == status.HTTP_200_OK
+        assert res.data["count"] == 2
+
+
+def test_postman_collection_contains_weekday_habit():
+    import json
+    from pathlib import Path
+
+    collection_path = Path("postman/habit_tracker.postman_collection.json")
+    assert collection_path.exists()
+    data = json.loads(collection_path.read_text(encoding="utf-8"))
+
+    habits_folder = next(item for item in data["item"] if item["name"] == "2. Habits")
+    request_names = [r["name"] for r in habits_folder["item"]]
+    assert "Create weekday-only habit" in request_names
