@@ -44,26 +44,27 @@ def test_unique_checkin_per_date_constraint(habit):
 
 
 @pytest.mark.django_db
-def test_cannot_create_future_checkin_validation(habit):
-    future_date = date.today() + timedelta(days=1)
-    checkin = HabitCheckIn(habit=habit, date=future_date)
-    with pytest.raises(ValidationError):
-        checkin.full_clean()
+def test_checkin_model_save_does_not_call_clean(habit, monkeypatch):
+    """Model save() must not call clean(), avoiding overhead on fixtures/bulk ops."""
+    clean_called = False
+
+    def mock_clean():
+        nonlocal clean_called
+        clean_called = True
+
+    checkin = HabitCheckIn(habit=habit, date=date.today())
+    monkeypatch.setattr(checkin, "clean", mock_clean)
+    checkin.save()
+    assert not clean_called, "HabitCheckIn.save() should not call clean()"
 
 
 @pytest.mark.django_db
-def test_cannot_create_future_checkin_orm_create(habit):
+def test_checkin_model_allows_future_date_for_fixtures_and_bulk(habit):
+    """Model clean() and save() do not reject future dates, leaving that to the service."""
     future_date = date.today() + timedelta(days=1)
-    with pytest.raises(ValidationError):
-        HabitCheckIn.objects.create(habit=habit, date=future_date)
-
-
-@pytest.mark.django_db
-def test_cannot_save_future_checkin_orm_save(habit):
-    future_date = date.today() + timedelta(days=1)
-    checkin = HabitCheckIn(habit=habit, date=future_date)
-    with pytest.raises(ValidationError):
-        checkin.save()
+    checkin = HabitCheckIn.objects.create(habit=habit, date=future_date)
+    assert checkin.id is not None
+    checkin.full_clean()  # Should not raise
 
 
 @pytest.mark.django_db

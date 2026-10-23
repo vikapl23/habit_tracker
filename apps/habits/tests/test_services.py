@@ -324,3 +324,164 @@ def test_streak_year_boundary_broken():
     result = calculate_streaks(checkins)
     assert result.current_streak == 1
     assert result.longest_streak == 1
+
+
+# --- Tests for checkin service (Items 4 & 5) ---
+
+
+def test_validate_checkin_date_accepts_today_and_past():
+    from apps.habits.services import validate_checkin_date
+
+    today = date.today()
+    past = today - timedelta(days=5)
+    # Should not raise
+    validate_checkin_date(today)
+    validate_checkin_date(past)
+
+
+def test_validate_checkin_date_rejects_future_date():
+    from rest_framework.exceptions import ValidationError
+
+    from apps.habits.services import validate_checkin_date
+
+    future = date.today() + timedelta(days=1)
+    with pytest.raises(ValidationError) as exc_info:
+        validate_checkin_date(future)
+    assert "date" in exc_info.value.detail
+
+
+def test_validate_checkin_date_respects_user_timezone():
+    from unittest.mock import MagicMock
+
+    from rest_framework.exceptions import ValidationError
+
+    from apps.habits.services import validate_checkin_date
+
+    mock_user = MagicMock()
+    mock_user.get_today.return_value = date(2026, 10, 23)
+
+    # Date matching user's today should pass
+    validate_checkin_date(date(2026, 10, 23), user=mock_user)
+
+    # Date after user's today should fail
+    with pytest.raises(ValidationError):
+        validate_checkin_date(date(2026, 10, 24), user=mock_user)
+
+
+@pytest.mark.django_db
+def test_check_in_habit_success(habit):
+    from apps.habits.models import HabitCheckIn
+    from apps.habits.services import CheckInResult, check_in_habit
+
+    today = date.today()
+    result = check_in_habit(habit=habit, target_date=today)
+
+    assert isinstance(result, CheckInResult)
+    assert result.status == "checked"
+    assert result.habit_id == habit.id
+    assert result.date == today
+    assert result.created is True
+    assert result.current_streak == 1
+    assert result.longest_streak == 1
+    assert HabitCheckIn.objects.filter(habit=habit, date=today).exists()
+
+
+@pytest.mark.django_db
+def test_check_in_habit_idempotent(habit):
+    from apps.habits.models import HabitCheckIn
+    from apps.habits.services import check_in_habit
+
+    today = date.today()
+    res1 = check_in_habit(habit=habit, target_date=today)
+    assert res1.created is True
+
+    res2 = check_in_habit(habit=habit, target_date=today)
+    assert res2.created is False
+    assert res2.status == "checked"
+    assert HabitCheckIn.objects.filter(habit=habit, date=today).count() == 1
+
+
+@pytest.mark.django_db
+def test_check_in_habit_handles_integrity_error_concurrent_race(habit, monkeypatch):
+    """
+    Simulate a race condition where get_or_create raises IntegrityError
+    due to another worker inserting the row concurrently.
+    Should catch IntegrityError, fetch the existing check-in, and return it with created=False.
+    """
+    from django.db import IntegrityError
+
+    import apps.habits.services.checkin as checkin_service
+    from apps.habits.models import HabitCheckIn
+    from apps.habits.services import check_in_habit
+
+    today = date.today()
+    # Existing check-in in DB (simulating concurrent worker inserted it)
+    HabitCheckIn.objects.create(habit=habit, date=today)
+
+    def mock_get_or_create(*args, **kwargs):
+        raise IntegrityError("duplicate key value violates unique constraint")
+
+    monkeypatch.setattr(checkin_service.HabitCheckIn.objects, "get_or_create", mock_get_or_create)
+
+    result = check_in_habit(habit=habit, target_date=today)
+    assert result.status == "checked"
+    assert result.habit_id == habit.id
+    assert result.date == today
+    assert result.created is False
+    assert result.current_streak == 1
+
+
+@pytest.mark.django_db
+def test_check_in_habit_rejects_archived(habit):
+    from rest_framework.exceptions import ValidationError
+
+    from apps.habits.services import check_in_habit
+
+    habit.is_archived = True
+    habit.save()
+
+    with pytest.raises(ValidationError) as exc_info:
+        check_in_habit(habit=habit)
+    assert "detail" in exc_info.value.detail or "Cannot check in on an archived habit." in str(
+        exc_info.value
+    )
+
+
+@pytest.mark.django_db
+def test_check_in_and_uncheck_habit_with_prefetched_cache(habit):
+    """
+    Ensure check_in_habit and uncheck_habit return fresh streak calculations
+    even if the habit instance has a populated _prefetched_objects_cache.
+    """
+    from apps.habits.models import Habit
+    from apps.habits.services import check_in_habit, uncheck_habit
+
+    today = date.today()
+    yesterday = today - timedelta(days=1)
+
+    # Populate yesterday checkin
+    habit.check_ins.create(date=yesterday)
+
+    # Fetch habit with prefetch
+    prefetched_habit = Habit.objects.prefetch_related("check_ins").get(id=habit.id)
+    assert len(prefetched_habit.check_ins.all()) == 1
+
+    # Check in today using the prefetched instance
+    res_check = check_in_habit(habit=prefetched_habit, target_date=today)
+    assert res_check.current_streak == 2
+    assert res_check.longest_streak == 2
+
+    # Uncheck today using the same instance
+    res_uncheck = uncheck_habit(habit=prefetched_habit, target_date=today)
+    assert res_uncheck.current_streak == 1
+    assert res_uncheck.longest_streak == 1
+
+
+@pytest.mark.django_db
+def test_uncheck_habit_nonexistent_raises_not_found(habit):
+    from rest_framework.exceptions import NotFound
+
+    from apps.habits.services import uncheck_habit
+
+    with pytest.raises(NotFound):
+        uncheck_habit(habit=habit, target_date=date.today())

@@ -1,7 +1,5 @@
 from django.conf import settings
-from django.core.exceptions import ValidationError
 from django.db import models
-from django.utils import timezone
 
 from .validators import hex_color_validator, validate_emoji
 
@@ -40,22 +38,6 @@ class HabitCheckIn(models.Model):
         constraints = [
             models.UniqueConstraint(fields=["habit", "date"], name="unique_habit_checkin_per_date")
         ]
-
-    def clean(self):
-        super().clean()
-        max_date = timezone.localdate()
-        if (
-            hasattr(self, "habit")
-            and getattr(self.habit, "user", None)
-            and hasattr(self.habit.user, "get_today")
-        ):
-            max_date = self.habit.user.get_today()
-        if self.date and self.date > max_date:
-            raise ValidationError({"date": "Check-ins cannot be recorded for future dates."})
-
-    def save(self, *args, **kwargs):
-        self.clean()
-        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.habit.name} - {self.date}"

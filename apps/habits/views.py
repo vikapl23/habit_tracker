@@ -1,10 +1,9 @@
-from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import permissions, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from .models import Habit, HabitCheckIn
+from .models import Habit
 from .serializers import (
     ArchiveResponseSerializer,
     CheckInActionSerializer,
@@ -13,7 +12,7 @@ from .serializers import (
     HabitCheckInSerializer,
     HabitSerializer,
 )
-from .services.streaks import calculate_habit_streaks
+from .services import CheckInResult, check_in_habit, uncheck_habit
 
 
 class HabitViewSet(viewsets.ModelViewSet):
@@ -32,16 +31,8 @@ class HabitViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
 
-    def _format_checkin_response(self, habit, status_str: str, target_date, streaks) -> dict:
-        return CheckInResponseSerializer(
-            {
-                "status": status_str,
-                "habit_id": habit.id,
-                "date": target_date,
-                "current_streak": streaks.current_streak,
-                "longest_streak": streaks.longest_streak,
-            }
-        ).data
+    def _format_checkin_response(self, result: CheckInResult) -> dict:
+        return CheckInResponseSerializer(result).data
 
     def get_queryset(self):
         user = self.request.user
@@ -83,28 +74,14 @@ class HabitViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"])
     def check(self, request, pk=None):
         habit = self.get_object()
-        if habit.is_archived:
-            return Response(
-                {"detail": "Cannot check in on an archived habit."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        serializer = CheckInActionSerializer(
-            data=request.data,
-            context={**self.get_serializer_context(), "habit": habit},
-        )
+        serializer = CheckInActionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        user = request.user if request.user and request.user.is_authenticated else habit.user
-        today = user.get_today() if (user and hasattr(user, "get_today")) else timezone.localdate()
-        target_date = serializer.validated_data.get("date") or today
+        target_date = serializer.validated_data.get("date")
 
-        _, created = HabitCheckIn.objects.get_or_create(habit=habit, date=target_date)
-        if hasattr(habit, "_prefetched_objects_cache"):
-            habit._prefetched_objects_cache.pop("check_ins", None)
-        streaks = calculate_habit_streaks(habit)
-
+        result = check_in_habit(habit=habit, target_date=target_date, user=request.user)
         return Response(
-            self._format_checkin_response(habit, "checked", target_date, streaks),
-            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+            self._format_checkin_response(result),
+            status=status.HTTP_201_CREATED if result.created else status.HTTP_200_OK,
         )
 
     @extend_schema(
@@ -114,29 +91,13 @@ class HabitViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"])
     def uncheck(self, request, pk=None):
         habit = self.get_object()
-        serializer = CheckInActionSerializer(
-            data=request.data,
-            context={**self.get_serializer_context(), "habit": habit},
-        )
+        serializer = CheckInActionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        user = request.user if request.user and request.user.is_authenticated else habit.user
-        today = user.get_today() if (user and hasattr(user, "get_today")) else timezone.localdate()
-        target_date = serializer.validated_data.get("date") or today
+        target_date = serializer.validated_data.get("date")
 
-        checkin = HabitCheckIn.objects.filter(habit=habit, date=target_date).first()
-        if not checkin:
-            return Response(
-                {"detail": f"No check-in found for habit {habit.id} on {target_date}."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        checkin.delete()
-        if hasattr(habit, "_prefetched_objects_cache"):
-            habit._prefetched_objects_cache.pop("check_ins", None)
-        streaks = calculate_habit_streaks(habit)
-
+        result = uncheck_habit(habit=habit, target_date=target_date, user=request.user)
         return Response(
-            self._format_checkin_response(habit, "unchecked", target_date, streaks),
+            self._format_checkin_response(result),
             status=status.HTTP_200_OK,
         )
 

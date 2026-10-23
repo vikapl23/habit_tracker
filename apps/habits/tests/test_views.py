@@ -284,13 +284,16 @@ def test_list_checkins_invalid_to_date_returns_400(api_client, habit):
     assert response.status_code == status.HTTP_400_BAD_REQUEST
 
 
-def test_habit_checkin_serializer_rejects_future_date():
-    from apps.habits.serializers import HabitCheckInSerializer
+def test_habit_checkin_serializer_does_not_duplicate_future_date_validation():
+    """Future-date validation is handled in service function, not duplicated in serializers."""
+    from apps.habits.serializers import CheckInActionSerializer, HabitCheckInSerializer
 
     future_date = date.today() + timedelta(days=2)
     serializer = HabitCheckInSerializer(data={"date": future_date})
-    assert not serializer.is_valid()
-    assert "date" in serializer.errors
+    assert serializer.is_valid()
+
+    action_serializer = CheckInActionSerializer(data={"date": future_date})
+    assert action_serializer.is_valid()
 
 
 @pytest.mark.django_db
@@ -398,3 +401,31 @@ def test_habit_api_longest_past_streak_in_response(api_client, habit):
     assert res.status_code == status.HTTP_200_OK
     assert res.data["current_streak"] == 1
     assert res.data["longest_streak"] == 3
+
+
+@pytest.mark.django_db
+def test_checkin_race_condition_integrity_error_returns_200(api_client, habit, monkeypatch):
+    """
+    Simulate race condition during concurrent check-in:
+    get_or_create encounters IntegrityError due to another thread/process inserting.
+    The endpoint must handle IntegrityError and return 200 with the existing check-in instead of 500.
+    """
+    from django.db import IntegrityError
+
+    from apps.habits.models import HabitCheckIn
+    from apps.habits.services import checkin as checkin_service
+
+    today = date.today()
+    HabitCheckIn.objects.create(habit=habit, date=today)
+
+    def mock_get_or_create(*args, **kwargs):
+        raise IntegrityError("duplicate key value violates unique constraint")
+
+    monkeypatch.setattr(checkin_service.HabitCheckIn.objects, "get_or_create", mock_get_or_create)
+
+    response = api_client.post(f"/api/v1/habits/{habit.id}/check/", {"date": str(today)})
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data["status"] == "checked"
+    assert response.data["habit_id"] == habit.id
+    assert response.data["date"] == str(today)
+    assert response.data["current_streak"] == 1
