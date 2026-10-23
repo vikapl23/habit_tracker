@@ -88,6 +88,46 @@ The API will be accessible at:
 
 ---
 
+## 🌐 Running Backend & Frontend Together
+
+The application consists of a Django REST Framework backend and a mobile-first React (Vite + Tailwind CSS) frontend in `frontend/`.
+
+### 1. Terminal 1 — Start the Backend API
+
+```powershell
+# Activate Python environment
+.\.venv\Scripts\Activate.ps1
+
+# Apply migrations
+python manage.py migrate
+
+# Start Django development server (default port 8000)
+python manage.py runserver
+```
+
+> **CORS Configuration:** `django-cors-headers` is configured to allow `http://localhost:5173` by default via `CORS_ALLOWED_ORIGINS` in `.env`.
+
+### 2. Terminal 2 — Start the React Frontend
+
+```powershell
+# Navigate to frontend directory
+cd frontend
+
+# Set up environment variables (.env with VITE_API_URL=http://localhost:8000/api/v1)
+copy .env.example .env
+
+# Install Node dependencies
+npm install
+
+# Start Vite development server (default port 5173)
+npm run dev
+```
+
+Open your browser at **[http://localhost:5173](http://localhost:5173)**. You can register an account, log in, and view the mobile-first habit tracker interface (optimized for 375px mobile view and responsive on desktop).
+
+
+---
+
 ## 🧪 Running Tests & Linting
 
 ### Running Tests
@@ -117,6 +157,23 @@ Code style and quality are enforced with [Ruff](https://astral.sh/ruff):
 # Auto-format codebase
 .\.venv\Scripts\ruff format .
 ```
+
+### Frontend Tests & Quality Checks
+Frontend tests and checks run inside `frontend/`:
+
+```powershell
+cd frontend
+
+# Run ESLint
+npm run lint
+
+# Run Vitest test suite
+npm test
+
+# Production build check
+npm run build
+```
+
 
 ---
 
