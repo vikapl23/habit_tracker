@@ -1,3 +1,4 @@
+from datetime import date
 from rest_framework import serializers
 from django.utils import timezone
 from .models import Habit, CheckIn, HabitCheckIn
@@ -27,6 +28,7 @@ CheckInSerializer = HabitCheckInSerializer
 class HabitSerializer(serializers.ModelSerializer):
     current_streak = serializers.SerializerMethodField()
     longest_streak = serializers.SerializerMethodField()
+    is_checked_today = serializers.SerializerMethodField()
 
     class Meta:
         model = Habit
@@ -39,6 +41,7 @@ class HabitSerializer(serializers.ModelSerializer):
             'is_archived',
             'current_streak',
             'longest_streak',
+            'is_checked_today',
             'created_at',
             'updated_at',
         ]
@@ -47,9 +50,25 @@ class HabitSerializer(serializers.ModelSerializer):
             'is_archived',
             'current_streak',
             'longest_streak',
+            'is_checked_today',
             'created_at',
             'updated_at',
         ]
+
+    def _get_target_date(self) -> date:
+        request = self.context.get('request')
+        if request and 'date' in request.query_params:
+            try:
+                return date.fromisoformat(request.query_params['date'])
+            except (ValueError, TypeError):
+                pass
+        return timezone.localdate()
+
+    def get_is_checked_today(self, obj) -> bool:
+        target_date = self._get_target_date()
+        if hasattr(obj, '_prefetched_objects_cache') and 'check_ins' in obj._prefetched_objects_cache:
+            return any(ci.date == target_date for ci in obj.check_ins.all())
+        return obj.check_ins.filter(date=target_date).exists()
 
     def _get_streaks(self, obj):
         if not hasattr(obj, '_streaks_cache'):
@@ -70,3 +89,17 @@ class CheckInActionSerializer(serializers.Serializer):
         if value is not None and value > timezone.localdate():
             raise serializers.ValidationError("Check-ins cannot be recorded for future dates.")
         return value
+
+
+class ArchiveResponseSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    is_archived = serializers.BooleanField()
+
+
+class CheckInResponseSerializer(serializers.Serializer):
+    status = serializers.CharField()
+    habit_id = serializers.IntegerField()
+    date = serializers.DateField()
+    current_streak = serializers.IntegerField()
+    longest_streak = serializers.IntegerField()
+

@@ -137,7 +137,7 @@ A comprehensive code review of the Habit Tracker MVP was conducted across all fi
 ### 🟡 Important Priority
 *Violations of specifications, missing data validation, broken documentation schemas, and architectural flaws.*
 
-#### 6. Missing `is_checked_today` Field in `HabitSerializer`
+#### 6. Missing `is_checked_today` Field in `HabitSerializer` [FIXED]
 - **Location:** `apps/habits/serializers.py:17-43`, `apps/habits/views.py:19`
 - **Category:** API Contract & Specifications
 - **Description:** `docs/PLAN.md` (Sections 4.1, 4.2 line 217-235) specifies that the habit list/detail response must include `is_checked_today: bool`, driven optionally by a `?date=YYYY-MM-DD` query parameter. Currently, `is_checked_today` is missing from `HabitSerializer.Meta.fields`. Frontends (such as the planned Phase 5 React client) will be unable to determine today's completion status without making secondary queries.
@@ -145,7 +145,7 @@ A comprehensive code review of the Habit Tracker MVP was conducted across all fi
 
 ---
 
-#### 7. Missing Hex Color Format Validation on `Habit.color`
+#### 7. Missing Hex Color Format Validation on `Habit.color` [FIXED]
 - **Location:** `apps/habits/models.py:16`, `apps/habits/serializers.py:17-34`
 - **Category:** Input Validation
 - **Description:** `color` is defined as `models.CharField(max_length=7, default='#3B82F6')`. Neither the model nor `HabitSerializer` validates whether the input is a valid hexadecimal color string. Clients can store arbitrary text such as `"blue"`, `"invalid"`, `"#12"`, or `"1234567"`.
@@ -161,7 +161,7 @@ A comprehensive code review of the Habit Tracker MVP was conducted across all fi
 
 ---
 
-#### 8. Missing Length and Unicode Emoji Validation on `Habit.emoji`
+#### 8. Missing Length and Unicode Emoji Validation on `Habit.emoji` [FIXED]
 - **Location:** `apps/habits/models.py:17`, `apps/habits/serializers.py:17-34`
 - **Category:** Input Validation
 - **Description:** `emoji` is defined as `models.CharField(max_length=16, default='🎯')`. It accepts any arbitrary 16-character string (e.g. `"not-an-emoji"`, `"1234567890"`, or empty strings `""`).
@@ -169,7 +169,7 @@ A comprehensive code review of the Habit Tracker MVP was conducted across all fi
 
 ---
 
-#### 9. Broken OpenAPI / Swagger Schemas for Custom ViewSet Actions
+#### 9. Broken OpenAPI / Swagger Schemas for Custom ViewSet Actions [FIXED]
 - **Location:** `apps/habits/views.py:24-100`
 - **Category:** Documentation & Developer Experience
 - **Description:** Because DRF-Spectacular falls back to the ViewSet's `serializer_class = HabitSerializer`:
@@ -210,7 +210,7 @@ A comprehensive code review of the Habit Tracker MVP was conducted across all fi
 
 ---
 
-#### 11. Fragile Hardcoded Detail Action List in `HabitViewSet.get_queryset()`
+#### 11. Fragile Hardcoded Detail Action List in `HabitViewSet.get_queryset()` [FIXED]
 - **Location:** `apps/habits/views.py:15-17`
 - **Category:** Architecture & Maintainability
 - **Description:** `HabitViewSet.get_queryset()` lists actions explicitly:
@@ -293,7 +293,7 @@ A comprehensive code review of the Habit Tracker MVP was conducted across all fi
 
 ---
 
-#### 17. Absence of Pagination on List Endpoints
+#### 17. Absence of Pagination on List Endpoints [FIXED]
 - **Location:** `config/settings/base.py:95-97`, `apps/habits/views.py:87-100`
 - **Category:** Scalability
 - **Description:** `GET /api/v1/habits/` and `GET /api/v1/habits/{id}/check-ins/` return all records in a single payload. As habits accumulate check-ins over months and years, `check-ins` will return hundreds of items without pagination, leading to unnecessary memory usage and response latency.
@@ -350,18 +350,18 @@ A comprehensive code review of the Habit Tracker MVP was conducted across all fi
 | 3 | 🔴 Critical | Performance | `apps/habits/views.py:14-23`, `apps/habits/services/streaks.py:85-88` | [FIXED] $N+1$ queries when listing habits with computed streaks |
 | 4 | 🔴 Critical | Bug / Error | `apps/habits/views.py:94-97` | [FIXED] Uncaught `ValidationError` causes 500 error on invalid date query param |
 | 5 | 🔴 Critical | Bug / Types | `apps/habits/services/streaks.py:28-35` | [FIXED] `calculate_streaks` crashes with `TypeError` when passed `datetime` objects |
-| 6 | 🟡 Important | Spec / API | `apps/habits/serializers.py:17-43`, `apps/habits/views.py:19` | `is_checked_today` field missing from `HabitSerializer` |
-| 7 | 🟡 Important | Validation | `apps/habits/models.py:16`, `apps/habits/serializers.py:17` | Missing hex color format validator (`#RRGGBB`) |
-| 8 | 🟡 Important | Validation | `apps/habits/models.py:17`, `apps/habits/serializers.py:17` | Missing emoji length and character validation |
-| 9 | 🟡 Important | OpenAPI | `apps/habits/views.py:24-100` | AutoSchema documents wrong request/response models for actions |
+| 6 | 🟡 Important | Spec / API | `apps/habits/serializers.py:17-43`, `apps/habits/views.py:19` | [FIXED] `is_checked_today` field missing from `HabitSerializer` |
+| 7 | 🟡 Important | Validation | `apps/habits/models.py:16`, `apps/habits/serializers.py:17` | [FIXED] Missing hex color format validator (`#RRGGBB`) |
+| 8 | 🟡 Important | Validation | `apps/habits/models.py:17`, `apps/habits/serializers.py:17` | [FIXED] Missing emoji length and character validation |
+| 9 | 🟡 Important | OpenAPI | `apps/habits/views.py:24-100` | [FIXED] AutoSchema documents wrong request/response models for actions |
 | 10 | 🟡 Important | Integrity | `apps/habits/models.py:53-56`, `apps/habits/serializers.py:6-10` | [FIXED] Model `clean()` validation bypassed by ModelSerializer and direct ORM |
-| 11 | 🟡 Important | Architecture | `apps/habits/views.py:16-17` | Hardcoded detail action list in `get_queryset` is brittle |
+| 11 | 🟡 Important | Architecture | `apps/habits/views.py:16-17` | [FIXED] Hardcoded detail action list in `get_queryset` is brittle |
 | 12 | 🟡 Important | Testing | `apps/habits/tests/` | Missing tests for N+1 queries, invalid filter params, and validators |
 | 13 | 🟢 Nice-to-Have | Database | `apps/habits/models.py:43-51` | Redundant index on `(habit, date)` duplicates unique constraint index |
 | 14 | 🟢 Nice-to-Have | Admin | `apps/habits/admin.py:12-18` | [FIXED] Missing `list_select_related` on `HabitCheckInAdmin` ($N+1$ in Admin) |
 | 15 | 🟢 Nice-to-Have | Routing | `config/urls.py:8-9` | Redundant non-slashed `/docs` route |
 | 16 | 🟢 Nice-to-Have | Clean Code | `apps/habits/models.py:63`, `serializers.py:14`, `admin.py:20` | Redundant aliases (`CheckIn = HabitCheckIn`) |
-| 17 | 🟢 Nice-to-Have | Scalability | `config/settings/base.py:95-97`, `apps/habits/views.py:87-100` | No pagination configured on list endpoints |
+| 17 | 🟢 Nice-to-Have | Scalability | `config/settings/base.py:95-97`, `apps/habits/views.py:87-100` | [FIXED] No pagination configured on list endpoints |
 | 18 | 🟢 Nice-to-Have | Database | `apps/habits/models.py:22-26` | Index direction mismatch (`created_at` vs `-created_at`) |
 | 19 | 🟢 Nice-to-Have | DRY | `apps/habits/views.py:48-56, 76-84` | Duplicated response dictionary in `check` and `uncheck` |
 | 20 | 🟢 Nice-to-Have | Clean Code | `config/settings/base.py:10, 19` | [FIXED] Duplicated default value for `ALLOWED_HOSTS` in base settings |

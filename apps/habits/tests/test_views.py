@@ -10,13 +10,13 @@ def test_list_habits(api_client, habit):
     # By default, archived habits should not be listed
     response = api_client.get("/api/v1/habits/")
     assert response.status_code == status.HTTP_200_OK
-    assert len(response.data) == 1
-    assert response.data[0]["id"] == habit.id
+    assert response.data["count"] == 1
+    assert response.data["results"][0]["id"] == habit.id
 
     # With include_archived=true
     response = api_client.get("/api/v1/habits/?include_archived=true")
     assert response.status_code == status.HTTP_200_OK
-    assert len(response.data) == 2
+    assert response.data["count"] == 2
 
 
 @pytest.mark.django_db
@@ -26,11 +26,12 @@ def test_list_habits_query_count_constant(api_client, django_assert_num_queries)
         h = Habit.objects.create(name=f"Habit {i}")
         h.check_ins.create(date=today)
 
-    # 1 query to fetch habits + 1 query to prefetch check_ins = 2 queries
-    with django_assert_num_queries(2):
+    # 1 query for count + 1 query to fetch habits + 1 query to prefetch check_ins = 3 queries
+    with django_assert_num_queries(3):
         response = api_client.get("/api/v1/habits/")
         assert response.status_code == status.HTTP_200_OK
-        assert len(response.data) == 5
+        assert response.data["count"] == 5
+        assert len(response.data["results"]) == 5
 
 
 @pytest.mark.django_db
@@ -209,8 +210,8 @@ def test_list_checkins(api_client, habit):
 
     response = api_client.get(f"/api/v1/habits/{habit.id}/check-ins/")
     assert response.status_code == status.HTTP_200_OK
-    assert len(response.data) == 2
-    dates = [item["date"] for item in response.data]
+    assert response.data["count"] == 2
+    dates = [item["date"] for item in response.data["results"]]
     assert str(today) in dates
     assert str(yesterday) in dates
 
@@ -228,8 +229,8 @@ def test_list_checkins_date_range_filter(api_client, habit):
     # Filter with both 'from' and 'to'
     response = api_client.get(f"/api/v1/habits/{habit.id}/check-ins/?from={d2}&to={d3}")
     assert response.status_code == status.HTTP_200_OK
-    assert len(response.data) == 2
-    dates = [item["date"] for item in response.data]
+    assert response.data["count"] == 2
+    dates = [item["date"] for item in response.data["results"]]
     assert str(d2) in dates
     assert str(d3) in dates
     assert str(d1) not in dates
@@ -237,12 +238,12 @@ def test_list_checkins_date_range_filter(api_client, habit):
     # Filter with only 'from'
     response = api_client.get(f"/api/v1/habits/{habit.id}/check-ins/?from={d2}")
     assert response.status_code == status.HTTP_200_OK
-    assert len(response.data) == 2
+    assert response.data["count"] == 2
 
     # Filter with only 'to'
     response = api_client.get(f"/api/v1/habits/{habit.id}/check-ins/?to={d2}")
     assert response.status_code == status.HTTP_200_OK
-    assert len(response.data) == 2
+    assert response.data["count"] == 2
 
 
 @pytest.mark.django_db
@@ -280,8 +281,8 @@ def test_list_checkins_isolated_to_habit(api_client, habit):
 
     response = api_client.get(f"/api/v1/habits/{habit.id}/check-ins/")
     assert response.status_code == status.HTTP_200_OK
-    assert len(response.data) == 1
-    assert response.data[0]["date"] == str(today)
+    assert response.data["count"] == 1
+    assert response.data["results"][0]["date"] == str(today)
 
 
 def test_swagger_docs_accessible(api_client):
@@ -312,7 +313,7 @@ def test_habit_api_exposes_streaks_empty(api_client, habit):
     # Also in list habits
     list_res = api_client.get("/api/v1/habits/")
     assert list_res.status_code == status.HTTP_200_OK
-    habit_data = next(h for h in list_res.data if h["id"] == habit.id)
+    habit_data = next(h for h in list_res.data["results"] if h["id"] == habit.id)
     assert habit_data["current_streak"] == 0
     assert habit_data["longest_streak"] == 0
 

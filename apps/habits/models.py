@@ -2,6 +2,7 @@ from django.db import models
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.utils import timezone
+from .validators import hex_color_validator, validate_emoji
 
 class Habit(models.Model):
     user = models.ForeignKey(
@@ -13,8 +14,8 @@ class Habit(models.Model):
     )
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True, default='')
-    color = models.CharField(max_length=7, default='#3B82F6')
-    emoji = models.CharField(max_length=16, default='🎯')
+    color = models.CharField(max_length=7, default='#3B82F6', validators=[hex_color_validator])
+    emoji = models.CharField(max_length=16, default='🎯', validators=[validate_emoji])
     is_archived = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

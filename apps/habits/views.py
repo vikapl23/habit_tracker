@@ -2,12 +2,15 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.utils import timezone
+from drf_spectacular.utils import extend_schema, OpenApiParameter
 from .models import Habit, HabitCheckIn, CheckIn
 from .serializers import (
     HabitSerializer,
     HabitCheckInSerializer,
     CheckInActionSerializer,
     CheckInFilterSerializer,
+    ArchiveResponseSerializer,
+    CheckInResponseSerializer,
 )
 from .services.streaks import calculate_habit_streaks
 
@@ -17,8 +20,7 @@ class HabitViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = Habit.objects.prefetch_related('check_ins')
-        # In detail routes (like archive/unarchive, check/uncheck/check-ins), allow accessing habit
-        if self.action in ['retrieve', 'update', 'partial_update', 'destroy', 'archive', 'unarchive', 'check', 'uncheck', 'check_ins']:
+        if getattr(self, 'detail', False) or self.action != 'list':
             return qs
 
         include_archived = self.request.query_params.get('include_archived', 'false').lower() in ['true', '1']
@@ -26,6 +28,7 @@ class HabitViewSet(viewsets.ModelViewSet):
             qs = qs.filter(is_archived=False)
         return qs
 
+    @extend_schema(request=None, responses={200: ArchiveResponseSerializer})
     @action(detail=True, methods=['post'])
     def archive(self, request, pk=None):
         habit = self.get_object()
@@ -33,6 +36,7 @@ class HabitViewSet(viewsets.ModelViewSet):
         habit.save(update_fields=['is_archived', 'updated_at'])
         return Response({'id': habit.id, 'is_archived': True}, status=status.HTTP_200_OK)
 
+    @extend_schema(request=None, responses={200: ArchiveResponseSerializer})
     @action(detail=True, methods=['post'])
     def unarchive(self, request, pk=None):
         habit = self.get_object()
@@ -40,6 +44,10 @@ class HabitViewSet(viewsets.ModelViewSet):
         habit.save(update_fields=['is_archived', 'updated_at'])
         return Response({'id': habit.id, 'is_archived': False}, status=status.HTTP_200_OK)
 
+    @extend_schema(
+        request=CheckInActionSerializer,
+        responses={201: CheckInResponseSerializer, 200: CheckInResponseSerializer},
+    )
     @action(detail=True, methods=['post'])
     def check(self, request, pk=None):
         habit = self.get_object()
@@ -63,6 +71,10 @@ class HabitViewSet(viewsets.ModelViewSet):
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
         )
 
+    @extend_schema(
+        request=CheckInActionSerializer,
+        responses={200: CheckInResponseSerializer},
+    )
     @action(detail=True, methods=['post'])
     def uncheck(self, request, pk=None):
         habit = self.get_object()
@@ -93,6 +105,13 @@ class HabitViewSet(viewsets.ModelViewSet):
             status=status.HTTP_200_OK,
         )
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='from', description='Filter check-ins from date (YYYY-MM-DD)', required=False, type=str),
+            OpenApiParameter(name='to', description='Filter check-ins up to date (YYYY-MM-DD)', required=False, type=str),
+        ],
+        responses={200: HabitCheckInSerializer(many=True)},
+    )
     @action(detail=True, methods=['get'], url_path='check-ins')
     def check_ins(self, request, pk=None):
         habit = self.get_object()
@@ -113,6 +132,11 @@ class HabitViewSet(viewsets.ModelViewSet):
             qs = qs.filter(date__gte=validated['from_date'])
         if 'to_date' in validated:
             qs = qs.filter(date__lte=validated['to_date'])
+
+        page = self.paginate_queryset(qs)
+        if page is not None:
+            serializer = HabitCheckInSerializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
 
         serializer = HabitCheckInSerializer(qs, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
