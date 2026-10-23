@@ -95,14 +95,57 @@ def test_production_succeeds_with_valid_env(monkeypatch):
     assert settings.SECRET_KEY == "valid-production-secret-key-for-test-12345"
 
 
+def test_base_settings_fails_when_secret_key_is_missing(monkeypatch):
+    monkeypatch.setattr("environ.Env.read_env", lambda *a, **kw: None)
+    monkeypatch.delenv("SECRET_KEY", raising=False)
+    for mod in ["config.settings.base"]:
+        if mod in sys.modules:
+            del sys.modules[mod]
+    with pytest.raises(ImproperlyConfigured, match="SECRET_KEY"):
+        importlib.import_module("config.settings.base")
+
+
+def test_base_settings_fails_when_secret_key_is_empty(monkeypatch):
+    monkeypatch.setattr("environ.Env.read_env", lambda *a, **kw: None)
+    monkeypatch.setenv("SECRET_KEY", "")
+    for mod in ["config.settings.base"]:
+        if mod in sys.modules:
+            del sys.modules[mod]
+    with pytest.raises(ImproperlyConfigured, match="SECRET_KEY"):
+        importlib.import_module("config.settings.base")
+
+
 def test_base_settings_allowed_hosts_default(monkeypatch):
     monkeypatch.setattr("environ.Env.read_env", lambda *a, **kw: None)
+    monkeypatch.setenv("SECRET_KEY", "dummy-secret-key-for-test")
     monkeypatch.delenv("ALLOWED_HOSTS", raising=False)
     for mod in ["config.settings.base"]:
         if mod in sys.modules:
             del sys.modules[mod]
     base = importlib.import_module("config.settings.base")
-    assert base.ALLOWED_HOSTS == ["*"]
+    assert base.ALLOWED_HOSTS == []
+
+
+def test_local_settings_allowed_hosts_default(monkeypatch):
+    monkeypatch.setattr("environ.Env.read_env", lambda *a, **kw: None)
+    monkeypatch.setenv("SECRET_KEY", "dummy-secret-key-for-test")
+    monkeypatch.delenv("ALLOWED_HOSTS", raising=False)
+    for mod in ["config.settings.local", "config.settings.base"]:
+        if mod in sys.modules:
+            del sys.modules[mod]
+    local = importlib.import_module("config.settings.local")
+    assert set(local.ALLOWED_HOSTS) == {"localhost", "127.0.0.1"}
+
+
+def test_env_example_contains_placeholder_and_no_wildcard_hosts():
+    from pathlib import Path
+
+    env_example = Path(__file__).resolve().parent.parent.parent.parent / ".env.example"
+    content = env_example.read_text(encoding="utf-8")
+    assert "django-insecure-development-secret-key-change-in-production-12345" not in content
+    assert "ALLOWED_HOSTS=*" not in content
+    assert "SECRET_KEY=" in content
+    assert "ALLOWED_HOSTS=" in content
 
 
 def test_test_settings_uses_md5_password_hasher():

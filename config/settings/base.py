@@ -2,13 +2,12 @@ from datetime import timedelta
 from pathlib import Path
 
 import environ
+from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 env = environ.Env(
     DEBUG=(bool, False),
-    SECRET_KEY=(str, "django-insecure-development-secret-key-change-in-production-12345"),
-    ALLOWED_HOSTS=(list, ["*"]),
     AUTH_THROTTLE_RATE=(str, "5/minute"),
 )
 
@@ -16,9 +15,17 @@ env_file = BASE_DIR / ".env"
 if env_file.exists():
     environ.Env.read_env(env_file)
 
-SECRET_KEY = env("SECRET_KEY")
+try:
+    SECRET_KEY = env("SECRET_KEY")
+    if not SECRET_KEY:
+        raise ImproperlyConfigured("SECRET_KEY environment variable must be set.")
+except ImproperlyConfigured:
+    raise
+except Exception as e:
+    raise ImproperlyConfigured(f"SECRET_KEY environment variable must be set: {e}") from e
+
 DEBUG = env("DEBUG")
-ALLOWED_HOSTS = env.list("ALLOWED_HOSTS")
+ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=[])
 AUTH_THROTTLE_RATE = env("AUTH_THROTTLE_RATE")
 
 INSTALLED_APPS = [

@@ -2,6 +2,8 @@ from .base import *
 
 DEBUG = True
 
+ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
+
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
 AUTH_THROTTLE_RATE = env("AUTH_THROTTLE_RATE", default="100/minute")
