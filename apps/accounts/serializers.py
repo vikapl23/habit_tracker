@@ -1,17 +1,14 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
+from django.db import IntegrityError
 from rest_framework import serializers
 
 User = get_user_model()
 
 
-class RegisterSerializer(serializers.ModelSerializer):
+class RegisterSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
-
-    class Meta:
-        model = User
-        fields = ("id", "email", "password")
-        read_only_fields = ("id",)
 
     def to_internal_value(self, data):
         if hasattr(data, "copy"):
@@ -23,6 +20,12 @@ class RegisterSerializer(serializers.ModelSerializer):
         return super().to_internal_value(data)
 
     def create(self, validated_data):
-        return User.objects.create_user(
-            email=validated_data["email"], password=validated_data["password"]
-        )
+        email = validated_data["email"].lower()
+        try:
+            if not User.objects.filter(email=email).exists():
+                return User.objects.create_user(
+                    email=email, password=validated_data["password"]
+                )
+            return User.objects.get(email=email)
+        except IntegrityError:
+            return User.objects.get(email=email)

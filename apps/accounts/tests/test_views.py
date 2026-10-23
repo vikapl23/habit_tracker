@@ -39,28 +39,41 @@ class TestAuthEndpoints:
         }
         response = api_client.post(self.register_url, data)
         assert response.status_code == status.HTTP_201_CREATED
-        assert response.data["email"] == "newuser@example.com"
-        assert "id" in response.data
-        assert "password" not in response.data
+        assert response.data == {"detail": "User registered successfully."}
         assert User.objects.filter(email="newuser@example.com").exists()
+        created_user = User.objects.get(email="newuser@example.com")
+        assert created_user.check_password("StrongPassword123!")
 
-    def test_register_duplicate_email_fails(self, api_client, existing_user):
+    def test_register_duplicate_email_returns_same_generic_response(
+        self, api_client, existing_user
+    ):
         data = {
             "email": existing_user.email,
             "password": "AnotherPassword123!",
         }
         response = api_client.post(self.register_url, data)
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert "email" in response.data
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data == {"detail": "User registered successfully."}
+        # Existing user is not duplicated
+        assert User.objects.filter(email=existing_user.email).count() == 1
+        # Existing user password is not overwritten
+        existing_user.refresh_from_db()
+        assert existing_user.check_password("ValidPassword123!")
+        assert not existing_user.check_password("AnotherPassword123!")
 
-    def test_register_duplicate_email_case_insensitive_fails(self, api_client, existing_user):
+    def test_register_duplicate_email_case_insensitive_returns_same_generic_response(
+        self, api_client, existing_user
+    ):
         data = {
             "email": existing_user.email.upper(),
             "password": "AnotherPassword123!",
         }
         response = api_client.post(self.register_url, data)
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert "email" in response.data
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data == {"detail": "User registered successfully."}
+        assert User.objects.filter(email=existing_user.email).count() == 1
+        existing_user.refresh_from_db()
+        assert existing_user.check_password("ValidPassword123!")
 
     def test_register_stores_email_lowercased(self, api_client):
         data = {
@@ -69,7 +82,7 @@ class TestAuthEndpoints:
         }
         response = api_client.post(self.register_url, data)
         assert response.status_code == status.HTTP_201_CREATED
-        assert response.data["email"] == "newuserwithcaps@example.com"
+        assert response.data == {"detail": "User registered successfully."}
         assert User.objects.filter(email="newuserwithcaps@example.com").exists()
 
     def test_register_invalid_email_fails(self, api_client):
