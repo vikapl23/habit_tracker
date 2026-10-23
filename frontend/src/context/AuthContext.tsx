@@ -15,6 +15,7 @@ export interface AuthContextType {
   register: (email: string, password: string, timezone?: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshProfile: () => Promise<void>;
+  updateProfile: (data: Partial<UserProfile>) => Promise<UserProfile>;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -86,6 +87,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await fetchProfile();
   };
 
+  const updateProfile = async (data: Partial<UserProfile>): Promise<UserProfile> => {
+    const updated = await apiClient.updateProfile(data);
+    setUser(updated);
+    return updated;
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -96,6 +103,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         register,
         logout,
         refreshProfile,
+        updateProfile,
       }}
     >
       {children}

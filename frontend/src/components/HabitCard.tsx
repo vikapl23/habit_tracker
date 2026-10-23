@@ -1,10 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Habit } from '../types/habit';
 import { Check, MoreHorizontal, Edit, Archive, Trash2 } from 'lucide-react';
 
 interface HabitCardProps {
   habit: Habit;
   onToggle: (habit: Habit) => void;
+  onSelect?: (habit: Habit) => void;
   onEdit?: (habit: Habit) => void;
   onArchive?: (habit: Habit) => void;
   onDelete?: (habit: Habit) => void;
@@ -14,11 +16,13 @@ interface HabitCardProps {
 export const HabitCard: React.FC<HabitCardProps> = ({
   habit,
   onToggle,
+  onSelect,
   onEdit,
   onArchive,
   onDelete,
   disabled = false,
 }) => {
+  const navigate = useNavigate();
   const isChecked = habit.is_checked_today;
   const accentColor = habit.color || '#3B82F6';
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -38,8 +42,13 @@ export const HabitCard: React.FC<HabitCardProps> = ({
     };
   }, [isMenuOpen]);
 
-  const handleCardClick = () => {
-    onToggle(habit);
+  const handleInfoClick = (e: React.MouseEvent | React.KeyboardEvent) => {
+    e.stopPropagation();
+    if (onSelect) {
+      onSelect(habit);
+    } else {
+      navigate(`/habits/${habit.id}`);
+    }
   };
 
   const handleMenuToggle = (e: React.MouseEvent) => {
@@ -49,19 +58,8 @@ export const HabitCard: React.FC<HabitCardProps> = ({
 
   return (
     <div
-      role="button"
-      tabIndex={0}
-      onClick={handleCardClick}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          handleCardClick();
-        }
-      }}
-      aria-label={`Toggle ${habit.name}, currently ${isChecked ? 'completed' : 'incomplete'}`}
-      aria-pressed={isChecked}
-      className={`relative w-full min-h-[56px] text-left p-3.5 rounded-2xl border transition-all duration-200 flex items-center justify-between gap-3 select-none cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-        disabled ? 'opacity-60 pointer-events-none' : 'active:scale-[0.99]'
+      className={`relative w-full min-h-[56px] text-left p-3.5 rounded-2xl border transition-all duration-200 flex items-center justify-between gap-3 select-none ${
+        disabled ? 'opacity-60 pointer-events-none' : ''
       } ${
         isChecked
           ? 'bg-slate-50/80 border-slate-200 shadow-none'
@@ -72,8 +70,20 @@ export const HabitCard: React.FC<HabitCardProps> = ({
         borderLeftColor: accentColor,
       }}
     >
-      {/* Left side: Emoji & Habit Information */}
-      <div className="flex items-center gap-3 min-w-0 flex-1">
+      {/* Left side: Emoji & Habit Information (Tap to view habit details) */}
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={handleInfoClick}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            handleInfoClick(e);
+          }
+        }}
+        aria-label={`View details for ${habit.name}`}
+        className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg p-1 -m-1"
+      >
         <div
           className="w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0 transition-transform"
           style={{
@@ -115,16 +125,23 @@ export const HabitCard: React.FC<HabitCardProps> = ({
 
       {/* Right side: Checkbox Circle Indicator & Menu Button */}
       <div className="shrink-0 flex items-center gap-2 pl-1">
-        <div
-          className={`w-7 h-7 rounded-full flex items-center justify-center transition-all duration-200 ${
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggle(habit);
+          }}
+          disabled={disabled}
+          aria-label={`Toggle ${habit.name}, currently ${isChecked ? 'completed' : 'incomplete'}`}
+          aria-pressed={isChecked}
+          className={`w-7 h-7 rounded-full flex items-center justify-center transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
             isChecked
               ? 'bg-emerald-500 text-white shadow-sm ring-2 ring-emerald-500/20'
               : 'border-2 border-slate-300 hover:border-slate-400 bg-white'
           }`}
-          aria-hidden="true"
         >
           {isChecked && <Check className="w-4 h-4 stroke-[2.5]" />}
-        </div>
+        </button>
 
         {(onEdit || onArchive || onDelete) && (
           <div className="relative" ref={menuRef}>

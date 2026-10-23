@@ -135,5 +135,23 @@ describe('Habits API Service', () => {
       await habitsApi.unarchiveHabit(10);
       expect(postSpy).toHaveBeenNthCalledWith(2, '/habits/10/unarchive/', {});
     });
+
+    it('calls GET /habits/{id}/ to get single habit', async () => {
+      const getSpy = vi.spyOn(apiClient, 'get').mockResolvedValueOnce(mockHabit(15, 'Read'));
+      const habit = await habitsApi.getHabit(15);
+      expect(getSpy).toHaveBeenCalledWith('/habits/15/');
+      expect(habit.name).toBe('Read');
+    });
+
+    it('calls GET /habits/{id}/check-ins/ with from and to query params', async () => {
+      const getSpy = vi.spyOn(apiClient, 'get').mockResolvedValueOnce([
+        { id: 1, date: '2026-10-01', created_at: '2026-10-01T00:00:00Z' },
+        { id: 2, date: '2026-10-02', created_at: '2026-10-02T00:00:00Z' },
+      ]);
+      const checkIns = await habitsApi.getHabitCheckIns(15, '2026-10-01', '2026-10-31');
+      expect(getSpy).toHaveBeenCalledWith('/habits/15/check-ins/?page=1&from=2026-10-01&to=2026-10-31');
+      expect(checkIns).toHaveLength(2);
+      expect(checkIns[0].date).toBe('2026-10-01');
+    });
   });
 });

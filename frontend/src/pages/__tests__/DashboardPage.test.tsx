@@ -293,4 +293,41 @@ describe('DashboardPage Mobile View', () => {
     expect(getAllSpy).toHaveBeenCalledTimes(2);
     expect(await screen.findByText('Drink Water')).toBeInTheDocument();
   });
+
+  it('renders bottom navigation with Today, Archive, and Profile, with FAB above navigation', async () => {
+    vi.spyOn(habitsApi, 'getAllHabits').mockResolvedValue([mockScheduledHabit]);
+
+    renderDashboard();
+
+    expect(await screen.findByText('Drink Water')).toBeInTheDocument();
+
+    const bottomNav = screen.getByRole('navigation', { name: /bottom navigation/i });
+    expect(bottomNav).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /today/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /archive/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /profile/i })).toBeInTheDocument();
+
+    // Check that FAB is rendered with bottom-20 (above the bottom navigation bar)
+    const fab = screen.getByRole('button', { name: /new habit/i });
+    expect(fab.parentElement).toHaveClass('bottom-20');
+  });
+
+  it('tapping on habit name/emoji triggers view details rather than toggling check-in', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(habitsApi, 'getAllHabits').mockResolvedValue([mockScheduledHabit]);
+    const checkSpy = vi.spyOn(habitsApi, 'checkHabit');
+
+    renderDashboard();
+
+    const detailsBtn = await screen.findByRole('button', {
+      name: /view details for drink water/i,
+    });
+    expect(detailsBtn).toBeInTheDocument();
+
+    // Tap habit details button
+    await user.click(detailsBtn);
+
+    // checkHabit should NOT have been called
+    expect(checkSpy).not.toHaveBeenCalled();
+  });
 });

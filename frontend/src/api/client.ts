@@ -314,4 +314,8 @@ export const apiClient = {
   getProfile: async (): Promise<UserProfile> => {
     return apiClient.get<UserProfile>('/auth/profile/');
   },
+
+  updateProfile: async (data: Partial<UserProfile>): Promise<UserProfile> => {
+    return apiClient.patch<UserProfile>('/auth/profile/', data);
+  },
 };

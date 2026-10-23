@@ -6,6 +6,8 @@ import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { ArchivedHabitsPage } from './pages/ArchivedHabitsPage';
+import { ProfilePage } from './pages/ProfilePage';
+import { HabitDetailPage } from './pages/HabitDetailPage';
 
 const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuth();
@@ -57,6 +59,22 @@ export const AppRoutes: React.FC = () => {
         element={
           <ProtectedRoute>
             <ArchivedHabitsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/profile"
+        element={
+          <ProtectedRoute>
+            <ProfilePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/habits/:id"
+        element={
+          <ProtectedRoute>
+            <HabitDetailPage />
           </ProtectedRoute>
         }
       />

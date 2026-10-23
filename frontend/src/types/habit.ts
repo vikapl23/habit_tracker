@@ -39,6 +39,12 @@ export interface ArchiveResponse {
   is_archived: boolean;
 }
 
+export interface CheckInRecord {
+  id: number;
+  date: string;
+  created_at: string;
+}
+
 export interface PaginatedResponse<T> {
   count: number;
   next: string | null;

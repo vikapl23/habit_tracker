@@ -350,4 +350,29 @@ describe('API Client and Auth / Token Refresh logic', () => {
       });
     }
   });
+
+  it('updateProfile calls PATCH /auth/profile/ with updated data', async () => {
+    let patchUrl = '';
+    let patchBody: any = null;
+    let patchMethod = '';
+
+    const mockFetch = vi.fn().mockImplementation(async (url: string, init: any) => {
+      patchUrl = url;
+      patchMethod = init.method;
+      patchBody = JSON.parse(init.body);
+      return {
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({ id: 1, email: 'user@example.com', timezone: 'Europe/Kyiv' }),
+      };
+    });
+    globalThis.fetch = mockFetch;
+
+    const res = await apiClient.updateProfile({ timezone: 'Europe/Kyiv' });
+    expect(patchUrl).toContain('/auth/profile/');
+    expect(patchMethod).toBe('PATCH');
+    expect(patchBody).toEqual({ timezone: 'Europe/Kyiv' });
+    expect(res.timezone).toBe('Europe/Kyiv');
+  });
 });

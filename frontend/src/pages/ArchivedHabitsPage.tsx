@@ -4,6 +4,7 @@ import { ArrowLeft, ArchiveRestore, Sparkles, AlertCircle, RefreshCw } from 'luc
 import { Habit } from '../types/habit';
 import { habitsApi } from '../api/habits';
 import { Toast, ToastMessage } from '../components/Toast';
+import { BottomNavigation } from '../components/BottomNavigation';
 
 export const ArchivedHabitsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -160,6 +161,9 @@ export const ArchivedHabitsPage: React.FC = () => {
             </div>
           )}
         </main>
+
+        {/* Bottom Navigation */}
+        <BottomNavigation />
       </div>
     </div>
   );

@@ -13,7 +13,7 @@ This checklist tracks the ongoing development progress of the Habit Tracker proj
 | **Phase 2** | JWT Authentication & User Isolation | `[x]` Completed | 5 / 5 |
 | **Phase 3** | Habit Scheduling & Frequency | `[x]` Completed | 4 / 4 |
 | **Phase 4** | Statistics & Analytics | `[ ]` Postponed (after deployment) | 0 / 4 |
-| **Phase 5** | Mobile-First React Frontend (Vite) | `[ ]` In Progress | 4 / 6 |
+| **Phase 5** | Mobile-First React Frontend (Vite) | `[ ]` In Progress | 5 / 6 |
 | **Phase 6** | Docker & PostgreSQL Environment | `[ ]` Not Started | 0 / 4 |
 | **Phase 7** | Production Deployment (Render.com) | `[ ]` Not Started | 0 / 4 |
 
@@ -148,9 +148,15 @@ This checklist tracks the ongoing development progress of the Habit Tracker proj
   - [x] Dedicated "Archived" habits screen with unarchive functionality.
   - [x] Server and client-side field validation error rendering.
   - [x] Mobile drawer UX: backdrop tap, swipe down, Esc key, auto-focus, responsive layout.
-- [ ] **5.5 Habit Detail & History View**
-  - [ ] Monthly calendar heatmap view of check-in history.
-  - [ ] Statistical summary cards.
+- [x] **5.5 Habit Detail & History View**
+  - [x] Habit detail screen (tap on habit name/emoji, not check circle).
+  - [x] Month calendar view with checked days in habit color, non-scheduled days visually muted.
+  - [x] Month navigation with range query `GET /habits/{id}/check-ins/?from=&to=`.
+  - [x] Current and longest streak cards.
+  - [x] Tapping past day toggles check-in; future days disabled.
+  - [x] Profile screen with read-only email, timezone selector (`PATCH /auth/profile/`), and logout.
+  - [x] Bottom navigation (Today / Archive / Profile) replacing header archive and sign-out icons.
+  - [x] Floating "+" button positioned above bottom navigation without overlap.
 - [ ] **5.6 Polish & PWA Readiness**
   - [ ] Haptic-feel animations, responsive touch targets, dark/light theme support.
 

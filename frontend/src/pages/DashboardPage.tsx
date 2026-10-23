@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
-  LogOut,
   Flame,
   Sparkles,
   ChevronDown,
@@ -11,7 +9,6 @@ import {
   RefreshCw,
   PlusCircle,
   Plus,
-  Archive,
 } from 'lucide-react';
 import { Habit, HabitFormData } from '../types/habit';
 import { habitsApi } from '../api/habits';
@@ -20,15 +17,14 @@ import { HabitFormBottomSheet } from '../components/HabitFormBottomSheet';
 import { DeleteConfirmDialog } from '../components/DeleteConfirmDialog';
 import { Toast, ToastMessage } from '../components/Toast';
 import { DashboardSkeleton } from '../components/DashboardSkeleton';
+import { BottomNavigation } from '../components/BottomNavigation';
 
 interface DashboardPageProps {
   onCreateHabit?: () => void;
 }
 
 export const DashboardPage: React.FC<DashboardPageProps> = ({ onCreateHabit }) => {
-  const { user, logout } = useAuth();
-  const navigate = useNavigate();
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const { user } = useAuth();
 
   const [habits, setHabits] = useState<Habit[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -61,15 +57,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onCreateHabit }) =
   useEffect(() => {
     loadHabits();
   }, [loadHabits]);
-
-  const handleLogout = async () => {
-    setIsLoggingOut(true);
-    try {
-      await logout();
-    } finally {
-      setIsLoggingOut(false);
-    }
-  };
 
   const handleToggleHabit = async (habit: Habit) => {
     if (pendingHabitIds.has(habit.id)) return;
@@ -267,35 +254,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onCreateHabit }) =
             <span className="text-2xl select-none shrink-0" role="img" aria-label="Target">🎯</span>
             <div className="min-w-0">
               <h1 className="text-base font-bold text-slate-900 leading-tight truncate">Habit Tracker</h1>
-              <p className="text-[11px] text-slate-500 truncate max-w-[150px] sm:max-w-[200px]" title={user?.email}>
+              <p className="text-[11px] text-slate-500 truncate max-w-[200px]" title={user?.email}>
                 {user?.email}
               </p>
             </div>
-          </div>
-
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => navigate('/archived')}
-              aria-label="View archived habits"
-              className="min-h-[44px] min-w-[44px] flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 active:bg-slate-200 transition duration-150 shrink-0"
-              title="Archived habits"
-            >
-              <Archive className="h-4 w-4 text-slate-500" />
-            </button>
-
-            <button
-              onClick={handleLogout}
-              disabled={isLoggingOut}
-              aria-label="Log out"
-              className="min-h-[44px] min-w-[44px] flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 active:bg-slate-200 transition duration-150 disabled:opacity-50 shrink-0"
-            >
-              {isLoggingOut ? (
-                <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-slate-400 border-t-transparent" />
-              ) : (
-                <LogOut className="h-3.5 w-3.5 text-slate-500" />
-              )}
-              <span>Sign out</span>
-            </button>
           </div>
         </header>
 
@@ -491,8 +453,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onCreateHabit }) =
           )}
         </main>
 
-        {/* Floating Action Button (FAB) for New Habit */}
-        <div className="fixed bottom-6 right-6 z-20 sm:static sm:bottom-auto sm:right-auto sm:p-5 sm:pt-0">
+        {/* Floating Action Button (FAB) for New Habit - positioned above bottom navigation */}
+        <div className="fixed bottom-20 right-6 z-20 sm:static sm:bottom-auto sm:right-auto sm:p-5 sm:pt-0">
           <button
             type="button"
             onClick={handleCreateHabitClick}
@@ -502,6 +464,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onCreateHabit }) =
             <Plus className="w-7 h-7 stroke-[2.5]" />
           </button>
         </div>
+
+        {/* Bottom Navigation */}
+        <BottomNavigation />
 
         {/* New / Edit Habit Bottom Sheet */}
         <HabitFormBottomSheet

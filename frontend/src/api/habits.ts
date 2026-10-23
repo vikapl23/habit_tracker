@@ -3,6 +3,7 @@ import {
   Habit,
   HabitFormData,
   CheckInResponse,
+  CheckInRecord,
   ArchiveResponse,
   PaginatedResponse,
 } from '../types/habit';
@@ -64,8 +65,50 @@ export const uncheckHabit = async (id: number, date?: string): Promise<CheckInRe
   return apiClient.post<CheckInResponse>(`/habits/${id}/uncheck/`, date ? { date } : {});
 };
 
+export const getHabit = async (id: number): Promise<Habit> => {
+  return apiClient.get<Habit>(`/habits/${id}/`);
+};
+
+export const getHabitCheckIns = async (
+  id: number,
+  from?: string,
+  to?: string
+): Promise<CheckInRecord[]> => {
+  const allCheckIns: CheckInRecord[] = [];
+  let page = 1;
+  let hasMore = true;
+
+  while (hasMore) {
+    const query = new URLSearchParams({
+      page: String(page),
+      ...(from ? { from } : {}),
+      ...(to ? { to } : {}),
+    });
+    const res = await apiClient.get<PaginatedResponse<CheckInRecord> | CheckInRecord[]>(
+      `/habits/${id}/check-ins/?${query.toString()}`
+    );
+    if (Array.isArray(res)) {
+      return res;
+    }
+    if (res && Array.isArray(res.results)) {
+      allCheckIns.push(...res.results);
+      if (res.next) {
+        page += 1;
+      } else {
+        hasMore = false;
+      }
+    } else {
+      hasMore = false;
+    }
+  }
+
+  return allCheckIns;
+};
+
 export const habitsApi = {
   getAllHabits,
+  getHabit,
+  getHabitCheckIns,
   createHabit,
   updateHabit,
   deleteHabit,
