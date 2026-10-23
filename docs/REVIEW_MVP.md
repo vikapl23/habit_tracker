@@ -58,7 +58,7 @@ A comprehensive code review of the Habit Tracker MVP was conducted across all fi
 
 ---
 
-#### 3. Classic N+1 Database Query Bottleneck on Habit Listing
+#### 3. Classic N+1 Database Query Bottleneck on Habit Listing [FIXED]
 - **Location:** `apps/habits/views.py:14-23`, `apps/habits/services/streaks.py:85-88`
 - **Category:** Query Performance
 - **Description:** In `HabitViewSet.get_queryset()`, habits are queried without prefetching check-ins (`qs = Habit.objects.all()`). When DRF serializes each habit with `HabitSerializer`:
@@ -256,7 +256,7 @@ A comprehensive code review of the Habit Tracker MVP was conducted across all fi
 
 ---
 
-#### 14. Django Admin N+1 Query on `HabitCheckInAdmin`
+#### 14. Django Admin N+1 Query on `HabitCheckInAdmin` [FIXED]
 - **Location:** `apps/habits/admin.py:12-18`
 - **Category:** Django Admin Performance
 - **Description:** `HabitCheckInAdmin` displays `habit` in `list_display`:
@@ -347,7 +347,7 @@ A comprehensive code review of the Habit Tracker MVP was conducted across all fi
 |---|---|---|---|---|
 | 1 | 🔴 Critical | Security | `config/settings/production.py:1-16`, `config/settings/base.py:10,19` | [FIXED] Wildcard `ALLOWED_HOSTS` allowed in production |
 | 2 | 🔴 Critical | Security | `config/settings/production.py:1-16`, `config/settings/base.py:9,17` | [FIXED] Fallback insecure `SECRET_KEY` allowed in production |
-| 3 | 🔴 Critical | Performance | `apps/habits/views.py:14-23`, `apps/habits/services/streaks.py:85-88` | $N+1$ queries when listing habits with computed streaks |
+| 3 | 🔴 Critical | Performance | `apps/habits/views.py:14-23`, `apps/habits/services/streaks.py:85-88` | [FIXED] $N+1$ queries when listing habits with computed streaks |
 | 4 | 🔴 Critical | Bug / Error | `apps/habits/views.py:94-97` | [FIXED] Uncaught `ValidationError` causes 500 error on invalid date query param |
 | 5 | 🔴 Critical | Bug / Types | `apps/habits/services/streaks.py:28-35` | [FIXED] `calculate_streaks` crashes with `TypeError` when passed `datetime` objects |
 | 6 | 🟡 Important | Spec / API | `apps/habits/serializers.py:17-43`, `apps/habits/views.py:19` | `is_checked_today` field missing from `HabitSerializer` |
@@ -358,7 +358,7 @@ A comprehensive code review of the Habit Tracker MVP was conducted across all fi
 | 11 | 🟡 Important | Architecture | `apps/habits/views.py:16-17` | Hardcoded detail action list in `get_queryset` is brittle |
 | 12 | 🟡 Important | Testing | `apps/habits/tests/` | Missing tests for N+1 queries, invalid filter params, and validators |
 | 13 | 🟢 Nice-to-Have | Database | `apps/habits/models.py:43-51` | Redundant index on `(habit, date)` duplicates unique constraint index |
-| 14 | 🟢 Nice-to-Have | Admin | `apps/habits/admin.py:12-18` | Missing `list_select_related` on `HabitCheckInAdmin` ($N+1$ in Admin) |
+| 14 | 🟢 Nice-to-Have | Admin | `apps/habits/admin.py:12-18` | [FIXED] Missing `list_select_related` on `HabitCheckInAdmin` ($N+1$ in Admin) |
 | 15 | 🟢 Nice-to-Have | Routing | `config/urls.py:8-9` | Redundant non-slashed `/docs` route |
 | 16 | 🟢 Nice-to-Have | Clean Code | `apps/habits/models.py:63`, `serializers.py:14`, `admin.py:20` | Redundant aliases (`CheckIn = HabitCheckIn`) |
 | 17 | 🟢 Nice-to-Have | Scalability | `config/settings/base.py:95-97`, `apps/habits/views.py:87-100` | No pagination configured on list endpoints |

@@ -12,11 +12,11 @@ from .serializers import (
 from .services.streaks import calculate_habit_streaks
 
 class HabitViewSet(viewsets.ModelViewSet):
-    queryset = Habit.objects.all()
+    queryset = Habit.objects.prefetch_related('check_ins')
     serializer_class = HabitSerializer
 
     def get_queryset(self):
-        qs = Habit.objects.all()
+        qs = Habit.objects.prefetch_related('check_ins')
         # In detail routes (like archive/unarchive, check/uncheck/check-ins), allow accessing habit
         if self.action in ['retrieve', 'update', 'partial_update', 'destroy', 'archive', 'unarchive', 'check', 'uncheck', 'check_ins']:
             return qs
@@ -48,6 +48,8 @@ class HabitViewSet(viewsets.ModelViewSet):
         target_date = serializer.validated_data.get('date') or timezone.localdate()
 
         checkin, created = HabitCheckIn.objects.get_or_create(habit=habit, date=target_date)
+        if hasattr(habit, '_prefetched_objects_cache'):
+            habit._prefetched_objects_cache.pop('check_ins', None)
         streaks = calculate_habit_streaks(habit)
 
         return Response(
@@ -76,6 +78,8 @@ class HabitViewSet(viewsets.ModelViewSet):
             )
 
         checkin.delete()
+        if hasattr(habit, '_prefetched_objects_cache'):
+            habit._prefetched_objects_cache.pop('check_ins', None)
         streaks = calculate_habit_streaks(habit)
 
         return Response(

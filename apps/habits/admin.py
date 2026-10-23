@@ -12,6 +12,7 @@ class HabitAdmin(admin.ModelAdmin):
 @admin.register(HabitCheckIn)
 class HabitCheckInAdmin(admin.ModelAdmin):
     list_display = ('id', 'habit', 'date', 'created_at')
+    list_select_related = ('habit',)
     list_filter = ('date', 'created_at')
     search_fields = ('habit__name',)
     ordering = ('-date',)

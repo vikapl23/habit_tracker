@@ -20,6 +20,20 @@ def test_list_habits(api_client, habit):
 
 
 @pytest.mark.django_db
+def test_list_habits_query_count_constant(api_client, django_assert_num_queries):
+    today = date.today()
+    for i in range(5):
+        h = Habit.objects.create(name=f"Habit {i}")
+        h.check_ins.create(date=today)
+
+    # 1 query to fetch habits + 1 query to prefetch check_ins = 2 queries
+    with django_assert_num_queries(2):
+        response = api_client.get("/api/v1/habits/")
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data) == 5
+
+
+@pytest.mark.django_db
 def test_create_habit(api_client):
     payload = {
         "name": "Morning Meditation",
