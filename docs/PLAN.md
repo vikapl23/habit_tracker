@@ -339,10 +339,20 @@ The streak calculation logic is housed in `apps.habits.services.streaks` to guar
    - **Case A: Today is checked**: Streak includes Today and consecutive prior days.
    - **Case B: Today is not checked yet, but Yesterday is checked**: The streak is **active** (not broken), because the user still has time to check in today. Current streak is the consecutive days ending Yesterday.
    - **Case C: Neither Today nor Yesterday is checked**: The streak has lapsed. Current streak is `0`.
-3. **Longest Streak Ever**:
-   - The maximum consecutive block of checked-in dates in the habit's entire history.
+3. **Scheduled Frequency & Rest Days**:
+   - Habits can be scheduled as "daily" or for specific weekdays (list of 0–6, Monday=0).
+   - Streaks count only scheduled days: off-schedule days never break a streak.
+   - A check-in on an off-schedule day is allowed (e.g. bonus check-in on Saturday for a weekday habit) but does not affect the streak count or streak continuity.
+   - **Current streak with custom frequency**:
+     - If today is a scheduled day:
+       - If today is checked, current streak counts consecutive scheduled days through today.
+       - If today is not checked yet, the streak is still alive (unbroken) based on the preceding scheduled days.
+     - If today is an off-schedule day:
+       - The streak is still alive based on the most recent scheduled days.
+4. **Longest Streak Ever**:
+   - The maximum consecutive block of checked-in scheduled dates in the habit's entire history.
    - Always $\ge$ Current Streak.
-4. **Undo Operation**:
+5. **Undo Operation**:
    - Removing a check-in instantly recalculates streaks. If today's check-in is undone and yesterday was checked, streak reverts to yesterday's count. If an intermediate date is removed, it splits one streak into two.
 
 ### 5.2 Algorithmic Logic & Edge Cases

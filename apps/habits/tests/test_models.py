@@ -120,3 +120,83 @@ def test_habit_model_validation_accepts_valid_complex_emojis(user):
     for emoji in ["👍🏽", "🇺🇦", "❤️", "👨👩👧", "👨‍👩‍👧"]:
         habit = Habit(user=user, name="Test", emoji=emoji)
         habit.full_clean()  # Should not raise
+
+
+@pytest.mark.django_db
+def test_habit_default_frequency(user):
+    habit = Habit.objects.create(user=user, name="Daily Habit")
+    assert habit.frequency_type == "daily"
+    assert habit.frequency_days == []
+    assert habit.is_scheduled_on(date(2026, 10, 23))  # Friday
+    assert habit.is_scheduled_on(date(2026, 10, 24))  # Saturday
+    assert habit.is_scheduled_today() is True
+
+
+@pytest.mark.django_db
+def test_habit_custom_frequency_scheduling(user):
+    # Mon (0), Wed (2), Fri (4)
+    habit = Habit.objects.create(
+        user=user,
+        name="Gym",
+        frequency_type="custom",
+        frequency_days=[0, 2, 4],
+    )
+    assert habit.frequency_type == "custom"
+    assert habit.frequency_days == [0, 2, 4]
+    assert habit.is_scheduled_on(date(2026, 10, 23)) is True  # Friday is 4
+    assert habit.is_scheduled_on(date(2026, 10, 24)) is False  # Saturday is 5
+    assert habit.is_scheduled_on(date(2026, 10, 25)) is False  # Sunday is 6
+    assert habit.is_scheduled_on(date(2026, 10, 26)) is True  # Monday is 0
+
+
+@pytest.mark.django_db
+def test_habit_validation_rejects_empty_frequency_days_for_custom(user):
+    habit = Habit(user=user, name="Gym", frequency_type="custom", frequency_days=[])
+    with pytest.raises(ValidationError) as exc_info:
+        habit.full_clean()
+    assert "frequency_days" in exc_info.value.message_dict
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "invalid_days",
+    [
+        [-1],
+        [7],
+        [0, 7],
+        ["mon"],
+        [0, 1, 1],  # Duplicate
+        [2, 3, 2],  # Duplicate
+    ],
+)
+def test_habit_validation_rejects_invalid_frequency_days(user, invalid_days):
+    habit = Habit(user=user, name="Gym", frequency_type="custom", frequency_days=invalid_days)
+    with pytest.raises(ValidationError) as exc_info:
+        habit.full_clean()
+    assert "frequency_days" in exc_info.value.message_dict
+
+
+@pytest.mark.django_db
+def test_habit_validation_rejects_invalid_frequency_type(user):
+    habit = Habit(user=user, name="Gym", frequency_type="yearly", frequency_days=[0])
+    with pytest.raises(ValidationError) as exc_info:
+        habit.full_clean()
+    assert "frequency_type" in exc_info.value.message_dict
+
+
+@pytest.mark.django_db
+def test_habit_recalculates_streaks_on_frequency_change(user, monkeypatch):
+    habit = Habit.objects.create(user=user, name="Gym")
+    recalculate_called = False
+
+    def mock_recalculate(h, reference_date=None):
+        nonlocal recalculate_called
+        recalculate_called = True
+        return h
+
+    monkeypatch.setattr("apps.habits.services.streaks.recalculate_habit_streaks", mock_recalculate)
+    habit.frequency_type = "custom"
+    habit.frequency_days = [0, 2, 4]
+    habit.save()
+    assert recalculate_called is True
+
