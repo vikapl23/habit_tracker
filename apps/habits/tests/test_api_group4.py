@@ -1,5 +1,6 @@
 import pytest
 from datetime import date, timedelta
+from freezegun import freeze_time
 from rest_framework import status
 from apps.habits.models import Habit
 
@@ -50,12 +51,23 @@ def test_create_habit_valid_color_accepted(api_client, valid_color):
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("invalid_emoji", ["", "   ", "not-an-emoji", "123", "hello 🎯"])
+@freeze_time("2026-10-23")
+@pytest.mark.parametrize("invalid_emoji", ["", "   ", "not-an-emoji", "123", "hello 🎯", "💧💧"])
 def test_create_habit_invalid_emoji_rejected(api_client, invalid_emoji):
     payload = {"name": "Test Habit", "emoji": invalid_emoji}
     res = api_client.post("/api/v1/habits/", payload, format="json")
     assert res.status_code == status.HTTP_400_BAD_REQUEST
     assert "emoji" in res.data
+
+
+@pytest.mark.django_db
+@freeze_time("2026-10-23")
+@pytest.mark.parametrize("valid_emoji", ["👍🏽", "🇺🇦", "❤️", "👨👩👧", "👨‍👩‍👧", "💧", "🎯"])
+def test_create_habit_valid_emoji_accepted(api_client, valid_emoji):
+    payload = {"name": "Test Habit", "emoji": valid_emoji}
+    res = api_client.post("/api/v1/habits/", payload, format="json")
+    assert res.status_code == status.HTTP_201_CREATED
+    assert res.data["emoji"] == valid_emoji
 
 
 @pytest.mark.django_db
