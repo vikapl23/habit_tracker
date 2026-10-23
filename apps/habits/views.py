@@ -1,4 +1,4 @@
-from rest_framework import viewsets, status
+from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.contrib.auth import get_user_model
@@ -16,17 +16,11 @@ from .serializers import (
 from .services.streaks import calculate_habit_streaks
 
 class HabitViewSet(viewsets.ModelViewSet):
-    queryset = Habit.objects.prefetch_related('check_ins')
+    permission_classes = [permissions.IsAuthenticated]
     serializer_class = HabitSerializer
 
     def perform_create(self, serializer):
-        user = self.request.user if getattr(self.request, 'user', None) and self.request.user.is_authenticated else None
-        if user:
-            serializer.save(user=user)
-        else:
-            User = get_user_model()
-            default_user, _ = User.objects.get_or_create(email='default@example.com')
-            serializer.save(user=default_user)
+        serializer.save(user=self.request.user)
 
     def _format_checkin_response(self, habit, status_str: str, target_date, streaks) -> dict:
         return CheckInResponseSerializer({
@@ -38,7 +32,11 @@ class HabitViewSet(viewsets.ModelViewSet):
         }).data
 
     def get_queryset(self):
-        qs = Habit.objects.prefetch_related('check_ins')
+        user = self.request.user
+        if not user or not user.is_authenticated:
+            return Habit.objects.none()
+
+        qs = Habit.objects.filter(user=user).prefetch_related('check_ins')
         if getattr(self, 'detail', False) or self.action != 'list':
             return qs
 

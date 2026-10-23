@@ -14,8 +14,15 @@ def user():
     )
 
 @pytest.fixture
-def api_client():
+def unauthenticated_client():
     return APIClient()
+
+
+@pytest.fixture
+def api_client(db, user):
+    client = APIClient()
+    client.force_authenticate(user=user)
+    return client
 
 @pytest.fixture
 def habit(user):
