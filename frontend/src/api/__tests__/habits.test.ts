@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { getAllHabits, checkHabit, uncheckHabit } from '../habits';
+import { getAllHabits, checkHabit, uncheckHabit, habitsApi } from '../habits';
 import { apiClient } from '../client';
 import { Habit } from '../../types/habit';
 
@@ -89,6 +89,51 @@ describe('Habits API Service', () => {
 
       expect(postSpy).toHaveBeenCalledWith('/habits/1/uncheck/', {});
       expect(res.current_streak).toBe(5);
+    });
+  });
+
+  describe('createHabit, updateHabit, deleteHabit, archiveHabit, unarchiveHabit', () => {
+    it('calls POST /habits/ to create habit', async () => {
+      const postSpy = vi.spyOn(apiClient, 'post').mockResolvedValueOnce(mockHabit(10, 'New'));
+      await habitsApi.createHabit({
+        name: 'New',
+        color: '#3B82F6',
+        emoji: '🎯',
+        frequency_type: 'daily',
+        frequency_days: [],
+      });
+      expect(postSpy).toHaveBeenCalledWith('/habits/', {
+        name: 'New',
+        color: '#3B82F6',
+        emoji: '🎯',
+        frequency_type: 'daily',
+        frequency_days: [],
+      });
+    });
+
+    it('calls PATCH /habits/{id}/ to update habit', async () => {
+      const patchSpy = vi.spyOn(apiClient, 'patch').mockResolvedValueOnce(mockHabit(10, 'Updated'));
+      await habitsApi.updateHabit(10, { name: 'Updated' });
+      expect(patchSpy).toHaveBeenCalledWith('/habits/10/', { name: 'Updated' });
+    });
+
+    it('calls DELETE /habits/{id}/ to delete habit', async () => {
+      const deleteSpy = vi.spyOn(apiClient, 'delete').mockResolvedValueOnce(undefined);
+      await habitsApi.deleteHabit(10);
+      expect(deleteSpy).toHaveBeenCalledWith('/habits/10/');
+    });
+
+    it('calls POST /habits/{id}/archive/ and unarchive/', async () => {
+      const postSpy = vi
+        .spyOn(apiClient, 'post')
+        .mockResolvedValueOnce({ id: 10, is_archived: true })
+        .mockResolvedValueOnce({ id: 10, is_archived: false });
+
+      await habitsApi.archiveHabit(10);
+      expect(postSpy).toHaveBeenNthCalledWith(1, '/habits/10/archive/', {});
+
+      await habitsApi.unarchiveHabit(10);
+      expect(postSpy).toHaveBeenNthCalledWith(2, '/habits/10/unarchive/', {});
     });
   });
 });

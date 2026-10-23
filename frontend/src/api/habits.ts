@@ -1,13 +1,23 @@
 import { apiClient } from './client';
-import { Habit, CheckInResponse, PaginatedResponse } from '../types/habit';
+import {
+  Habit,
+  HabitFormData,
+  CheckInResponse,
+  ArchiveResponse,
+  PaginatedResponse,
+} from '../types/habit';
 
-export const getAllHabits = async (): Promise<Habit[]> => {
+export const getAllHabits = async (includeArchived = false): Promise<Habit[]> => {
   const allHabits: Habit[] = [];
   let page = 1;
   let hasMore = true;
 
   while (hasMore) {
-    const res = await apiClient.get<PaginatedResponse<Habit> | Habit[]>(`/habits/?page=${page}`);
+    const query = new URLSearchParams({
+      page: String(page),
+      ...(includeArchived ? { include_archived: 'true' } : {}),
+    });
+    const res = await apiClient.get<PaginatedResponse<Habit> | Habit[]>(`/habits/?${query.toString()}`);
     if (Array.isArray(res)) {
       return res;
     }
@@ -26,6 +36,26 @@ export const getAllHabits = async (): Promise<Habit[]> => {
   return allHabits;
 };
 
+export const createHabit = async (data: HabitFormData): Promise<Habit> => {
+  return apiClient.post<Habit>('/habits/', data);
+};
+
+export const updateHabit = async (id: number, data: Partial<HabitFormData>): Promise<Habit> => {
+  return apiClient.patch<Habit>(`/habits/${id}/`, data);
+};
+
+export const deleteHabit = async (id: number): Promise<void> => {
+  return apiClient.delete<void>(`/habits/${id}/`);
+};
+
+export const archiveHabit = async (id: number): Promise<ArchiveResponse> => {
+  return apiClient.post<ArchiveResponse>(`/habits/${id}/archive/`, {});
+};
+
+export const unarchiveHabit = async (id: number): Promise<ArchiveResponse> => {
+  return apiClient.post<ArchiveResponse>(`/habits/${id}/unarchive/`, {});
+};
+
 export const checkHabit = async (id: number, date?: string): Promise<CheckInResponse> => {
   return apiClient.post<CheckInResponse>(`/habits/${id}/check/`, date ? { date } : {});
 };
@@ -36,6 +66,11 @@ export const uncheckHabit = async (id: number, date?: string): Promise<CheckInRe
 
 export const habitsApi = {
   getAllHabits,
+  createHabit,
+  updateHabit,
+  deleteHabit,
+  archiveHabit,
+  unarchiveHabit,
   checkHabit,
   uncheckHabit,
 };

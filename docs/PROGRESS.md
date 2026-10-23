@@ -13,7 +13,7 @@ This checklist tracks the ongoing development progress of the Habit Tracker proj
 | **Phase 2** | JWT Authentication & User Isolation | `[x]` Completed | 5 / 5 |
 | **Phase 3** | Habit Scheduling & Frequency | `[x]` Completed | 4 / 4 |
 | **Phase 4** | Statistics & Analytics | `[ ]` Postponed (after deployment) | 0 / 4 |
-| **Phase 5** | Mobile-First React Frontend (Vite) | `[ ]` In Progress | 3 / 6 |
+| **Phase 5** | Mobile-First React Frontend (Vite) | `[ ]` In Progress | 4 / 6 |
 | **Phase 6** | Docker & PostgreSQL Environment | `[ ]` Not Started | 0 / 4 |
 | **Phase 7** | Production Deployment (Render.com) | `[ ]` Not Started | 0 / 4 |
 
@@ -140,9 +140,14 @@ This checklist tracks the ongoing development progress of the Habit Tracker proj
   - [x] Pagination handling to load all habit pages.
   - [x] Empty state ("Create your first habit"), loading skeletons, and error retry state.
   - [x] Touch targets min 44px, no horizontal scroll at 320px width.
-- [ ] **5.4 Habit Management (Modals/Drawers)**
-  - [ ] Create habit modal (name, description, color picker, emoji selector, frequency).
-  - [ ] Edit and archive drawers.
+- [x] **5.4 Habit Management (Modals/Drawers)**
+  - [x] Create habit bottom sheet (name, description, color picker, emoji selector, frequency).
+  - [x] Floating action button and empty state create trigger.
+  - [x] Edit habit and soft-archive actions from card menu.
+  - [x] Delete confirmation dialog with prompt.
+  - [x] Dedicated "Archived" habits screen with unarchive functionality.
+  - [x] Server and client-side field validation error rendering.
+  - [x] Mobile drawer UX: backdrop tap, swipe down, Esc key, auto-focus, responsive layout.
 - [ ] **5.5 Habit Detail & History View**
   - [ ] Monthly calendar heatmap view of check-in history.
   - [ ] Statistical summary cards.

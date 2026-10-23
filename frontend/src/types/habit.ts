@@ -17,12 +17,26 @@ export interface Habit {
   updated_at: string;
 }
 
+export interface HabitFormData {
+  name: string;
+  description?: string;
+  color: string;
+  emoji: string;
+  frequency_type: FrequencyType;
+  frequency_days: number[];
+}
+
 export interface CheckInResponse {
   status: string;
   habit_id: number;
   date: string;
   current_streak: number;
   longest_streak: number;
+}
+
+export interface ArchiveResponse {
+  id: number;
+  is_archived: boolean;
 }
 
 export interface PaginatedResponse<T> {

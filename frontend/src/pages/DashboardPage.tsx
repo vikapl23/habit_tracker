@@ -1,9 +1,23 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LogOut, Flame, Sparkles, ChevronDown, ChevronUp, AlertCircle, RefreshCw, PlusCircle } from 'lucide-react';
-import { Habit } from '../types/habit';
+import {
+  LogOut,
+  Flame,
+  Sparkles,
+  ChevronDown,
+  ChevronUp,
+  AlertCircle,
+  RefreshCw,
+  PlusCircle,
+  Plus,
+  Archive,
+} from 'lucide-react';
+import { Habit, HabitFormData } from '../types/habit';
 import { habitsApi } from '../api/habits';
 import { HabitCard } from '../components/HabitCard';
+import { HabitFormBottomSheet } from '../components/HabitFormBottomSheet';
+import { DeleteConfirmDialog } from '../components/DeleteConfirmDialog';
 import { Toast, ToastMessage } from '../components/Toast';
 import { DashboardSkeleton } from '../components/DashboardSkeleton';
 
@@ -13,6 +27,7 @@ interface DashboardPageProps {
 
 export const DashboardPage: React.FC<DashboardPageProps> = ({ onCreateHabit }) => {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const [habits, setHabits] = useState<Habit[]>([]);
@@ -21,6 +36,14 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onCreateHabit }) =
   const [isNotTodayExpanded, setIsNotTodayExpanded] = useState(false);
   const [pendingHabitIds, setPendingHabitIds] = useState<Set<number>>(new Set());
   const [toast, setToast] = useState<ToastMessage | null>(null);
+
+  // Bottom Sheet Form State
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const [editingHabit, setEditingHabit] = useState<Habit | null>(null);
+
+  // Delete Confirmation Dialog State
+  const [deletingHabit, setDeletingHabit] = useState<Habit | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const loadHabits = useCallback(async () => {
     setIsLoading(true);
@@ -156,11 +179,78 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onCreateHabit }) =
     if (onCreateHabit) {
       onCreateHabit();
     } else {
+      setEditingHabit(null);
+      setIsSheetOpen(true);
+    }
+  };
+
+  const handleEditHabitClick = (habit: Habit) => {
+    setEditingHabit(habit);
+    setIsSheetOpen(true);
+  };
+
+  const handleFormSubmit = async (data: HabitFormData) => {
+    if (editingHabit) {
+      const updated = await habitsApi.updateHabit(editingHabit.id, data);
+      setHabits((prev) => prev.map((h) => (h.id === updated.id ? updated : h)));
+      setToast({
+        id: String(Date.now()),
+        type: 'success',
+        message: `Habit "${updated.name}" updated successfully.`,
+      });
+    } else {
+      const created = await habitsApi.createHabit(data);
+      setHabits((prev) => [created, ...prev]);
+      setToast({
+        id: String(Date.now()),
+        type: 'success',
+        message: `Habit "${created.name}" created!`,
+      });
+    }
+  };
+
+  const handleArchiveHabitClick = async (habit: Habit) => {
+    try {
+      await habitsApi.archiveHabit(habit.id);
+      setHabits((prev) => prev.filter((h) => h.id !== habit.id));
       setToast({
         id: String(Date.now()),
         type: 'info',
-        message: 'Habit creation will be available in step 5.4.',
+        message: `Habit "${habit.name}" archived.`,
       });
+    } catch (err: any) {
+      setToast({
+        id: String(Date.now()),
+        type: 'error',
+        message: err?.data?.detail || err?.message || 'Failed to archive habit.',
+      });
+    }
+  };
+
+  const handleDeleteHabitClick = (habit: Habit) => {
+    setDeletingHabit(habit);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deletingHabit) return;
+    setIsDeleting(true);
+    try {
+      await habitsApi.deleteHabit(deletingHabit.id);
+      setHabits((prev) => prev.filter((h) => h.id !== deletingHabit.id));
+      setToast({
+        id: String(Date.now()),
+        type: 'success',
+        message: `Habit "${deletingHabit.name}" deleted.`,
+      });
+      setDeletingHabit(null);
+    } catch (err: any) {
+      setToast({
+        id: String(Date.now()),
+        type: 'error',
+        message: err?.data?.detail || err?.message || 'Failed to delete habit.',
+      });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -183,19 +273,30 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onCreateHabit }) =
             </div>
           </div>
 
-          <button
-            onClick={handleLogout}
-            disabled={isLoggingOut}
-            aria-label="Log out"
-            className="min-h-[44px] min-w-[44px] flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 active:bg-slate-200 transition duration-150 disabled:opacity-50 shrink-0"
-          >
-            {isLoggingOut ? (
-              <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-slate-400 border-t-transparent" />
-            ) : (
-              <LogOut className="h-3.5 w-3.5 text-slate-500" />
-            )}
-            <span>Sign out</span>
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => navigate('/archived')}
+              aria-label="View archived habits"
+              className="min-h-[44px] min-w-[44px] flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 active:bg-slate-200 transition duration-150 shrink-0"
+              title="Archived habits"
+            >
+              <Archive className="h-4 w-4 text-slate-500" />
+            </button>
+
+            <button
+              onClick={handleLogout}
+              disabled={isLoggingOut}
+              aria-label="Log out"
+              className="min-h-[44px] min-w-[44px] flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 active:bg-slate-200 transition duration-150 disabled:opacity-50 shrink-0"
+            >
+              {isLoggingOut ? (
+                <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-slate-400 border-t-transparent" />
+              ) : (
+                <LogOut className="h-3.5 w-3.5 text-slate-500" />
+              )}
+              <span>Sign out</span>
+            </button>
+          </div>
         </header>
 
         {/* Main Content Area */}
@@ -330,6 +431,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onCreateHabit }) =
                         key={habit.id}
                         habit={habit}
                         onToggle={handleToggleHabit}
+                        onEdit={handleEditHabitClick}
+                        onArchive={handleArchiveHabitClick}
+                        onDelete={handleDeleteHabitClick}
                         disabled={pendingHabitIds.has(habit.id)}
                       />
                     ))}
@@ -373,6 +477,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onCreateHabit }) =
                           key={habit.id}
                           habit={habit}
                           onToggle={handleToggleHabit}
+                          onEdit={handleEditHabitClick}
+                          onArchive={handleArchiveHabitClick}
+                          onDelete={handleDeleteHabitClick}
                           disabled={pendingHabitIds.has(habit.id)}
                         />
                       ))}
@@ -383,6 +490,38 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onCreateHabit }) =
             </>
           )}
         </main>
+
+        {/* Floating Action Button (FAB) for New Habit */}
+        <div className="fixed bottom-6 right-6 z-20 sm:static sm:bottom-auto sm:right-auto sm:p-5 sm:pt-0">
+          <button
+            type="button"
+            onClick={handleCreateHabitClick}
+            aria-label="New habit"
+            className="w-14 h-14 rounded-full bg-blue-600 hover:bg-blue-700 active:scale-95 text-white shadow-lg flex items-center justify-center transition-all focus:outline-none focus-visible:ring-4 focus-visible:ring-blue-400"
+          >
+            <Plus className="w-7 h-7 stroke-[2.5]" />
+          </button>
+        </div>
+
+        {/* New / Edit Habit Bottom Sheet */}
+        <HabitFormBottomSheet
+          isOpen={isSheetOpen}
+          habit={editingHabit}
+          onClose={() => {
+            setIsSheetOpen(false);
+            setEditingHabit(null);
+          }}
+          onSubmit={handleFormSubmit}
+        />
+
+        {/* Delete Habit Confirmation Dialog */}
+        <DeleteConfirmDialog
+          isOpen={!!deletingHabit}
+          habitName={deletingHabit?.name || ''}
+          isDeleting={isDeleting}
+          onConfirm={handleConfirmDelete}
+          onCancel={() => setDeletingHabit(null)}
+        />
       </div>
     </div>
   );

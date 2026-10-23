@@ -1,0 +1,484 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { X } from 'lucide-react';
+import { Habit, HabitFormData, FrequencyType } from '../types/habit';
+
+interface HabitFormBottomSheetProps {
+  isOpen: boolean;
+  habit?: Habit | null;
+  onClose: () => void;
+  onSubmit: (data: HabitFormData) => Promise<void>;
+}
+
+const PRESET_COLORS = [
+  '#3B82F6', // Blue
+  '#10B981', // Emerald
+  '#F59E0B', // Amber
+  '#EF4444', // Red
+  '#8B5CF6', // Purple
+  '#EC4899', // Pink
+  '#06B6D4', // Cyan
+  '#14B8A6', // Teal
+  '#F97316', // Orange
+  '#6366F1', // Indigo
+];
+
+const PRESET_EMOJIS = [
+  '🎯', '💧', '🏃', '📚', '🧘', '💪', '🍎', '💤',
+  '☕', '✍️', '🌱', '🚶', '🚴', '🎨', '🧠', '🥗',
+  '☀️', '🚭', '🧹', '💊',
+];
+
+const WEEKDAYS = [
+  { day: 0, label: 'Mon' },
+  { day: 1, label: 'Tue' },
+  { day: 2, label: 'Wed' },
+  { day: 3, label: 'Thu' },
+  { day: 4, label: 'Fri' },
+  { day: 5, label: 'Sat' },
+  { day: 6, label: 'Sun' },
+];
+
+export const HabitFormBottomSheet: React.FC<HabitFormBottomSheetProps> = ({
+  isOpen,
+  habit,
+  onClose,
+  onSubmit,
+}) => {
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [color, setColor] = useState(PRESET_COLORS[0]);
+  const [emoji, setEmoji] = useState(PRESET_EMOJIS[0]);
+  const [frequencyType, setFrequencyType] = useState<FrequencyType>('daily');
+  const [frequencyDays, setFrequencyDays] = useState<number[]>([]);
+
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [generalError, setGeneralError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const touchStartY = useRef<number | null>(null);
+
+  // Sync form state when habit changes or sheet opens
+  useEffect(() => {
+    if (isOpen) {
+      if (habit) {
+        setName(habit.name);
+        setDescription(habit.description || '');
+        setColor(habit.color || PRESET_COLORS[0]);
+        setEmoji(habit.emoji || PRESET_EMOJIS[0]);
+        setFrequencyType(habit.frequency_type || 'daily');
+        setFrequencyDays(habit.frequency_days || []);
+      } else {
+        setName('');
+        setDescription('');
+        setColor(PRESET_COLORS[0]);
+        setEmoji(PRESET_EMOJIS[0]);
+        setFrequencyType('daily');
+        setFrequencyDays([]);
+      }
+      setFieldErrors({});
+      setGeneralError(null);
+
+      // Focus name input automatically
+      const timer = setTimeout(() => {
+        nameInputRef.current?.focus();
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, habit]);
+
+  // Handle ESC key to close
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
+  // Touch handlers for swipe down to dismiss
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartY.current = e.touches[0].clientY;
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartY.current !== null) {
+      const touchEndY = e.changedTouches[0].clientY;
+      const distance = touchEndY - touchStartY.current;
+      // If pulled down sufficiently (> 75px), close sheet
+      if (distance > 75) {
+        onClose();
+      }
+    }
+    touchStartY.current = null;
+  };
+
+  const toggleWeekday = (day: number) => {
+    setFrequencyDays((prev) => {
+      if (prev.includes(day)) {
+        return prev.filter((d) => d !== day);
+      }
+      return [...prev, day].sort();
+    });
+    // Clear weekday error when user toggles
+    setFieldErrors((prev) => {
+      const next = { ...prev };
+      delete next.frequency_days;
+      delete next.frequency;
+      return next;
+    });
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFieldErrors({});
+    setGeneralError(null);
+
+    // Client-side quick validations
+    const errors: Record<string, string> = {};
+    if (!name.trim()) {
+      errors.name = 'Habit name is required.';
+    }
+    if (frequencyType === 'custom' && frequencyDays.length === 0) {
+      errors.frequency_days = 'Custom frequency requires at least one weekday.';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await onSubmit({
+        name: name.trim(),
+        description: description.trim(),
+        color,
+        emoji: emoji.trim() || '🎯',
+        frequency_type: frequencyType,
+        frequency_days: frequencyType === 'daily' ? [] : frequencyDays,
+      });
+      onClose();
+    } catch (err: any) {
+      if (err?.data && typeof err.data === 'object') {
+        const nextFieldErrors: Record<string, string> = {};
+        for (const [key, val] of Object.entries(err.data)) {
+          if (Array.isArray(val)) {
+            nextFieldErrors[key] = val.join(' ');
+          } else if (typeof val === 'string') {
+            nextFieldErrors[key] = val;
+          }
+        }
+        setFieldErrors(nextFieldErrors);
+        if (err.data.detail) {
+          setGeneralError(err.data.detail);
+        }
+      } else {
+        setGeneralError(err?.message || 'Something went wrong. Please check your inputs.');
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="habit-sheet-title"
+      className="fixed inset-0 z-40 flex flex-col justify-end bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-[420px] mx-auto bg-white rounded-t-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden animate-in slide-in-from-bottom duration-300"
+        onClick={(e) => e.stopPropagation()}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
+        {/* Drag handle header for swipe affordance */}
+        <div className="pt-3 pb-1 flex flex-col items-center shrink-0 cursor-grab active:cursor-grabbing">
+          <div className="w-10 h-1.5 rounded-full bg-slate-300" aria-hidden="true" />
+          <div className="w-full px-5 pt-2 pb-3 flex items-center justify-between border-b border-slate-100">
+            <h2 id="habit-sheet-title" className="text-base font-bold text-slate-900">
+              {habit ? 'Edit Habit' : 'New Habit'}
+            </h2>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close bottom sheet"
+              className="p-1 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Scrollable Form Body */}
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+          {generalError && (
+            <div className="p-3 rounded-xl bg-red-50 text-red-700 text-xs font-medium border border-red-200">
+              {generalError}
+            </div>
+          )}
+
+          {/* Name Field */}
+          <div className="space-y-1.5">
+            <label htmlFor="habit-name" className="block text-xs font-bold text-slate-700">
+              Habit Name <span className="text-red-500">*</span>
+            </label>
+            <input
+              ref={nameInputRef}
+              id="habit-name"
+              type="text"
+              required
+              value={name}
+              onChange={(e) => {
+                setName(e.target.value);
+                if (fieldErrors.name) {
+                  setFieldErrors((prev) => {
+                    const next = { ...prev };
+                    delete next.name;
+                    return next;
+                  });
+                }
+              }}
+              placeholder="e.g. Read 20 pages"
+              className={`w-full h-11 px-3.5 rounded-xl border text-sm text-slate-900 bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition ${
+                fieldErrors.name ? 'border-red-500 bg-red-50/20' : 'border-slate-200'
+              }`}
+            />
+            {fieldErrors.name && (
+              <p className="text-[11px] font-medium text-red-600 animate-in fade-in">
+                {fieldErrors.name}
+              </p>
+            )}
+          </div>
+
+          {/* Description Field */}
+          <div className="space-y-1.5">
+            <label htmlFor="habit-description" className="block text-xs font-bold text-slate-700">
+              Description <span className="text-slate-400 font-normal">(optional)</span>
+            </label>
+            <textarea
+              id="habit-description"
+              rows={2}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Why this habit matters..."
+              className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-sm text-slate-900 bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition resize-none"
+            />
+            {fieldErrors.description && (
+              <p className="text-[11px] font-medium text-red-600 animate-in fade-in">
+                {fieldErrors.description}
+              </p>
+            )}
+          </div>
+
+          {/* Color Picker */}
+          <div className="space-y-2">
+            <label className="block text-xs font-bold text-slate-700">
+              Color Accent
+            </label>
+            <div className="flex items-center gap-2.5 flex-wrap">
+              {PRESET_COLORS.map((c) => {
+                const isSelected = color.toUpperCase() === c.toUpperCase();
+                return (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => {
+                      setColor(c);
+                      if (fieldErrors.color) {
+                        setFieldErrors((prev) => {
+                          const next = { ...prev };
+                          delete next.color;
+                          return next;
+                        });
+                      }
+                    }}
+                    aria-label={`Select color ${c}`}
+                    aria-pressed={isSelected}
+                    className={`w-8 h-8 rounded-full transition-transform active:scale-90 flex items-center justify-center ${
+                      isSelected ? 'ring-2 ring-offset-2 ring-slate-800 scale-110 shadow-sm' : ''
+                    }`}
+                    style={{ backgroundColor: c }}
+                  />
+                );
+              })}
+            </div>
+            {fieldErrors.color && (
+              <p className="text-[11px] font-medium text-red-600 animate-in fade-in">
+                {fieldErrors.color}
+              </p>
+            )}
+          </div>
+
+          {/* Emoji Picker */}
+          <div className="space-y-2">
+            <label className="block text-xs font-bold text-slate-700">
+              Emoji Icon
+            </label>
+            <div className="grid grid-cols-5 sm:grid-cols-10 gap-1.5 p-2 rounded-xl bg-slate-50 border border-slate-100">
+              {PRESET_EMOJIS.map((em) => {
+                const isSelected = emoji === em;
+                return (
+                  <button
+                    key={em}
+                    type="button"
+                    onClick={() => {
+                      setEmoji(em);
+                      if (fieldErrors.emoji) {
+                        setFieldErrors((prev) => {
+                          const next = { ...prev };
+                          delete next.emoji;
+                          return next;
+                        });
+                      }
+                    }}
+                    aria-label={`Select emoji ${em}`}
+                    aria-pressed={isSelected}
+                    className={`w-9 h-9 text-lg rounded-lg flex items-center justify-center transition-all ${
+                      isSelected
+                        ? 'bg-white shadow-sm ring-2 ring-blue-500 scale-110'
+                        : 'hover:bg-slate-200/60 active:scale-95'
+                    }`}
+                  >
+                    {em}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center gap-2 pt-1">
+              <span className="text-xs text-slate-500">Custom emoji:</span>
+              <input
+                type="text"
+                maxLength={4}
+                value={emoji}
+                onChange={(e) => {
+                  setEmoji(e.target.value);
+                  if (fieldErrors.emoji) {
+                    setFieldErrors((prev) => {
+                      const next = { ...prev };
+                      delete next.emoji;
+                      return next;
+                    });
+                  }
+                }}
+                aria-label="Custom emoji input"
+                className="w-14 h-9 text-center text-lg rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            {fieldErrors.emoji && (
+              <p className="text-[11px] font-medium text-red-600 animate-in fade-in">
+                {fieldErrors.emoji}
+              </p>
+            )}
+          </div>
+
+          {/* Frequency Selector */}
+          <div className="space-y-2.5">
+            <label className="block text-xs font-bold text-slate-700">
+              Frequency
+            </label>
+            <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-xl">
+              <button
+                type="button"
+                onClick={() => {
+                  setFrequencyType('daily');
+                  setFieldErrors((prev) => {
+                    const next = { ...prev };
+                    delete next.frequency_days;
+                    delete next.frequency;
+                    return next;
+                  });
+                }}
+                aria-pressed={frequencyType === 'daily'}
+                className={`min-h-[40px] text-xs font-semibold rounded-lg transition-all ${
+                  frequencyType === 'daily'
+                    ? 'bg-white text-slate-900 shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Every day
+              </button>
+              <button
+                type="button"
+                onClick={() => setFrequencyType('custom')}
+                aria-pressed={frequencyType === 'custom'}
+                className={`min-h-[40px] text-xs font-semibold rounded-lg transition-all ${
+                  frequencyType === 'custom'
+                    ? 'bg-white text-slate-900 shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Specific days
+              </button>
+            </div>
+
+            {frequencyType === 'custom' && (
+              <div className="space-y-2 animate-in fade-in duration-150 pt-1">
+                <p className="text-[11px] text-slate-500">Choose days of the week:</p>
+                <div className="flex items-center justify-between gap-1">
+                  {WEEKDAYS.map(({ day, label }) => {
+                    const isSelected = frequencyDays.includes(day);
+                    return (
+                      <button
+                        key={day}
+                        type="button"
+                        onClick={() => toggleWeekday(day)}
+                        aria-pressed={isSelected}
+                        aria-label={label}
+                        className={`min-h-[44px] flex-1 rounded-xl text-xs font-bold transition-all ${
+                          isSelected
+                            ? 'bg-blue-600 text-white shadow-sm'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            {(fieldErrors.frequency_days || fieldErrors.frequency) && (
+              <p className="text-[11px] font-medium text-red-600 animate-in fade-in">
+                {fieldErrors.frequency_days || fieldErrors.frequency}
+              </p>
+            )}
+          </div>
+
+          {/* Bottom Actions */}
+          <div className="pt-3 pb-2 sticky bottom-0 bg-white border-t border-slate-100 flex gap-2.5">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isSubmitting}
+              className="flex-1 min-h-[44px] rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 active:bg-slate-100 transition disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="flex-1 min-h-[44px] rounded-xl bg-blue-600 text-xs font-semibold text-white hover:bg-blue-700 active:bg-blue-800 transition shadow-sm flex items-center justify-center gap-1.5 disabled:opacity-50"
+            >
+              {isSubmitting ? (
+                <div className="w-4 h-4 rounded-full border-2 border-white/60 border-t-white animate-spin" />
+              ) : habit ? (
+                'Save Changes'
+              ) : (
+                'Create Habit'
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
