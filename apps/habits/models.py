@@ -55,6 +55,10 @@ class HabitCheckIn(models.Model):
         if self.date and self.date > timezone.localdate():
             raise ValidationError({'date': 'Check-ins cannot be recorded for future dates.'})
 
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f"{self.habit.name} - {self.date}"
 

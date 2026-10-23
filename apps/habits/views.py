@@ -3,7 +3,12 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.utils import timezone
 from .models import Habit, HabitCheckIn, CheckIn
-from .serializers import HabitSerializer, HabitCheckInSerializer, CheckInActionSerializer
+from .serializers import (
+    HabitSerializer,
+    HabitCheckInSerializer,
+    CheckInActionSerializer,
+    CheckInFilterSerializer,
+)
 from .services.streaks import calculate_habit_streaks
 
 class HabitViewSet(viewsets.ModelViewSet):
@@ -89,12 +94,21 @@ class HabitViewSet(viewsets.ModelViewSet):
         habit = self.get_object()
         qs = habit.check_ins.all()
 
-        from_date = request.query_params.get('from')
-        to_date = request.query_params.get('to')
-        if from_date:
-            qs = qs.filter(date__gte=from_date)
-        if to_date:
-            qs = qs.filter(date__lte=to_date)
+        filter_data = {}
+        if 'from' in request.query_params:
+            filter_data['from_date'] = request.query_params.get('from')
+        if 'to' in request.query_params:
+            filter_data['to_date'] = request.query_params.get('to')
+
+        filter_serializer = CheckInFilterSerializer(data=filter_data)
+        if not filter_serializer.is_valid():
+            return Response(filter_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        validated = filter_serializer.validated_data
+        if 'from_date' in validated:
+            qs = qs.filter(date__gte=validated['from_date'])
+        if 'to_date' in validated:
+            qs = qs.filter(date__lte=validated['to_date'])
 
         serializer = HabitCheckInSerializer(qs, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)

@@ -9,6 +9,16 @@ class HabitCheckInSerializer(serializers.ModelSerializer):
         fields = ['id', 'date', 'created_at']
         read_only_fields = ['id', 'created_at']
 
+    def validate_date(self, value):
+        if value is not None and value > timezone.localdate():
+            raise serializers.ValidationError("Check-ins cannot be recorded for future dates.")
+        return value
+
+
+class CheckInFilterSerializer(serializers.Serializer):
+    from_date = serializers.DateField(required=False)
+    to_date = serializers.DateField(required=False)
+
 
 # Alias for convenience
 CheckInSerializer = HabitCheckInSerializer

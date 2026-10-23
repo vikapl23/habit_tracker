@@ -232,6 +232,26 @@ def test_list_checkins_date_range_filter(api_client, habit):
 
 
 @pytest.mark.django_db
+def test_list_checkins_invalid_from_date_returns_400(api_client, habit):
+    response = api_client.get(f"/api/v1/habits/{habit.id}/check-ins/?from=invalid-date")
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+
+@pytest.mark.django_db
+def test_list_checkins_invalid_to_date_returns_400(api_client, habit):
+    response = api_client.get(f"/api/v1/habits/{habit.id}/check-ins/?to=invalid-date")
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+
+def test_habit_checkin_serializer_rejects_future_date():
+    from apps.habits.serializers import HabitCheckInSerializer
+    future_date = date.today() + timedelta(days=2)
+    serializer = HabitCheckInSerializer(data={'date': future_date})
+    assert not serializer.is_valid()
+    assert 'date' in serializer.errors
+
+
+@pytest.mark.django_db
 def test_list_checkins_nonexistent_habit_404(api_client):
     response = api_client.get("/api/v1/habits/99999/check-ins/")
     assert response.status_code == status.HTTP_404_NOT_FOUND

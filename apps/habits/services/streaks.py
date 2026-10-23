@@ -1,5 +1,5 @@
 from __future__ import annotations
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Iterable, NamedTuple, Optional, Set
 from django.utils import timezone
 
@@ -24,13 +24,21 @@ def calculate_streaks(
     """
     if reference_date is None:
         reference_date = timezone.localdate()
+    elif isinstance(reference_date, datetime):
+        reference_date = reference_date.date()
 
     raw_dates: Set[date] = set()
     for item in checkin_dates:
-        if isinstance(item, date):
+        if isinstance(item, datetime):
+            raw_dates.add(item.date())
+        elif isinstance(item, date):
             raw_dates.add(item)
         elif hasattr(item, 'date'):
-            raw_dates.add(item.date)
+            d = item.date() if callable(item.date) else item.date
+            if isinstance(d, datetime):
+                raw_dates.add(d.date())
+            elif isinstance(d, date):
+                raw_dates.add(d)
 
     valid_dates = {d for d in raw_dates if d <= reference_date}
 

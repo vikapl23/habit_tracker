@@ -52,6 +52,21 @@ def test_cannot_create_future_checkin_validation(habit):
 
 
 @pytest.mark.django_db
+def test_cannot_create_future_checkin_orm_create(habit):
+    future_date = date.today() + timedelta(days=1)
+    with pytest.raises(ValidationError):
+        CheckIn.objects.create(habit=habit, date=future_date)
+
+
+@pytest.mark.django_db
+def test_cannot_save_future_checkin_orm_save(habit):
+    future_date = date.today() + timedelta(days=1)
+    checkin = CheckIn(habit=habit, date=future_date)
+    with pytest.raises(ValidationError):
+        checkin.save()
+
+
+@pytest.mark.django_db
 def test_cascade_delete_habit_deletes_checkins(habit):
     CheckIn.objects.create(habit=habit, date=date.today())
     assert CheckIn.objects.filter(habit=habit).count() == 1

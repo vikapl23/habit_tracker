@@ -172,6 +172,30 @@ def test_streak_explicit_reference_date():
     assert result.longest_streak == 2
 
 
+def test_calculate_streaks_with_datetime_objects():
+    from datetime import datetime
+    ref = date(2026, 10, 23)
+    checkins = [
+        datetime(2026, 10, 23, 10, 30),
+        datetime(2026, 10, 22, 18, 0),
+    ]
+    result = calculate_streaks(checkins, reference_date=ref)
+    assert result.current_streak == 2
+    assert result.longest_streak == 2
+
+
+def test_calculate_streaks_with_datetime_reference_date():
+    from datetime import datetime
+    ref = datetime(2026, 10, 23, 15, 0)
+    checkins = [
+        datetime(2026, 10, 23, 10, 30),
+        datetime(2026, 10, 22, 18, 0),
+    ]
+    result = calculate_streaks(checkins, reference_date=ref)
+    assert result.current_streak == 2
+    assert result.longest_streak == 2
+
+
 @pytest.mark.django_db
 @freeze_time("2026-10-23")
 def test_calculate_habit_streaks_integration(habit):
