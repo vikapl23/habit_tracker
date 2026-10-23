@@ -1,5 +1,6 @@
 import pytest
 from datetime import date, timedelta
+from freezegun import freeze_time
 from rest_framework import status
 from apps.habits.models import Habit
 
@@ -124,6 +125,17 @@ def test_check_in_default_today(api_client, habit):
     assert response.data["habit_id"] == habit.id
     assert response.data["date"] == str(today)
     assert habit.check_ins.filter(date=today).exists()
+
+
+@pytest.mark.django_db
+@freeze_time("2026-10-23T22:30:00Z")
+def test_check_in_default_today_kyiv_timezone(api_client, habit):
+    response = api_client.post(f"/api/v1/habits/{habit.id}/check/", {})
+    assert response.status_code == status.HTTP_201_CREATED
+    assert response.data["status"] == "checked"
+    assert response.data["habit_id"] == habit.id
+    assert response.data["date"] == "2026-10-24"
+    assert habit.check_ins.filter(date=date(2026, 10, 24)).exists()
 
 
 @pytest.mark.django_db
