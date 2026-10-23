@@ -1,5 +1,7 @@
 # Habit Tracker — Backend REST API
 
+[![CI](https://github.com/vikapl23/habit_tracker/actions/workflows/ci.yml/badge.svg)](https://github.com/vikapl23/habit_tracker/actions/workflows/ci.yml)
+
 A high-performance, robust RESTful API for habit tracking and daily streak monitoring, built with Python, Django, and Django REST Framework (DRF).
 
 ---
@@ -26,7 +28,7 @@ A high-performance, robust RESTful API for habit tracking and daily streak monit
 | **API Framework** | Django REST Framework (DRF) 3.15+ |
 | **API Documentation** | `drf-spectacular` (OpenAPI 3.0 & Swagger UI) |
 | **Configuration** | `django-environ` (12-factor configuration via `.env`) |
-| **Testing** | `pytest`, `pytest-django`, `freezegun` |
+| **Testing & Quality** | `pytest`, `pytest-django`, `freezegun`, `ruff` |
 | **Database** | SQLite 3 (local development), PostgreSQL 16+ (production-ready) |
 
 ---
@@ -86,8 +88,9 @@ The API will be accessible at:
 
 ---
 
-## 🧪 Running Tests
+## 🧪 Running Tests & Linting
 
+### Running Tests
 The test suite uses `pytest` with `pytest-django`:
 
 ```powershell
@@ -99,6 +102,20 @@ The test suite uses `pytest` with `pytest-django`:
 
 # Run only view/API integration tests
 .\.venv\Scripts\pytest apps/habits/tests/test_views.py
+```
+
+### Linting & Formatting
+Code style and quality are enforced with [Ruff](https://astral.sh/ruff):
+
+```powershell
+# Check linting
+.\.venv\Scripts\ruff check .
+
+# Check formatting
+.\.venv\Scripts\ruff format --check .
+
+# Auto-format codebase
+.\.venv\Scripts\ruff format .
 ```
 
 ---

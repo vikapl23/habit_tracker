@@ -1,13 +1,16 @@
-import pytest
 from datetime import date, timedelta
+
+import pytest
 from freezegun import freeze_time
 from rest_framework import status
+
 from apps.habits.models import Habit
+
 
 @pytest.mark.django_db
 def test_list_habits(api_client, habit):
-    archived_habit = Habit.objects.create(user=habit.user, name="Archived Habit", is_archived=True)
-    
+    Habit.objects.create(user=habit.user, name="Archived Habit", is_archived=True)
+
     # By default, archived habits should not be listed
     response = api_client.get("/api/v1/habits/")
     assert response.status_code == status.HTTP_200_OK
@@ -41,7 +44,7 @@ def test_create_habit(api_client):
         "name": "Morning Meditation",
         "description": "10 minutes of mindfulness",
         "color": "#10B981",
-        "emoji": "🧘"
+        "emoji": "🧘",
     }
     response = api_client.post("/api/v1/habits/", payload, format="json")
     assert response.status_code == status.HTTP_201_CREATED
@@ -74,7 +77,7 @@ def test_update_habit(api_client, habit):
         "name": "Updated Water Habit",
         "description": "Drink 3 liters",
         "color": "#000000",
-        "emoji": "🚰"
+        "emoji": "🚰",
     }
     response = api_client.put(f"/api/v1/habits/{habit.id}/", payload, format="json")
     assert response.status_code == status.HTTP_200_OK
@@ -125,6 +128,7 @@ def test_check_in_on_archived_habit_returns_400(api_client, user):
 # ---------------------------------------------------------------------------
 # MVP Step 2: CheckIn API Tests (Mark done, Undo, List check-ins, Rules)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.django_db
 def test_check_in_default_today(api_client, habit):
@@ -282,10 +286,11 @@ def test_list_checkins_invalid_to_date_returns_400(api_client, habit):
 
 def test_habit_checkin_serializer_rejects_future_date():
     from apps.habits.serializers import HabitCheckInSerializer
+
     future_date = date.today() + timedelta(days=2)
-    serializer = HabitCheckInSerializer(data={'date': future_date})
+    serializer = HabitCheckInSerializer(data={"date": future_date})
     assert not serializer.is_valid()
-    assert 'date' in serializer.errors
+    assert "date" in serializer.errors
 
 
 @pytest.mark.django_db
@@ -319,7 +324,7 @@ def test_swagger_docs_accessible(api_client):
 # ---------------------------------------------------------------------------
 # MVP Step 3: Streak Calculation in API responses
 # ---------------------------------------------------------------------------
-from freezegun import freeze_time
+
 
 @pytest.mark.django_db
 @freeze_time("2026-10-23")
@@ -393,4 +398,3 @@ def test_habit_api_longest_past_streak_in_response(api_client, habit):
     assert res.status_code == status.HTTP_200_OK
     assert res.data["current_streak"] == 1
     assert res.data["longest_streak"] == 3
-

@@ -1,8 +1,11 @@
-import pytest
 from datetime import date, timedelta
+
+import pytest
 from freezegun import freeze_time
 from rest_framework import status
+
 from apps.habits.models import Habit
+
 
 @pytest.mark.django_db
 def test_habit_serializer_includes_is_checked_today(api_client, habit):
@@ -122,4 +125,3 @@ def test_custom_actions_openapi_schema(api_client):
     assert "requestBody" in check_op
     check_req_ref = check_op["requestBody"]["content"]["application/json"]["schema"]["$ref"]
     assert "CheckInAction" in check_req_ref
-

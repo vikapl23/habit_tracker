@@ -1,18 +1,17 @@
-import pytest
 from datetime import date, timedelta
+
+import pytest
+from django.contrib import admin
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
-from django.contrib import admin
+
 from apps.habits.models import Habit, HabitCheckIn
+
 
 @pytest.mark.django_db
 def test_create_habit(user):
     habit = Habit.objects.create(
-        user=user,
-        name="Morning Jog",
-        description="Jog for 30 minutes",
-        color="#10B981",
-        emoji="🏃"
+        user=user, name="Morning Jog", description="Jog for 30 minutes", color="#10B981", emoji="🏃"
     )
     assert habit.id is not None
     assert habit.name == "Morning Jog"
@@ -78,21 +77,12 @@ def test_cascade_delete_habit_deletes_checkins(habit):
 @pytest.mark.django_db
 def test_habit_requires_user():
     with pytest.raises(IntegrityError):
-        Habit.objects.create(
-            name="No User Habit",
-            color="#3B82F6",
-            emoji="🎯"
-        )
+        Habit.objects.create(name="No User Habit", color="#3B82F6", emoji="🎯")
 
 
 @pytest.mark.django_db
 def test_habit_belongs_to_user(user):
-    habit = Habit.objects.create(
-        user=user,
-        name="User Habit",
-        color="#3B82F6",
-        emoji="🎯"
-    )
+    habit = Habit.objects.create(user=user, name="User Habit", color="#3B82F6", emoji="🎯")
     assert habit.user == user
     assert habit in user.habits.all()
 

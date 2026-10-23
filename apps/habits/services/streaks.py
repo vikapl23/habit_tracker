@@ -1,6 +1,9 @@
 from __future__ import annotations
+
+from collections.abc import Iterable
 from datetime import date, datetime, timedelta
-from typing import Iterable, NamedTuple, Optional, Set
+from typing import NamedTuple
+
 from django.utils import timezone
 
 
@@ -11,7 +14,7 @@ class StreakResult(NamedTuple):
 
 def calculate_streaks(
     checkin_dates: Iterable[date],
-    reference_date: Optional[date] = None,
+    reference_date: date | None = None,
 ) -> StreakResult:
     """
     Calculate current_streak and longest_streak for a collection of check-in dates.
@@ -27,13 +30,13 @@ def calculate_streaks(
     elif isinstance(reference_date, datetime):
         reference_date = reference_date.date()
 
-    raw_dates: Set[date] = set()
+    raw_dates: set[date] = set()
     for item in checkin_dates:
         if isinstance(item, datetime):
             raw_dates.add(item.date())
         elif isinstance(item, date):
             raw_dates.add(item)
-        elif hasattr(item, 'date'):
+        elif hasattr(item, "date"):
             d = item.date() if callable(item.date) else item.date
             if isinstance(d, datetime):
                 raw_dates.add(d.date())
@@ -84,15 +87,18 @@ def calculate_streaks(
 
 def calculate_habit_streaks(
     habit,
-    reference_date: Optional[date] = None,
+    reference_date: date | None = None,
 ) -> StreakResult:
     """
     Convenience helper calculating streaks directly for a Habit model instance.
     Uses prefetched check_ins if available, otherwise queries values_list('date', flat=True).
     """
-    if hasattr(habit, '_prefetched_objects_cache') and 'check_ins' in habit._prefetched_objects_cache:
+    if (
+        hasattr(habit, "_prefetched_objects_cache")
+        and "check_ins" in habit._prefetched_objects_cache
+    ):
         dates = [ci.date for ci in habit.check_ins.all()]
     else:
-        dates = list(habit.check_ins.values_list('date', flat=True))
+        dates = list(habit.check_ins.values_list("date", flat=True))
 
     return calculate_streaks(dates, reference_date=reference_date)

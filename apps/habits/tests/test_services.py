@@ -1,8 +1,10 @@
-import pytest
 from datetime import date, timedelta
+
+import pytest
 from freezegun import freeze_time
-from apps.habits.models import Habit, HabitCheckIn
-from apps.habits.services.streaks import calculate_streaks, calculate_habit_streaks, StreakResult
+
+from apps.habits.models import Habit
+from apps.habits.services.streaks import StreakResult, calculate_habit_streaks, calculate_streaks
 
 
 @freeze_time("2026-10-23")
@@ -174,6 +176,7 @@ def test_streak_explicit_reference_date():
 
 def test_calculate_streaks_with_datetime_objects():
     from datetime import datetime
+
     ref = date(2026, 10, 23)
     checkins = [
         datetime(2026, 10, 23, 10, 30),
@@ -186,6 +189,7 @@ def test_calculate_streaks_with_datetime_objects():
 
 def test_calculate_streaks_with_datetime_reference_date():
     from datetime import datetime
+
     ref = datetime(2026, 10, 23, 15, 0)
     checkins = [
         datetime(2026, 10, 23, 10, 30),
@@ -226,6 +230,7 @@ def test_calculate_habit_streaks_integration(habit):
 def test_habit_serializer_computes_streaks(habit):
     """Verify that HabitSerializer includes computed current_streak and longest_streak."""
     from apps.habits.serializers import HabitSerializer
+
     today = date(2026, 10, 23)
     yesterday = date(2026, 10, 22)
 
@@ -319,4 +324,3 @@ def test_streak_year_boundary_broken():
     result = calculate_streaks(checkins)
     assert result.current_streak == 1
     assert result.longest_streak == 1
-
