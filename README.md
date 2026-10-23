@@ -103,6 +103,111 @@ The test suite uses `pytest` with `pytest-django`:
 
 ---
 
+## 🔐 Authentication & JWT Workflow
+
+All `/api/v1/habits/` endpoints require JWT (JSON Web Token) authentication. User data is strictly isolated per account.
+
+Rate limiting is enforced on auth endpoints (`5 requests/minute per IP`) to protect against brute-force attacks.
+
+### 1. Register an Account (`POST /api/v1/auth/register/`)
+
+Create a new user account. Email addresses are case-insensitive and stored lowercased (e.g. `User@Example.com` is stored as `user@example.com`).
+
+**Request Body:**
+```json
+{
+  "email": "anna@example.com",
+  "password": "StrongPassword123!"
+}
+```
+
+**Response (`201 Created`):**
+```json
+{
+  "id": 1,
+  "email": "anna@example.com"
+}
+```
+
+### 2. Obtain JWT Token Pair (`POST /api/v1/auth/token/`)
+
+Log in using your email (case-insensitive) and password to obtain an access and refresh token pair:
+
+**Request Body:**
+```json
+{
+  "email": "Anna@example.com",
+  "password": "StrongPassword123!"
+}
+```
+
+**Response (`200 OK`):**
+```json
+{
+  "access": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refresh": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+}
+```
+
+- **Access Token Lifetime**: 60 minutes
+- **Refresh Token Lifetime**: 7 days
+
+### 3. Use "Authorize" in Swagger UI (`/docs/`)
+
+When using the interactive documentation at [http://127.0.0.1:8000/docs/](http://127.0.0.1:8000/docs/):
+
+1. Click the green **Authorize** 🔓 button located in the top-right corner of the Swagger page.
+2. In the **jwtAuth (http, Bearer)** popup, enter your token in the **Value** field:
+   ```
+   Bearer <your_access_token>
+   ```
+   *(Or paste `<your_access_token>` directly; Swagger UI automatically prefixes with `Bearer` if needed).*
+3. Click **Authorize**, then click **Close**.
+4. The lock icon will change to locked 🔒 and all subsequent "Try it out" endpoint executions will automatically send the header.
+
+### 4. Call Endpoints with `Authorization: Bearer <token>`
+
+Pass the access token in the `Authorization` HTTP header with the `Bearer ` prefix:
+
+**cURL Example:**
+```bash
+curl -X GET http://127.0.0.1:8000/api/v1/habits/ \
+  -H "Authorization: Bearer <your_access_token>"
+```
+
+**PowerShell Example:**
+```powershell
+Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/v1/habits/" `
+  -Headers @{ Authorization = "Bearer <your_access_token>" }
+```
+
+**HTTP Header Example:**
+```http
+GET /api/v1/habits/ HTTP/1.1
+Host: 127.0.0.1:8000
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+### 5. Refresh an Expired Access Token (`POST /api/v1/auth/token/refresh/`)
+
+When an access token expires (after 60 minutes, returning `401 Unauthorized` with `code: "token_not_valid"`), use the `refresh` token to obtain a fresh access token without re-entering credentials:
+
+**Request Body:**
+```json
+{
+  "refresh": "<your_refresh_token>"
+}
+```
+
+**Response (`200 OK`):**
+```json
+{
+  "access": "<new_access_token>"
+}
+```
+
+---
+
 ## 📡 Main API Endpoints & Examples
 
 Base URL: `/api/v1`
