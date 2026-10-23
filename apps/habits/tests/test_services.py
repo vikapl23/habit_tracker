@@ -329,22 +329,24 @@ def test_streak_year_boundary_broken():
 # --- Tests for checkin service (Items 4 & 5) ---
 
 
+@freeze_time("2026-10-23 12:00:00")
 def test_validate_checkin_date_accepts_today_and_past():
     from apps.habits.services import validate_checkin_date
 
-    today = date.today()
+    today = date(2026, 10, 23)
     past = today - timedelta(days=5)
     # Should not raise
     validate_checkin_date(today)
     validate_checkin_date(past)
 
 
+@freeze_time("2026-10-23 12:00:00")
 def test_validate_checkin_date_rejects_future_date():
     from rest_framework.exceptions import ValidationError
 
     from apps.habits.services import validate_checkin_date
 
-    future = date.today() + timedelta(days=1)
+    future = date(2026, 10, 24)
     with pytest.raises(ValidationError) as exc_info:
         validate_checkin_date(future)
     assert "date" in exc_info.value.detail
@@ -373,7 +375,7 @@ def test_check_in_habit_success(habit):
     from apps.habits.models import HabitCheckIn
     from apps.habits.services import CheckInResult, check_in_habit
 
-    today = date.today()
+    today = habit.user.get_today()
     result = check_in_habit(habit=habit, target_date=today)
 
     assert isinstance(result, CheckInResult)
@@ -391,7 +393,7 @@ def test_check_in_habit_idempotent(habit):
     from apps.habits.models import HabitCheckIn
     from apps.habits.services import check_in_habit
 
-    today = date.today()
+    today = habit.user.get_today()
     res1 = check_in_habit(habit=habit, target_date=today)
     assert res1.created is True
 
@@ -414,7 +416,7 @@ def test_check_in_habit_handles_integrity_error_concurrent_race(habit, monkeypat
     from apps.habits.models import HabitCheckIn
     from apps.habits.services import check_in_habit
 
-    today = date.today()
+    today = habit.user.get_today()
     # Existing check-in in DB (simulating concurrent worker inserted it)
     HabitCheckIn.objects.create(habit=habit, date=today)
 
@@ -456,7 +458,7 @@ def test_check_in_and_uncheck_habit_with_prefetched_cache(habit):
     from apps.habits.models import Habit
     from apps.habits.services import check_in_habit, uncheck_habit
 
-    today = date.today()
+    today = habit.user.get_today()
     yesterday = today - timedelta(days=1)
 
     # Populate yesterday checkin
@@ -484,7 +486,7 @@ def test_uncheck_habit_nonexistent_raises_not_found(habit):
     from apps.habits.services import uncheck_habit
 
     with pytest.raises(NotFound):
-        uncheck_habit(habit=habit, target_date=date.today())
+        uncheck_habit(habit=habit, target_date=habit.user.get_today())
 
 
 @pytest.mark.django_db

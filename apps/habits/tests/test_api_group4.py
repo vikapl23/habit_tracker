@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import timedelta
 
 import pytest
 from freezegun import freeze_time
@@ -23,7 +23,8 @@ def test_habit_serializer_includes_is_checked_today(api_client, habit):
 
 @pytest.mark.django_db
 def test_habit_serializer_is_checked_today_with_date_query_param(api_client, habit):
-    past_date = date.today() - timedelta(days=2)
+    today = habit.user.get_today()
+    past_date = today - timedelta(days=2)
     habit.check_ins.create(date=past_date)
 
     # Without query param, today is not checked
@@ -85,7 +86,8 @@ def test_pagination_on_habits_and_checkins_list(api_client, habit):
     assert "results" in res.data
 
     # Check-ins list pagination
-    habit.check_ins.create(date=date.today())
+    today = habit.user.get_today()
+    habit.check_ins.create(date=today)
     res = api_client.get(f"/api/v1/habits/{habit.id}/check-ins/")
     assert res.status_code == status.HTTP_200_OK
     assert isinstance(res.data, dict)

@@ -28,7 +28,7 @@ def test_create_habit(user):
 
 @pytest.mark.django_db
 def test_create_checkin(habit):
-    checkin_date = date.today()
+    checkin_date = habit.user.get_today()
     checkin = HabitCheckIn.objects.create(habit=habit, date=checkin_date)
     assert checkin.id is not None
     assert checkin.habit == habit
@@ -39,7 +39,7 @@ def test_create_checkin(habit):
 
 @pytest.mark.django_db
 def test_unique_checkin_per_date_constraint(habit):
-    checkin_date = date.today()
+    checkin_date = habit.user.get_today()
     HabitCheckIn.objects.create(habit=habit, date=checkin_date)
     with pytest.raises(IntegrityError):
         HabitCheckIn.objects.create(habit=habit, date=checkin_date)
@@ -54,7 +54,7 @@ def test_checkin_model_save_does_not_call_clean(habit, monkeypatch):
         nonlocal clean_called
         clean_called = True
 
-    checkin = HabitCheckIn(habit=habit, date=date.today())
+    checkin = HabitCheckIn(habit=habit, date=habit.user.get_today())
     monkeypatch.setattr(checkin, "clean", mock_clean)
     checkin.save()
     assert not clean_called, "HabitCheckIn.save() should not call clean()"
@@ -63,7 +63,7 @@ def test_checkin_model_save_does_not_call_clean(habit, monkeypatch):
 @pytest.mark.django_db
 def test_checkin_model_allows_future_date_for_fixtures_and_bulk(habit):
     """Model clean() and save() do not reject future dates, leaving that to the service."""
-    future_date = date.today() + timedelta(days=1)
+    future_date = habit.user.get_today() + timedelta(days=1)
     checkin = HabitCheckIn.objects.create(habit=habit, date=future_date)
     assert checkin.id is not None
     checkin.full_clean()  # Should not raise
@@ -71,7 +71,7 @@ def test_checkin_model_allows_future_date_for_fixtures_and_bulk(habit):
 
 @pytest.mark.django_db
 def test_cascade_delete_habit_deletes_checkins(habit):
-    HabitCheckIn.objects.create(habit=habit, date=date.today())
+    HabitCheckIn.objects.create(habit=habit, date=habit.user.get_today())
     assert HabitCheckIn.objects.filter(habit=habit).count() == 1
     habit.delete()
     assert HabitCheckIn.objects.filter(habit_id=habit.id).count() == 0

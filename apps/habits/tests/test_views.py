@@ -25,7 +25,7 @@ def test_list_habits(api_client, habit):
 
 @pytest.mark.django_db
 def test_list_habits_query_count_constant(api_client, user, django_assert_num_queries):
-    today = date.today()
+    today = user.get_today()
     for i in range(5):
         h = Habit.objects.create(user=user, name=f"Habit {i}")
         h.check_ins.create(date=today)
@@ -44,7 +44,7 @@ def test_list_habits_does_not_load_checkins(api_client, user, django_assert_num_
     Mentor Review item 6: Prove that the habits list view does not load check-ins.
     Streaks and today's status are evaluated from fields on Habit and the user's today date.
     """
-    today = date.today()
+    today = user.get_today()
     for i in range(5):
         habit = Habit.objects.create(user=user, name=f"Habit {i}")
         for day_offset in range(10):
@@ -156,13 +156,28 @@ def test_check_in_on_archived_habit_returns_400(api_client, user):
 
 @pytest.mark.django_db
 def test_check_in_default_today(api_client, habit):
-    today = date.today()
+    today = habit.user.get_today()
     response = api_client.post(f"/api/v1/habits/{habit.id}/check/", {})
     assert response.status_code == status.HTTP_201_CREATED
     assert response.data["status"] == "checked"
     assert response.data["habit_id"] == habit.id
     assert response.data["date"] == str(today)
     assert habit.check_ins.filter(date=today).exists()
+
+
+@pytest.mark.django_db
+@freeze_time("2026-10-23T21:30:00Z")
+def test_check_in_default_today_kyiv_timezone_midnight_regression(api_client, habit):
+    """
+    Regression test: frozen at 2026-10-23T21:30:00Z (00:30 in Kyiv, Europe/Kyiv UTC+3).
+    Verifies that check-in default date records for 2026-10-24 (Kyiv date), not 2026-10-23 (UTC date).
+    """
+    response = api_client.post(f"/api/v1/habits/{habit.id}/check/", {})
+    assert response.status_code == status.HTTP_201_CREATED
+    assert response.data["status"] == "checked"
+    assert response.data["habit_id"] == habit.id
+    assert response.data["date"] == "2026-10-24"
+    assert habit.check_ins.filter(date=date(2026, 10, 24)).exists()
 
 
 @pytest.mark.django_db
@@ -178,7 +193,7 @@ def test_check_in_default_today_kyiv_timezone(api_client, habit):
 
 @pytest.mark.django_db
 def test_check_in_explicit_date(api_client, habit):
-    past_date = date.today() - timedelta(days=2)
+    past_date = habit.user.get_today() - timedelta(days=2)
     response = api_client.post(f"/api/v1/habits/{habit.id}/check/", {"date": str(past_date)})
     assert response.status_code == status.HTTP_201_CREATED
     assert response.data["status"] == "checked"
@@ -189,7 +204,7 @@ def test_check_in_explicit_date(api_client, habit):
 
 @pytest.mark.django_db
 def test_check_in_idempotency(api_client, habit):
-    today = date.today()
+    today = habit.user.get_today()
     res1 = api_client.post(f"/api/v1/habits/{habit.id}/check/", {"date": str(today)})
     assert res1.status_code == status.HTTP_201_CREATED
 
@@ -202,7 +217,7 @@ def test_check_in_idempotency(api_client, habit):
 
 @pytest.mark.django_db
 def test_cannot_check_in_future_date(api_client, habit):
-    future_date = date.today() + timedelta(days=1)
+    future_date = habit.user.get_today() + timedelta(days=1)
     response = api_client.post(f"/api/v1/habits/{habit.id}/check/", {"date": str(future_date)})
     assert response.status_code == status.HTTP_400_BAD_REQUEST
     assert "date" in response.data
@@ -216,7 +231,7 @@ def test_check_in_nonexistent_habit_404(api_client):
 
 @pytest.mark.django_db
 def test_uncheck_existing_checkin(api_client, habit):
-    today = date.today()
+    today = habit.user.get_today()
     habit.check_ins.create(date=today)
     response = api_client.post(f"/api/v1/habits/{habit.id}/uncheck/", {"date": str(today)})
     assert response.status_code == status.HTTP_200_OK
@@ -228,7 +243,7 @@ def test_uncheck_existing_checkin(api_client, habit):
 
 @pytest.mark.django_db
 def test_uncheck_default_today(api_client, habit):
-    today = date.today()
+    today = habit.user.get_today()
     habit.check_ins.create(date=today)
     response = api_client.post(f"/api/v1/habits/{habit.id}/uncheck/", {})
     assert response.status_code == status.HTTP_200_OK
@@ -240,7 +255,7 @@ def test_uncheck_default_today(api_client, habit):
 
 @pytest.mark.django_db
 def test_uncheck_nonexistent_checkin_404(api_client, habit):
-    today = date.today()
+    today = habit.user.get_today()
     response = api_client.post(f"/api/v1/habits/{habit.id}/uncheck/", {"date": str(today)})
     assert response.status_code == status.HTTP_404_NOT_FOUND
 
@@ -253,7 +268,7 @@ def test_uncheck_nonexistent_habit_404(api_client):
 
 @pytest.mark.django_db
 def test_list_checkins(api_client, habit):
-    today = date.today()
+    today = habit.user.get_today()
     yesterday = today - timedelta(days=1)
     habit.check_ins.create(date=yesterday)
     habit.check_ins.create(date=today)
@@ -268,7 +283,7 @@ def test_list_checkins(api_client, habit):
 
 @pytest.mark.django_db
 def test_list_checkins_date_range_filter(api_client, habit):
-    today = date.today()
+    today = habit.user.get_today()
     d1 = today - timedelta(days=5)
     d2 = today - timedelta(days=3)
     d3 = today
@@ -312,7 +327,7 @@ def test_habit_checkin_serializer_does_not_duplicate_future_date_validation():
     """Future-date validation is handled in service function, not duplicated in serializers."""
     from apps.habits.serializers import CheckInActionSerializer, HabitCheckInSerializer
 
-    future_date = date.today() + timedelta(days=2)
+    future_date = date(2026, 10, 25)
     serializer = HabitCheckInSerializer(data={"date": future_date})
     assert serializer.is_valid()
 
@@ -329,7 +344,7 @@ def test_list_checkins_nonexistent_habit_404(api_client):
 @pytest.mark.django_db
 def test_list_checkins_isolated_to_habit(api_client, habit):
     other_habit = Habit.objects.create(user=habit.user, name="Other Habit")
-    today = date.today()
+    today = habit.user.get_today()
     habit.check_ins.create(date=today)
     other_habit.check_ins.create(date=today)
 
@@ -439,7 +454,7 @@ def test_checkin_race_condition_integrity_error_returns_200(api_client, habit, m
     from apps.habits.models import HabitCheckIn
     from apps.habits.services import checkin as checkin_service
 
-    today = date.today()
+    today = habit.user.get_today()
     HabitCheckIn.objects.create(habit=habit, date=today)
 
     def mock_get_or_create(*args, **kwargs):
@@ -601,6 +616,7 @@ def test_filter_habits_scheduled_today_non_utc_timezone_near_midnight(api_client
 
 
 @pytest.mark.django_db
+@freeze_time("2026-10-23 12:00:00")
 def test_filter_habits_scheduled_today_executes_in_two_queries(
     api_client, user, django_assert_num_queries
 ):

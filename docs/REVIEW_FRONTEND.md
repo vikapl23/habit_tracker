@@ -54,7 +54,7 @@ Issues that cause security exposure, data loss, logouts across every tab, or gua
   4. Listen for the `storage` event (or use a `BroadcastChannel`) in `AuthProvider` so login and logout reach all tabs.
   5. Add a test that runs two independent `refreshTokens` calls (simulating two tabs) against a rotating mock server.
 
-### C3. `HabitDetailPage` tests fail from 2026-10-30, and the whole file from 2026-11-01
+### C3. `HabitDetailPage` tests fail from 2026-10-30, and the whole file from 2026-11-01 [FIXED]
 - **File**: [HabitDetailPage.test.tsx L52-L190](file:///c:/Users/monos.com.ua/.gemini/antigravity/scratch/habit_tracker/frontend/src/pages/__tests__/HabitDetailPage.test.tsx#L52-L190) (assertions at L55-L56, L70, L79, L86, L106, L125, L138, L160, L180, L188)
 - **Description**: The page opens the calendar on the **current real month** and computes `todayStr` from `new Date()` ([HabitDetailPage.tsx L22-L34](file:///c:/Users/monos.com.ua/.gemini/antigravity/scratch/habit_tracker/frontend/src/pages/HabitDetailPage.tsx#L22-L34)). The tests hard-code dates like `2026-10-02`, `2026-10-30` and `2026-09-01` and never fake the clock.
   - From **2026-10-30**, L160 fails because Oct 30 is now today, not a future date, so the cell is no longer disabled.
