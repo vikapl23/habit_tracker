@@ -5,6 +5,7 @@ import { Habit } from '../types/habit';
 import { habitsApi } from '../api/habits';
 import { Toast, ToastMessage } from '../components/Toast';
 import { BottomNavigation } from '../components/BottomNavigation';
+import { getErrorMessage } from '../utils/errorUtils';
 
 export const ArchivedHabitsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -22,7 +23,7 @@ export const ArchivedHabitsPage: React.FC = () => {
       const archivedOnly = all.filter((h) => h.is_archived);
       setHabits(archivedOnly);
     } catch (err: any) {
-      setFetchError(err?.message || 'Failed to load archived habits.');
+      setFetchError(getErrorMessage(err, 'Failed to load archived habits.'));
     } finally {
       setIsLoading(false);
     }

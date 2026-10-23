@@ -51,6 +51,7 @@ export const RegisterPage: React.FC = () => {
       if (err instanceof ApiError) {
         const data = err.data;
         const newFieldErrors: Record<string, string> = {};
+        const unhandledErrors: string[] = [];
 
         if (data.email) {
           newFieldErrors.email = Array.isArray(data.email) ? data.email.join(' ') : String(data.email);
@@ -58,8 +59,12 @@ export const RegisterPage: React.FC = () => {
         if (data.password) {
           newFieldErrors.password = Array.isArray(data.password) ? data.password.join(' ') : String(data.password);
         }
-        if (data.timezone) {
-          newFieldErrors.timezone = Array.isArray(data.timezone) ? data.timezone.join(' ') : String(data.timezone);
+        // I10: Show unknown fields (like timezone) in the general alert
+        for (const [key, val] of Object.entries(data)) {
+          if (key !== 'email' && key !== 'password' && key !== 'detail' && key !== 'non_field_errors') {
+            const valStr = Array.isArray(val) ? val.join(' ') : String(val);
+            unhandledErrors.push(`${key}: ${valStr}`);
+          }
         }
 
         if (data.detail) {
@@ -70,13 +75,17 @@ export const RegisterPage: React.FC = () => {
               ? data.non_field_errors.join(' ')
               : String(data.non_field_errors)
           );
+        } else if (unhandledErrors.length > 0) {
+          setGeneralError(unhandledErrors.join(' | '));
         } else if (Object.keys(newFieldErrors).length === 0) {
           setGeneralError(err.message || 'Registration failed. Please check your information.');
         }
 
         setFieldErrors(newFieldErrors);
       } else {
-        setGeneralError('An unexpected error occurred. Please try again.');
+        // I4: If registration succeeded but auto-login failed
+        navigate('/login?registered=1', { replace: true });
+        return;
       }
     } finally {
       setIsSubmitting(false);

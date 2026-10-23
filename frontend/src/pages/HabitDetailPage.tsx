@@ -1,10 +1,13 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ChevronLeft, ChevronRight, Flame, Trophy, Check, Calendar, AlertCircle, RefreshCw } from 'lucide-react';
 import { Habit } from '../types/habit';
 import { habitsApi } from '../api/habits';
+import { ApiError } from '../api/client';
+import { getErrorMessage } from '../utils/errorUtils';
 import { BottomNavigation } from '../components/BottomNavigation';
 import { Toast, ToastMessage } from '../components/Toast';
+import { useAuth } from '../context/AuthContext';
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
@@ -13,6 +16,7 @@ const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 export const HabitDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const habitId = Number(id);
 
   const [habit, setHabit] = useState<Habit | null>(null);
@@ -28,20 +32,50 @@ export const HabitDetailPage: React.FC = () => {
   const [togglingDate, setTogglingDate] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastMessage | null>(null);
 
-  const todayStr = useMemo(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-  }, []);
+  const [todayStr, setTodayStr] = useState<string>(() => {
+    const tz = user?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    try {
+      return new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date());
+    } catch {
+      const now = new Date();
+      return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    }
+  });
 
+  // I7: Refresh today string on visibilitychange / midnight
+  useEffect(() => {
+    const updateToday = () => {
+      const tz = user?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+      try {
+        setTodayStr(new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date()));
+      } catch {
+        const now = new Date();
+        setTodayStr(`${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`);
+      }
+    };
+
+    document.addEventListener('visibilitychange', updateToday);
+    return () => document.removeEventListener('visibilitychange', updateToday);
+  }, [user?.timezone]);
+
+  // I13: Validate habit ID
   const loadHabit = useCallback(async () => {
-    if (!habitId) return;
+    if (isNaN(habitId) || habitId <= 0) {
+      setIsLoadingHabit(false);
+      setHabitError('Habit not found.');
+      return;
+    }
     setIsLoadingHabit(true);
     setHabitError(null);
     try {
       const data = await habitsApi.getHabit(habitId);
       setHabit(data);
     } catch (err: any) {
-      setHabitError(err?.message || 'Failed to load habit details.');
+      if (err instanceof ApiError && err.status === 404) {
+        setHabitError('Habit not found.');
+      } else {
+        setHabitError(getErrorMessage(err, 'Failed to load habit details.'));
+      }
     } finally {
       setIsLoadingHabit(false);
     }
@@ -51,8 +85,14 @@ export const HabitDetailPage: React.FC = () => {
     loadHabit();
   }, [loadHabit]);
 
+  const [checkInsError, setCheckInsError] = useState<string | null>(null);
+
+  // I6: Cancel overlapping requests with request counter
+  const checkInsRequestSeq = useRef(0);
+
   const loadCheckIns = useCallback(async () => {
-    if (!habitId) return;
+    if (isNaN(habitId) || habitId <= 0) return;
+    const reqId = ++checkInsRequestSeq.current;
     const year = currentMonth.getFullYear();
     const month = currentMonth.getMonth();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -60,17 +100,25 @@ export const HabitDetailPage: React.FC = () => {
     const to = `${year}-${pad(month + 1)}-${pad(daysInMonth)}`;
 
     setIsLoadingCheckIns(true);
+    setCheckInsError(null);
     try {
       const records = await habitsApi.getHabitCheckIns(habitId, from, to);
+      // Ignore stale responses if a newer request was dispatched
+      if (reqId !== checkInsRequestSeq.current) return;
       const set = new Set<string>();
       records.forEach((r) => {
         if (r.date) set.add(r.date);
       });
       setCheckInDates(set);
     } catch {
-      // Error fetching check-ins
+      if (reqId === checkInsRequestSeq.current) {
+        // I12: Show inline error for check-ins with retry
+        setCheckInsError('Unable to load check-ins for this month.');
+      }
     } finally {
-      setIsLoadingCheckIns(false);
+      if (reqId === checkInsRequestSeq.current) {
+        setIsLoadingCheckIns(false);
+      }
     }
   }, [habitId, currentMonth]);
 
@@ -308,6 +356,22 @@ export const HabitDetailPage: React.FC = () => {
                     </button>
                   </div>
                 </div>
+
+                {checkInsError && (
+                  <div
+                    role="alert"
+                    className="p-3 rounded-xl bg-red-50 text-red-700 text-xs flex items-center justify-between gap-2 border border-red-200"
+                  >
+                    <span>{checkInsError}</span>
+                    <button
+                      type="button"
+                      onClick={() => loadCheckIns()}
+                      className="px-2.5 py-1 rounded-lg bg-red-600 text-white text-[11px] font-semibold hover:bg-red-700 active:bg-red-800 transition"
+                    >
+                      Retry
+                    </button>
+                  </div>
+                )}
 
                 {/* Weekday Labels (Mon - Sun) */}
                 <div className="grid grid-cols-7 gap-1 text-center">

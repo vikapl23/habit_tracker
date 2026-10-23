@@ -1,4 +1,4 @@
-import { apiClient } from './client';
+import { apiClient, RequestOptions } from './client';
 import {
   Habit,
   HabitFormData,
@@ -72,7 +72,8 @@ export const getHabit = async (id: number): Promise<Habit> => {
 export const getHabitCheckIns = async (
   id: number,
   from?: string,
-  to?: string
+  to?: string,
+  options?: RequestOptions
 ): Promise<CheckInRecord[]> => {
   const allCheckIns: CheckInRecord[] = [];
   let page = 1;
@@ -84,9 +85,14 @@ export const getHabitCheckIns = async (
       ...(from ? { from } : {}),
       ...(to ? { to } : {}),
     });
-    const res = await apiClient.get<PaginatedResponse<CheckInRecord> | CheckInRecord[]>(
-      `/habits/${id}/check-ins/?${query.toString()}`
-    );
+    const res = options
+      ? await apiClient.get<PaginatedResponse<CheckInRecord> | CheckInRecord[]>(
+          `/habits/${id}/check-ins/?${query.toString()}`,
+          options
+        )
+      : await apiClient.get<PaginatedResponse<CheckInRecord> | CheckInRecord[]>(
+          `/habits/${id}/check-ins/?${query.toString()}`
+        );
     if (Array.isArray(res)) {
       return res;
     }

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { ApiError } from '../api/client';
 import { LogIn, AlertCircle } from 'lucide-react';
@@ -8,6 +8,9 @@ export const LoginPage: React.FC = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+
+  const [searchParams] = useSearchParams();
+  const isJustRegistered = searchParams.get('registered') === '1';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -83,6 +86,15 @@ export const LoginPage: React.FC = () => {
         </div>
 
         <div className="bg-white px-5 py-6 shadow-sm ring-1 ring-slate-900/5 rounded-2xl sm:px-8">
+          {isJustRegistered && (
+            <div
+              role="status"
+              className="mb-5 flex items-start gap-2.5 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800 border border-emerald-200"
+            >
+              <div className="flex-1">Account created! Please sign in with your password.</div>
+            </div>
+          )}
+
           {generalError && (
             <div
               role="alert"

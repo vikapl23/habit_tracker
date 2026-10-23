@@ -5,6 +5,7 @@ import {
   getRefreshToken,
   onAuthFailure,
   UserProfile,
+  ApiError,
 } from '../api/client';
 
 export interface AuthContextType {
@@ -23,25 +24,26 @@ export const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [initError, setInitError] = useState<string | null>(null);
 
   const fetchProfile = useCallback(async (): Promise<boolean> => {
     try {
       const profile = await apiClient.getProfile();
       setUser(profile);
       return true;
-    } catch {
+    } catch (err) {
       setUser(null);
-      return false;
+      throw err;
     }
   }, []);
 
-  useEffect(() => {
-    let isMounted = true;
+  const initAuth = useCallback(async () => {
+    setIsLoading(true);
+    setInitError(null);
+    const refresh = getRefreshToken();
+    const access = getAccessToken();
 
-    const initAuth = async () => {
-      const refresh = getRefreshToken();
-      const access = getAccessToken();
-
+    try {
       if (access) {
         await fetchProfile();
       } else if (refresh) {
@@ -49,10 +51,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await apiClient.refreshTokens();
         await fetchProfile();
       }
-      if (isMounted) {
-        setIsLoading(false);
+    } catch (err: any) {
+      if (err instanceof ApiError && (err.status === 0 || err.status >= 500)) {
+        setInitError('Unable to reach server. Please check your network connection.');
+      } else {
+        setUser(null);
       }
-    };
+    } finally {
+      setIsLoading(false);
+    }
+  }, [fetchProfile]);
+
+  useEffect(() => {
+    let isMounted = true;
 
     initAuth();
 
@@ -67,7 +78,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isMounted = false;
       unsubscribe();
     };
-  }, [fetchProfile]);
+  }, [initAuth]);
+
+  if (initError) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
+        <div className="w-full max-w-[400px] bg-white rounded-2xl shadow-sm border border-slate-200 p-6 text-center space-y-4">
+          <div className="w-12 h-12 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center mx-auto text-xl font-bold">
+            ⚠️
+          </div>
+          <div className="space-y-1">
+            <h2 className="text-base font-bold text-slate-900">Can't reach server</h2>
+            <p className="text-xs text-slate-500">{initError}</p>
+          </div>
+          <button
+            type="button"
+            onClick={initAuth}
+            className="min-h-[44px] inline-flex items-center justify-center px-5 py-2.5 rounded-xl bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 active:bg-blue-800 transition"
+          >
+            Retry Connection
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const login = async (email: string, password: string) => {
     await apiClient.login(email, password);

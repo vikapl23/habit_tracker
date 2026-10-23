@@ -80,12 +80,6 @@ export const notifyAuthFailure = (): void => {
       // Ignore listener errors
     }
   });
-
-  if (typeof window !== 'undefined' && !import.meta.env?.VITEST) {
-    if (window.location.pathname !== '/login') {
-      window.location.href = '/login';
-    }
-  }
 };
 
 export const getApiBaseUrl = (): string => {
@@ -162,10 +156,16 @@ const executeTokenRefresh = async (): Promise<string | null> => {
         }
       }
 
-      clearTokens();
-      tokenBroadcastChannel?.postMessage({ type: 'LOGOUT' });
-      notifyAuthFailure();
-      return null;
+      // I1: Only clear tokens and force logout on 400/401 from refresh endpoint.
+      // On 5xx, 429, or network error, keep tokens and throw retryable ApiError.
+      if (response.status === 400 || response.status === 401) {
+        clearTokens();
+        tokenBroadcastChannel?.postMessage({ type: 'LOGOUT' });
+        notifyAuthFailure();
+        return null;
+      }
+
+      throw new ApiError('Token refresh failed temporarily', response.status, {});
     }
 
     const data = await response.json();
@@ -185,7 +185,10 @@ const executeTokenRefresh = async (): Promise<string | null> => {
     tokenBroadcastChannel?.postMessage({ type: 'LOGOUT' });
     notifyAuthFailure();
     return null;
-  } catch {
+  } catch (err) {
+    if (err instanceof ApiError && (err.status === 0 || err.status >= 500 || err.status === 429)) {
+      throw err;
+    }
     clearTokens();
     notifyAuthFailure();
     return null;
@@ -282,18 +285,39 @@ export const apiRequest = async <T = any>(
   } else {
     try {
       const text = await response.text();
-      data = text ? { detail: text } : {};
+      // I9: Ignore non-JSON bodies (HTML 500/502/404) so raw HTML is not stored as detail
+      data = text && !text.trim().startsWith('<') ? { detail: text } : {};
     } catch {
       data = {};
     }
   }
 
   if (!response.ok) {
-    const errorMsg =
-      data?.detail ||
-      (typeof data === 'object' && Object.keys(data).length > 0
-        ? 'Validation error'
-        : response.statusText || 'Request failed');
+    let errorMsg = 'Request failed';
+    if (data && typeof data === 'object') {
+      if (typeof data.detail === 'string' && !data.detail.trim().startsWith('<')) {
+        errorMsg = data.detail;
+      } else if (Object.keys(data).length > 0) {
+        errorMsg = 'Validation error';
+      }
+    } else {
+      data = {};
+    }
+
+    if (errorMsg === 'Request failed') {
+      if (response.status >= 500) {
+        errorMsg = 'Server error occurred. Please try again later.';
+      } else if (response.status === 404) {
+        errorMsg = 'Not found';
+      } else if (response.status === 403) {
+        errorMsg = 'Forbidden';
+      } else if (response.status === 429) {
+        errorMsg = 'Too many requests';
+      } else if (response.statusText) {
+        errorMsg = response.statusText;
+      }
+    }
+
     throw new ApiError(errorMsg, response.status, data || {});
   }
 
@@ -353,11 +377,19 @@ export const apiClient = {
     );
 
     // Auto-login after registration
-    const tokens = await apiClient.login(email, password);
-    return {
-      message: regRes.detail || 'User registered successfully.',
-      tokens,
-    };
+    try {
+      const tokens = await apiClient.login(email, password);
+      return {
+        message: regRes.detail || 'User registered successfully.',
+        tokens,
+      };
+    } catch {
+      // If login fails (e.g. rate limit / auth throttle), return null tokens so caller can redirect with notice
+      return {
+        message: regRes.detail || 'User registered successfully.',
+        tokens: null as any,
+      };
+    }
   },
 
   logout: async (): Promise<void> => {

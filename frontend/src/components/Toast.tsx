@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { AlertCircle, X } from 'lucide-react';
 
 export interface ToastMessage {
@@ -14,13 +14,20 @@ interface ToastProps {
 }
 
 export const Toast: React.FC<ToastProps> = ({ toast, onDismiss, duration = 4000 }) => {
+  const onDismissRef = useRef(onDismiss);
+  useEffect(() => {
+    onDismissRef.current = onDismiss;
+  });
+
+  // I15: Key timer effect on toast.id and use onDismissRef so parent inline arrows don't restart timer
   useEffect(() => {
     if (!toast) return;
     const timer = setTimeout(() => {
-      onDismiss();
+      onDismissRef.current();
     }, duration);
     return () => clearTimeout(timer);
-  }, [toast, onDismiss, duration]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [toast?.id, duration]);
 
   if (!toast) return null;
 

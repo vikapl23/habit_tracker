@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 import { Habit, HabitFormData, FrequencyType } from '../types/habit';
+import { getErrorMessage } from '../utils/errorUtils';
 
 interface HabitFormBottomSheetProps {
   isOpen: boolean;
@@ -184,19 +185,34 @@ export const HabitFormBottomSheet: React.FC<HabitFormBottomSheetProps> = ({
     } catch (err: any) {
       if (err?.data && typeof err.data === 'object') {
         const nextFieldErrors: Record<string, string> = {};
+        const unhandledErrors: string[] = [];
+        const knownFields = new Set(['name', 'description', 'color', 'emoji', 'frequency_type', 'frequency_days']);
+
         for (const [key, val] of Object.entries(err.data)) {
-          if (Array.isArray(val)) {
-            nextFieldErrors[key] = val.join(' ');
-          } else if (typeof val === 'string') {
-            nextFieldErrors[key] = val;
+          const valStr = Array.isArray(val) ? val.join(' ') : String(val);
+          if (knownFields.has(key)) {
+            nextFieldErrors[key] = valStr;
+          } else if (key !== 'detail' && key !== 'non_field_errors') {
+            unhandledErrors.push(`${key}: ${valStr}`);
           }
         }
         setFieldErrors(nextFieldErrors);
+
         if (err.data.detail) {
           setGeneralError(err.data.detail);
+        } else if (err.data.non_field_errors) {
+          setGeneralError(
+            Array.isArray(err.data.non_field_errors)
+              ? err.data.non_field_errors.join(' ')
+              : String(err.data.non_field_errors)
+          );
+        } else if (unhandledErrors.length > 0) {
+          setGeneralError(unhandledErrors.join(' | '));
+        } else if (Object.keys(nextFieldErrors).length === 0) {
+          setGeneralError(getErrorMessage(err, 'Something went wrong. Please check your inputs.'));
         }
       } else {
-        setGeneralError(err?.message || 'Something went wrong. Please check your inputs.');
+        setGeneralError(getErrorMessage(err, 'Something went wrong. Please check your inputs.'));
       }
       scrollToFirstError();
     } finally {

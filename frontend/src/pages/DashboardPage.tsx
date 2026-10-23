@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { Habit, HabitFormData } from '../types/habit';
 import { habitsApi } from '../api/habits';
+import { getErrorMessage } from '../utils/errorUtils';
 import { HabitCard } from '../components/HabitCard';
 import { HabitFormBottomSheet } from '../components/HabitFormBottomSheet';
 import { DeleteConfirmDialog } from '../components/DeleteConfirmDialog';
@@ -61,7 +62,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onCreateHabit }) =
   const handleToggleHabit = async (habit: Habit) => {
     if (pendingHabitIds.has(habit.id)) return;
 
-    const previousHabits = habits;
+    const originalHabit = habit;
     const isNowChecked = !habit.is_checked_today;
     const newCurrentStreak = isNowChecked
       ? habit.current_streak + 1
@@ -102,10 +103,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onCreateHabit }) =
         )
       );
     } catch (err: any) {
-      // Rollback to previous habits state
-      setHabits(previousHabits);
-      const errorMsg =
-        err?.data?.detail || err?.message || 'Failed to update habit. Please try again.';
+      // I5: Roll back ONLY the affected habit, not the entire list
+      setHabits((prev) => prev.map((h) => (h.id === habit.id ? originalHabit : h)));
+      const errorMsg = getErrorMessage(err, 'Failed to update habit. Please try again.');
       setToast({
         id: String(Date.now()),
         type: 'error',

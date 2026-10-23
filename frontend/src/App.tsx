@@ -8,6 +8,7 @@ import { DashboardPage } from './pages/DashboardPage';
 import { ArchivedHabitsPage } from './pages/ArchivedHabitsPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { HabitDetailPage } from './pages/HabitDetailPage';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuth();
@@ -85,16 +86,18 @@ export const AppRoutes: React.FC = () => {
 
 export const App: React.FC = () => {
   return (
-    <BrowserRouter
-      future={{
-        v7_startTransition: true,
-        v7_relativeSplatPath: true,
-      }}
-    >
-      <AuthProvider>
-        <AppRoutes />
-      </AuthProvider>
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true,
+        }}
+      >
+        <AuthProvider>
+          <AppRoutes />
+        </AuthProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
   );
 };
 
