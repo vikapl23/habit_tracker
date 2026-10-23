@@ -32,3 +32,12 @@ SECURE_HSTS_PRELOAD = True
 # Static files with WhiteNoise
 MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+AUTH_THROTTLE_RATE = env('AUTH_THROTTLE_RATE', default='5/minute')
+REST_FRAMEWORK = {
+    **REST_FRAMEWORK,
+    'DEFAULT_THROTTLE_RATES': {
+        **REST_FRAMEWORK.get('DEFAULT_THROTTLE_RATES', {}),
+        'auth': AUTH_THROTTLE_RATE,
+    },
+}

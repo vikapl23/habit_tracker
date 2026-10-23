@@ -9,6 +9,7 @@ env = environ.Env(
     DEBUG=(bool, False),
     SECRET_KEY=(str, 'django-insecure-development-secret-key-change-in-production-12345'),
     ALLOWED_HOSTS=(list, ['*']),
+    AUTH_THROTTLE_RATE=(str, '5/minute'),
 )
 
 env_file = BASE_DIR / '.env'
@@ -18,6 +19,7 @@ if env_file.exists():
 SECRET_KEY = env('SECRET_KEY')
 DEBUG = env('DEBUG')
 ALLOWED_HOSTS = env.list('ALLOWED_HOSTS')
+AUTH_THROTTLE_RATE = env('AUTH_THROTTLE_RATE')
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -107,7 +109,7 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',
     ),
     'DEFAULT_THROTTLE_RATES': {
-        'auth': '5/minute',
+        'auth': AUTH_THROTTLE_RATE,
     },
 }
 

@@ -1,6 +1,7 @@
 import pytest
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.test import override_settings
 from rest_framework import status
 from rest_framework.test import APIClient
 
@@ -98,6 +99,7 @@ class TestAuthEndpoints:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert 'password' in response.data
 
+    @override_settings(AUTH_THROTTLE_RATE='5/minute')
     def test_register_throttling(self, api_client):
         for i in range(5):
             res = api_client.post(self.register_url, {
@@ -112,6 +114,15 @@ class TestAuthEndpoints:
             'password': 'StrongPassword123!',
         })
         assert res.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+
+    def test_auth_endpoints_not_throttled_under_test_settings(self, api_client):
+        # In test settings, throttling is disabled or high so multiple auth requests succeed without 429
+        for i in range(8):
+            res = api_client.post(self.register_url, {
+                'email': f'unthrottled{i}@example.com',
+                'password': 'StrongPassword123!',
+            })
+            assert res.status_code == status.HTTP_201_CREATED
 
     # Token Obtain Tests
     def test_token_obtain_success(self, api_client, existing_user):
@@ -150,6 +161,7 @@ class TestAuthEndpoints:
         response = api_client.post(self.token_url, data)
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
+    @override_settings(AUTH_THROTTLE_RATE='5/minute')
     def test_token_obtain_throttling(self, api_client, existing_user):
         for _ in range(5):
             res = api_client.post(self.token_url, {
@@ -162,6 +174,31 @@ class TestAuthEndpoints:
         res = api_client.post(self.token_url, {
             'email': existing_user.email,
             'password': 'ValidPassword123!',
+        })
+        assert res.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+
+    @override_settings(AUTH_THROTTLE_RATE='5/minute')
+    def test_auth_throttling_shared_between_register_and_token(self, api_client):
+        # 3 register requests
+        for i in range(3):
+            res = api_client.post(self.register_url, {
+                'email': f'shared{i}@example.com',
+                'password': 'StrongPassword123!',
+            })
+            assert res.status_code == status.HTTP_201_CREATED
+
+        # 2 token requests (total 5 requests)
+        for i in range(2):
+            res = api_client.post(self.token_url, {
+                'email': f'shared{i}@example.com',
+                'password': 'StrongPassword123!',
+            })
+            assert res.status_code == status.HTTP_200_OK
+
+        # 6th auth request from same IP should be throttled
+        res = api_client.post(self.token_url, {
+            'email': 'shared0@example.com',
+            'password': 'StrongPassword123!',
         })
         assert res.status_code == status.HTTP_429_TOO_MANY_REQUESTS
 
