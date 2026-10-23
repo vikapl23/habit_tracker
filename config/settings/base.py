@@ -29,8 +29,11 @@ INSTALLED_APPS = [
     'rest_framework',
     'drf_spectacular',
     # Local apps
+    'apps.accounts.apps.AccountsConfig',
     'apps.habits.apps.HabitsConfig',
 ]
+
+AUTH_USER_MODEL = 'accounts.User'
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
