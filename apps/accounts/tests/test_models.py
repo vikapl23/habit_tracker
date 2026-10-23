@@ -24,7 +24,21 @@ class TestCustomUserModel:
 
     def test_create_user_normalizes_email(self):
         user = User.objects.create_user(email='User@EXAMPLE.COM', password='securepassword123')
-        assert user.email == 'User@example.com'
+        assert user.email == 'user@example.com'
+
+    def test_create_user_stores_email_lowercased(self):
+        user = User.objects.create_user(email='Anna@Test.COM', password='securepassword123')
+        assert user.email == 'anna@test.com'
+
+    def test_user_save_lowercases_email(self):
+        user = User(email='MixedCase@Example.COM')
+        user.save()
+        assert user.email == 'mixedcase@example.com'
+
+    def test_get_by_natural_key_case_insensitive(self):
+        User.objects.create_user(email='anna@test.com', password='securepassword123')
+        found = User.objects.get_by_natural_key('Anna@Test.COM')
+        assert found.email == 'anna@test.com'
 
     def test_create_user_without_email_raises_value_error(self):
         with pytest.raises(ValueError, match="The Email field must be set"):

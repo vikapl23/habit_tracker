@@ -47,6 +47,25 @@ class TestAuthEndpoints:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert 'email' in response.data
 
+    def test_register_duplicate_email_case_insensitive_fails(self, api_client, existing_user):
+        data = {
+            'email': existing_user.email.upper(),
+            'password': 'AnotherPassword123!',
+        }
+        response = api_client.post(self.register_url, data)
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'email' in response.data
+
+    def test_register_stores_email_lowercased(self, api_client):
+        data = {
+            'email': 'NewUserWithCaps@Example.COM',
+            'password': 'StrongPassword123!',
+        }
+        response = api_client.post(self.register_url, data)
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data['email'] == 'newuserwithcaps@example.com'
+        assert User.objects.filter(email='newuserwithcaps@example.com').exists()
+
     def test_register_invalid_email_fails(self, api_client):
         data = {
             'email': 'not-an-email',
@@ -75,6 +94,16 @@ class TestAuthEndpoints:
     def test_token_obtain_success(self, api_client, existing_user):
         data = {
             'email': 'existing@example.com',
+            'password': 'ValidPassword123!',
+        }
+        response = api_client.post(self.token_url, data)
+        assert response.status_code == status.HTTP_200_OK
+        assert 'access' in response.data
+        assert 'refresh' in response.data
+
+    def test_token_obtain_case_insensitive(self, api_client, existing_user):
+        data = {
+            'email': 'ExIsTiNg@EXAMPLE.com',
             'password': 'ValidPassword123!',
         }
         response = api_client.post(self.token_url, data)
