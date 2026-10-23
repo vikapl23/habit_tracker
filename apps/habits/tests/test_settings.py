@@ -243,3 +243,28 @@ def test_simple_jwt_settings_rotation_and_blacklist_enabled():
     assert "rest_framework_simplejwt.token_blacklist" in base_settings.INSTALLED_APPS
     assert base_settings.SIMPLE_JWT.get("ROTATE_REFRESH_TOKENS") is True
     assert base_settings.SIMPLE_JWT.get("BLACKLIST_AFTER_ROTATION") is True
+
+
+def test_storages_configured_in_base_settings():
+    base_settings = importlib.import_module("config.settings.base")
+    assert hasattr(base_settings, "STORAGES")
+    assert "default" in base_settings.STORAGES
+    assert "staticfiles" in base_settings.STORAGES
+    assert not hasattr(base_settings, "STATICFILES_STORAGE")
+
+
+def test_production_uses_storages_instead_of_staticfiles_storage(monkeypatch):
+    prod_settings = load_production_settings(
+        monkeypatch,
+        {
+            "SECRET_KEY": "valid-production-secret-key-for-test-12345",
+            "ALLOWED_HOSTS": "example.com",
+        },
+    )
+    assert hasattr(prod_settings, "STORAGES")
+    assert (
+        prod_settings.STORAGES["staticfiles"]["BACKEND"]
+        == "whitenoise.storage.CompressedManifestStaticFilesStorage"
+    )
+    assert "default" in prod_settings.STORAGES
+    assert not hasattr(prod_settings, "STATICFILES_STORAGE")
