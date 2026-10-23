@@ -2,19 +2,24 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from datetime import date, datetime, timedelta
-from typing import NamedTuple
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 from django.utils import timezone
 
+if TYPE_CHECKING:
+    from apps.habits.models import Habit
+
 
 class StreakResult(NamedTuple):
+    """Result data structure containing calculated streak counts."""
+
     current_streak: int
     longest_streak: int
 
 
 def calculate_streaks(
-    checkin_dates: Iterable[date],
-    reference_date: date | None = None,
+    checkin_dates: Iterable[date | datetime | Any],
+    reference_date: date | datetime | None = None,
 ) -> StreakResult:
     """
     Calculate current_streak and longest_streak for a collection of check-in dates.
@@ -53,7 +58,7 @@ def calculate_streaks(
     yesterday = today - timedelta(days=1)
 
     if today in valid_dates:
-        cursor = today
+        cursor: date | None = today
     elif yesterday in valid_dates:
         cursor = yesterday
     else:
@@ -86,11 +91,12 @@ def calculate_streaks(
 
 
 def calculate_habit_streaks(
-    habit,
-    reference_date: date | None = None,
+    habit: Habit,
+    reference_date: date | datetime | None = None,
 ) -> StreakResult:
     """
-    Convenience helper calculating streaks directly for a Habit model instance.
+    Calculate streaks directly for a Habit model instance.
+
     Uses prefetched check_ins if available, otherwise queries values_list('date', flat=True).
     """
     if reference_date is None:
@@ -104,7 +110,7 @@ def calculate_habit_streaks(
         hasattr(habit, "_prefetched_objects_cache")
         and "check_ins" in habit._prefetched_objects_cache
     ):
-        dates = [ci.date for ci in habit.check_ins.all()]
+        dates: list[date] = [ci.date for ci in habit.check_ins.all()]
     else:
         dates = list(habit.check_ins.values_list("date", flat=True))
 
@@ -112,9 +118,9 @@ def calculate_habit_streaks(
 
 
 def recalculate_habit_streaks(
-    habit,
-    reference_date: date | None = None,
-):
+    habit: Habit,
+    reference_date: date | datetime | None = None,
+) -> Habit:
     """
     Recalculate current_streak, longest_streak, and last_check_in_date for a habit,
     and persist them to the database.

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import NamedTuple
+from typing import TYPE_CHECKING, NamedTuple
 
 from django.db import IntegrityError, transaction
 from django.utils import timezone
@@ -10,8 +10,15 @@ from rest_framework.exceptions import NotFound, ValidationError
 from apps.habits.models import Habit, HabitCheckIn
 from apps.habits.services.streaks import recalculate_habit_streaks
 
+if TYPE_CHECKING:
+    from django.contrib.auth.models import AbstractBaseUser, AnonymousUser
+
+    from apps.accounts.models import User
+
 
 class CheckInResult(NamedTuple):
+    """Result data structure returned by check-in and uncheck operations."""
+
     status: str
     habit_id: int
     date: date
@@ -20,11 +27,12 @@ class CheckInResult(NamedTuple):
     created: bool = False
 
 
-def validate_checkin_date(target_date: date, user=None, habit: Habit | None = None) -> date:
-    """
-    Validate that target_date is not in the future relative to the user's timezone.
-    Single source of truth for future-date check-in validation.
-    """
+def validate_checkin_date(
+    target_date: date,
+    user: User | AbstractBaseUser | AnonymousUser | None = None,
+    habit: Habit | None = None,
+) -> date:
+    """Validate that target_date is not in the future relative to the user's timezone."""
     if user is None and habit is not None:
         user = getattr(habit, "user", None)
 
@@ -37,16 +45,9 @@ def validate_checkin_date(target_date: date, user=None, habit: Habit | None = No
 def check_in_habit(
     habit: Habit,
     target_date: date | None = None,
-    user=None,
+    user: User | AbstractBaseUser | AnonymousUser | None = None,
 ) -> CheckInResult:
-    """
-    Record a check-in for a habit on the given date (defaults to user's today).
-
-    Race-safe: handles IntegrityError from concurrent inserts, returning the existing
-    check-in instead of crashing with 500.
-
-    Returns the updated habit state without modifying or relying on prefetched caches.
-    """
+    """Record a check-in for a habit on the given date (defaults to user's today)."""
     if habit.is_archived:
         raise ValidationError({"detail": "Cannot check in on an archived habit."})
 
@@ -84,13 +85,9 @@ def check_in_habit(
 def uncheck_habit(
     habit: Habit,
     target_date: date | None = None,
-    user=None,
+    user: User | AbstractBaseUser | AnonymousUser | None = None,
 ) -> CheckInResult:
-    """
-    Remove a check-in for a habit on the given date (defaults to user's today).
-
-    Returns the updated habit state without modifying or relying on prefetched caches.
-    """
+    """Remove a check-in for a habit on the given date (defaults to user's today)."""
     if user is None:
         user = getattr(habit, "user", None)
 

@@ -1,6 +1,10 @@
+from __future__ import annotations
+
 import zoneinfo
+from typing import Any
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import AbstractBaseUser
 from django.contrib.auth.password_validation import validate_password
 from django.db import IntegrityError
 from rest_framework import serializers
@@ -9,16 +13,20 @@ User = get_user_model()
 
 
 class RegisterSerializer(serializers.Serializer):
+    """Serializer for registering a new user with email, password, and timezone."""
+
     email = serializers.EmailField(required=True)
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
     timezone = serializers.CharField(required=False, default="Europe/Kyiv")
 
-    def validate_timezone(self, value):
+    def validate_timezone(self, value: str) -> str:
+        """Validate that the provided timezone is a recognized IANA time zone."""
         if value not in zoneinfo.available_timezones():
             raise serializers.ValidationError(f"'{value}' is not a valid IANA time zone.")
         return value
 
-    def to_internal_value(self, data):
+    def to_internal_value(self, data: Any) -> dict[str, Any]:
+        """Normalize email to lowercase before validation."""
         if hasattr(data, "copy"):
             data = data.copy()
         elif isinstance(data, dict):
@@ -27,7 +35,8 @@ class RegisterSerializer(serializers.Serializer):
             data["email"] = data["email"].lower()
         return super().to_internal_value(data)
 
-    def create(self, validated_data):
+    def create(self, validated_data: dict[str, Any]) -> AbstractBaseUser:
+        """Create a user with lowercased email or return existing user if already registered."""
         email = validated_data["email"].lower()
         tz = validated_data.get("timezone", "Europe/Kyiv")
         try:
@@ -43,12 +52,15 @@ class RegisterSerializer(serializers.Serializer):
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
+    """Serializer for retrieving and updating user profile details."""
+
     class Meta:
         model = User
         fields = ["id", "email", "timezone"]
         read_only_fields = ["id", "email"]
 
-    def validate_timezone(self, value):
+    def validate_timezone(self, value: str) -> str:
+        """Validate that the provided timezone is a recognized IANA time zone."""
         if value not in zoneinfo.available_timezones():
             raise serializers.ValidationError(f"'{value}' is not a valid IANA time zone.")
         return value

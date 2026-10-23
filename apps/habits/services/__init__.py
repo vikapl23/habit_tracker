@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from .checkin import CheckInResult, check_in_habit, uncheck_habit, validate_checkin_date
 from .streaks import (
     StreakResult,

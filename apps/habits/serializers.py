@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import date
 
 from django.utils import timezone
@@ -7,6 +9,8 @@ from .models import Habit, HabitCheckIn
 
 
 class HabitCheckInSerializer(serializers.ModelSerializer):
+    """Serializer for habit check-in records."""
+
     class Meta:
         model = HabitCheckIn
         fields = ["id", "date", "created_at"]
@@ -14,11 +18,15 @@ class HabitCheckInSerializer(serializers.ModelSerializer):
 
 
 class CheckInFilterSerializer(serializers.Serializer):
+    """Serializer for validating query parameters when filtering check-in records."""
+
     from_date = serializers.DateField(required=False)
     to_date = serializers.DateField(required=False)
 
 
 class HabitSerializer(serializers.ModelSerializer):
+    """Serializer for Habit model representation and creation."""
+
     current_streak = serializers.SerializerMethodField()
     is_checked_today = serializers.SerializerMethodField()
 
@@ -47,7 +55,8 @@ class HabitSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
 
-    def _get_user_today(self, obj=None) -> date:
+    def _get_user_today(self, obj: Habit | None = None) -> date:
+        """Determine today's date in the context user's timezone."""
         request = self.context.get("request")
         if (
             request
@@ -60,7 +69,8 @@ class HabitSerializer(serializers.ModelSerializer):
             return obj.user.get_today()
         return timezone.localdate()
 
-    def _get_target_date(self, obj=None) -> date:
+    def _get_target_date(self, obj: Habit | None = None) -> date:
+        """Extract target date from query parameters or default to user's today."""
         request = self.context.get("request")
         if request and "date" in request.query_params:
             try:
@@ -69,7 +79,8 @@ class HabitSerializer(serializers.ModelSerializer):
                 pass
         return self._get_user_today(obj)
 
-    def get_is_checked_today(self, obj) -> bool:
+    def get_is_checked_today(self, obj: Habit) -> bool:
+        """Check whether the habit has a check-in recorded for today."""
         target_date = self._get_target_date(obj)
         if obj.last_check_in_date is None:
             return False
@@ -84,21 +95,28 @@ class HabitSerializer(serializers.ModelSerializer):
             return any(ci.date == target_date for ci in obj.check_ins.all())
         return obj.check_ins.filter(date=target_date).exists()
 
-    def get_current_streak(self, obj) -> int:
+    def get_current_streak(self, obj: Habit) -> int:
+        """Calculate the habit's current streak as of user's today."""
         user_today = self._get_user_today(obj)
         return obj.get_current_streak(reference_date=user_today)
 
 
 class CheckInActionSerializer(serializers.Serializer):
+    """Serializer for check-in action payloads."""
+
     date = serializers.DateField(required=False, default=None)
 
 
 class ArchiveResponseSerializer(serializers.Serializer):
+    """Serializer for archive/unarchive response payload."""
+
     id = serializers.IntegerField()
     is_archived = serializers.BooleanField()
 
 
 class CheckInResponseSerializer(serializers.Serializer):
+    """Serializer for check-in operation response payload."""
+
     status = serializers.CharField()
     habit_id = serializers.IntegerField()
     date = serializers.DateField()
