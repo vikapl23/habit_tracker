@@ -13,7 +13,7 @@ This checklist tracks the ongoing development progress of the Habit Tracker proj
 | **Phase 2** | JWT Authentication & User Isolation | `[x]` Completed | 5 / 5 |
 | **Phase 3** | Habit Scheduling & Frequency | `[x]` Completed | 4 / 4 |
 | **Phase 4** | Statistics & Analytics | `[ ]` Postponed (after deployment) | 0 / 4 |
-| **Phase 5** | Mobile-First React Frontend (Vite) | `[ ]` In Progress | 2 / 6 |
+| **Phase 5** | Mobile-First React Frontend (Vite) | `[ ]` In Progress | 3 / 6 |
 | **Phase 6** | Docker & PostgreSQL Environment | `[ ]` Not Started | 0 / 4 |
 | **Phase 7** | Production Deployment (Render.com) | `[ ]` Not Started | 0 / 4 |
 
@@ -131,10 +131,15 @@ This checklist tracks the ongoing development progress of the Habit Tracker proj
 - [x] **5.2 Authentication Flow**
   - [x] Login, registration, and automatic token refresh interceptor.
   - [x] Protected route wrapper for authenticated views.
-- [ ] **5.3 Mobile Dashboard View**
-  - [ ] Habit list with optimistic toggle (check/uncheck on tap).
-  - [ ] Visual streak badges (`🔥 7`).
-  - [ ] Daily progress bar (e.g. 4/6 completed today).
+- [x] **5.3 Mobile Dashboard View**
+  - [x] Habit list with optimistic toggle (check/uncheck on tap).
+  - [x] Visual streak badges (`🔥 7`), colored accent, and longest streak smaller.
+  - [x] Daily progress bar and date header (counting only habits scheduled today).
+  - [x] Summary card with best current streak among active habits.
+  - [x] Collapsed "Not today" section for other active habits.
+  - [x] Pagination handling to load all habit pages.
+  - [x] Empty state ("Create your first habit"), loading skeletons, and error retry state.
+  - [x] Touch targets min 44px, no horizontal scroll at 320px width.
 - [ ] **5.4 Habit Management (Modals/Drawers)**
   - [ ] Create habit modal (name, description, color picker, emoji selector, frequency).
   - [ ] Edit and archive drawers.
