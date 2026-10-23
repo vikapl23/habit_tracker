@@ -1,9 +1,17 @@
 import pytest
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from rest_framework import status
 from rest_framework.test import APIClient
 
 User = get_user_model()
+
+
+@pytest.fixture(autouse=True)
+def reset_cache():
+    cache.clear()
+    yield
+    cache.clear()
 
 
 @pytest.fixture
@@ -90,6 +98,21 @@ class TestAuthEndpoints:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert 'password' in response.data
 
+    def test_register_throttling(self, api_client):
+        for i in range(5):
+            res = api_client.post(self.register_url, {
+                'email': f'throttle{i}@example.com',
+                'password': 'StrongPassword123!',
+            })
+            assert res.status_code == status.HTTP_201_CREATED
+
+        # 6th request from same IP should be throttled
+        res = api_client.post(self.register_url, {
+            'email': 'throttle_blocked@example.com',
+            'password': 'StrongPassword123!',
+        })
+        assert res.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+
     # Token Obtain Tests
     def test_token_obtain_success(self, api_client, existing_user):
         data = {
@@ -126,6 +149,21 @@ class TestAuthEndpoints:
         }
         response = api_client.post(self.token_url, data)
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_token_obtain_throttling(self, api_client, existing_user):
+        for _ in range(5):
+            res = api_client.post(self.token_url, {
+                'email': existing_user.email,
+                'password': 'ValidPassword123!',
+            })
+            assert res.status_code == status.HTTP_200_OK
+
+        # 6th request from same IP should be throttled
+        res = api_client.post(self.token_url, {
+            'email': existing_user.email,
+            'password': 'ValidPassword123!',
+        })
+        assert res.status_code == status.HTTP_429_TOO_MANY_REQUESTS
 
     # Token Refresh Tests
     def test_token_refresh_success(self, api_client, existing_user):
