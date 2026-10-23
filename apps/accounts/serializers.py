@@ -23,9 +23,7 @@ class RegisterSerializer(serializers.Serializer):
         email = validated_data["email"].lower()
         try:
             if not User.objects.filter(email=email).exists():
-                return User.objects.create_user(
-                    email=email, password=validated_data["password"]
-                )
+                return User.objects.create_user(email=email, password=validated_data["password"])
             return User.objects.get(email=email)
         except IntegrityError:
             return User.objects.get(email=email)

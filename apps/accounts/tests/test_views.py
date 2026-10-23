@@ -30,6 +30,7 @@ class TestAuthEndpoints:
     register_url = "/api/v1/auth/register/"
     token_url = "/api/v1/auth/token/"
     refresh_url = "/api/v1/auth/token/refresh/"
+    logout_url = "/api/v1/auth/logout/"
 
     # Registration Tests
     def test_register_success(self, api_client):
@@ -252,10 +253,94 @@ class TestAuthEndpoints:
         response = api_client.post(self.refresh_url, {"refresh": refresh_token})
         assert response.status_code == status.HTTP_200_OK
         assert "access" in response.data
+        assert "refresh" in response.data
+
+    def test_token_refresh_rotates_and_blacklists_old_token(self, api_client, existing_user):
+        token_res = api_client.post(
+            self.token_url,
+            {
+                "email": "existing@example.com",
+                "password": "ValidPassword123!",
+            },
+        )
+        old_refresh_token = token_res.data["refresh"]
+
+        # 1st refresh rotates the refresh token
+        res1 = api_client.post(self.refresh_url, {"refresh": old_refresh_token})
+        assert res1.status_code == status.HTTP_200_OK
+        new_refresh_token = res1.data["refresh"]
+        assert new_refresh_token != old_refresh_token
+
+        # Attempting to reuse old refresh token must be rejected because it is blacklisted
+        res2 = api_client.post(self.refresh_url, {"refresh": old_refresh_token})
+        assert res2.status_code == status.HTTP_401_UNAUTHORIZED
+
+        # Using the new rotated refresh token succeeds
+        res3 = api_client.post(self.refresh_url, {"refresh": new_refresh_token})
+        assert res3.status_code == status.HTTP_200_OK
 
     def test_token_refresh_invalid_token_fails(self, api_client):
         response = api_client.post(self.refresh_url, {"refresh": "invalid.refresh.token"})
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    # Logout Tests
+    def test_logout_success_blacklists_refresh_token(self, api_client, existing_user):
+        token_res = api_client.post(
+            self.token_url,
+            {
+                "email": "existing@example.com",
+                "password": "ValidPassword123!",
+            },
+        )
+        refresh_token = token_res.data["refresh"]
+
+        # Logout by blacklisting the refresh token
+        logout_res = api_client.post(self.logout_url, {"refresh": refresh_token})
+        assert logout_res.status_code == status.HTTP_200_OK
+
+        # Trying to refresh with the blacklisted token must fail with 401
+        refresh_res = api_client.post(self.refresh_url, {"refresh": refresh_token})
+        assert refresh_res.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_logout_with_already_blacklisted_token_fails(self, api_client, existing_user):
+        token_res = api_client.post(
+            self.token_url,
+            {
+                "email": "existing@example.com",
+                "password": "ValidPassword123!",
+            },
+        )
+        refresh_token = token_res.data["refresh"]
+
+        # First logout succeeds
+        logout_res = api_client.post(self.logout_url, {"refresh": refresh_token})
+        assert logout_res.status_code == status.HTTP_200_OK
+
+        # Second logout with already blacklisted token fails
+        logout_res2 = api_client.post(self.logout_url, {"refresh": refresh_token})
+        assert logout_res2.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_logout_missing_refresh_token_fails(self, api_client):
+        res = api_client.post(self.logout_url, {})
+        assert res.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_logout_invalid_refresh_token_fails(self, api_client):
+        res = api_client.post(self.logout_url, {"refresh": "invalid.token.value"})
+        assert res.status_code == status.HTTP_401_UNAUTHORIZED
+
+    @override_settings(AUTH_THROTTLE_RATE="5/minute")
+    def test_logout_throttling(self, api_client, existing_user):
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        tokens = [str(RefreshToken.for_user(existing_user)) for _ in range(6)]
+
+        for i in range(5):
+            res = api_client.post(self.logout_url, {"refresh": tokens[i]})
+            assert res.status_code == status.HTTP_200_OK
+
+        # 6th request should be throttled
+        res = api_client.post(self.logout_url, {"refresh": tokens[5]})
+        assert res.status_code == status.HTTP_429_TOO_MANY_REQUESTS
 
 
 @pytest.mark.django_db

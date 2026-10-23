@@ -1,6 +1,11 @@
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
-from rest_framework_simplejwt.views import TokenObtainPairView as SimpleJWTTokenObtainPairView
+from rest_framework_simplejwt.views import (
+    TokenBlacklistView as SimpleJWTTokenBlacklistView,
+)
+from rest_framework_simplejwt.views import (
+    TokenObtainPairView as SimpleJWTTokenObtainPairView,
+)
 
 from .serializers import RegisterSerializer
 from .throttling import AuthRateThrottle
@@ -22,4 +27,8 @@ class RegisterView(generics.CreateAPIView):
 
 
 class TokenObtainPairView(SimpleJWTTokenObtainPairView):
+    throttle_classes = [AuthRateThrottle]
+
+
+class LogoutView(SimpleJWTTokenBlacklistView):
     throttle_classes = [AuthRateThrottle]

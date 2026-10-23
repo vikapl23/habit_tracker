@@ -193,3 +193,10 @@ def test_test_auth_throttle_rate_disabled_in_test_settings():
     test_settings = importlib.import_module("config.settings.test")
     assert getattr(test_settings, "AUTH_THROTTLE_RATE", None) is None
     assert test_settings.REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["auth"] is None
+
+
+def test_simple_jwt_settings_rotation_and_blacklist_enabled():
+    base_settings = importlib.import_module("config.settings.base")
+    assert "rest_framework_simplejwt.token_blacklist" in base_settings.INSTALLED_APPS
+    assert base_settings.SIMPLE_JWT.get("ROTATE_REFRESH_TOKENS") is True
+    assert base_settings.SIMPLE_JWT.get("BLACKLIST_AFTER_ROTATION") is True
