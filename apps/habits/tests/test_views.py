@@ -6,7 +6,7 @@ from apps.habits.models import Habit
 
 @pytest.mark.django_db
 def test_list_habits(api_client, habit):
-    archived_habit = Habit.objects.create(name="Archived Habit", is_archived=True)
+    archived_habit = Habit.objects.create(user=habit.user, name="Archived Habit", is_archived=True)
     
     # By default, archived habits should not be listed
     response = api_client.get("/api/v1/habits/")
@@ -21,10 +21,10 @@ def test_list_habits(api_client, habit):
 
 
 @pytest.mark.django_db
-def test_list_habits_query_count_constant(api_client, django_assert_num_queries):
+def test_list_habits_query_count_constant(api_client, user, django_assert_num_queries):
     today = date.today()
     for i in range(5):
-        h = Habit.objects.create(name=f"Habit {i}")
+        h = Habit.objects.create(user=user, name=f"Habit {i}")
         h.check_ins.create(date=today)
 
     # 1 query for count + 1 query to fetch habits + 1 query to prefetch check_ins = 3 queries
@@ -114,8 +114,8 @@ def test_archive_and_unarchive_habit(api_client, habit):
 
 @pytest.mark.django_db
 @freeze_time("2026-10-23")
-def test_check_in_on_archived_habit_returns_400(api_client):
-    archived_habit = Habit.objects.create(name="Archived Habit", is_archived=True)
+def test_check_in_on_archived_habit_returns_400(api_client, user):
+    archived_habit = Habit.objects.create(user=user, name="Archived Habit", is_archived=True)
     res = api_client.post(f"/api/v1/habits/{archived_habit.id}/check/", {})
     assert res.status_code == status.HTTP_400_BAD_REQUEST
     assert "detail" in res.data
@@ -296,7 +296,7 @@ def test_list_checkins_nonexistent_habit_404(api_client):
 
 @pytest.mark.django_db
 def test_list_checkins_isolated_to_habit(api_client, habit):
-    other_habit = Habit.objects.create(name="Other Habit")
+    other_habit = Habit.objects.create(user=habit.user, name="Other Habit")
     today = date.today()
     habit.check_ins.create(date=today)
     other_habit.check_ins.create(date=today)

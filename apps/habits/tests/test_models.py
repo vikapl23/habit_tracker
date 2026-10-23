@@ -6,8 +6,9 @@ from django.contrib import admin
 from apps.habits.models import Habit, HabitCheckIn
 
 @pytest.mark.django_db
-def test_create_habit():
+def test_create_habit(user):
     habit = Habit.objects.create(
+        user=user,
         name="Morning Jog",
         description="Jog for 30 minutes",
         color="#10B981",
@@ -74,6 +75,38 @@ def test_cascade_delete_habit_deletes_checkins(habit):
     assert HabitCheckIn.objects.filter(habit_id=habit.id).count() == 0
 
 
+@pytest.mark.django_db
+def test_habit_requires_user():
+    with pytest.raises(IntegrityError):
+        Habit.objects.create(
+            name="No User Habit",
+            color="#3B82F6",
+            emoji="🎯"
+        )
+
+
+@pytest.mark.django_db
+def test_habit_belongs_to_user(user):
+    habit = Habit.objects.create(
+        user=user,
+        name="User Habit",
+        color="#3B82F6",
+        emoji="🎯"
+    )
+    assert habit.user == user
+    assert habit in user.habits.all()
+
+
+@pytest.mark.django_db
+def test_delete_user_cascades_to_habits(user):
+    Habit.objects.create(user=user, name="Habit 1")
+    Habit.objects.create(user=user, name="Habit 2")
+    assert user.habits.count() == 2
+    user_id = user.id
+    user.delete()
+    assert Habit.objects.filter(user_id=user_id).count() == 0
+
+
 def test_admin_registration():
     assert Habit in admin.site._registry
     assert HabitCheckIn in admin.site._registry
@@ -91,7 +124,8 @@ def test_habit_model_validation_rejects_invalid_emoji():
         habit.full_clean()
 
 
-def test_habit_model_validation_accepts_valid_complex_emojis():
+@pytest.mark.django_db
+def test_habit_model_validation_accepts_valid_complex_emojis(user):
     for emoji in ["👍🏽", "🇺🇦", "❤️", "👨👩👧", "👨‍👩‍👧"]:
-        habit = Habit(name="Test", emoji=emoji)
+        habit = Habit(user=user, name="Test", emoji=emoji)
         habit.full_clean()  # Should not raise

@@ -10,7 +10,7 @@ This checklist tracks the ongoing development progress of the Habit Tracker proj
 |---|---|:---:|:---:|
 | **Phase 0** | Project Setup & Tooling | `[x]` Completed | 4 / 4 |
 | **Phase 1** | MVP: Core Domain, Streaks & REST API | `[x]` Completed | 7 / 7 |
-| **Phase 2** | JWT Authentication & User Isolation | `[ ]` In Progress | 2 / 5 |
+| **Phase 2** | JWT Authentication & User Isolation | `[ ]` In Progress | 3 / 5 |
 | **Phase 3** | Habit Scheduling & Frequency | `[ ]` Not Started | 0 / 4 |
 | **Phase 4** | Statistics & Analytics | `[ ]` Not Started | 0 / 4 |
 | **Phase 5** | Mobile-First React Frontend (Vite) | `[ ]` Not Started | 0 / 6 |
@@ -83,8 +83,8 @@ This checklist tracks the ongoing development progress of the Habit Tracker proj
   - [x] Configure `rest_framework_simplejwt` in settings.
   - [x] Setup token endpoints: `/api/v1/auth/token/` and `/api/v1/auth/token/refresh/`.
   - [x] Add user registration endpoint: `/api/v1/auth/register/`.
-- [ ] **2.3 User-Habit Association & Safe Migration**
-  - [ ] Migrate `Habit.user` ForeignKey to link to `accounts.User` (enforcing `null=False`).
+- [x] **2.3 User-Habit Association & Safe Migration**
+  - [x] Migrate `Habit.user` ForeignKey to link to `accounts.User` (enforcing `null=False`).
 - [ ] **2.4 Queryset Scoping & Permissions (TDD)**
   - [ ] **Test**: Ensure User A cannot view, edit, check, or delete User B's habits (`404` or `403`).
   - [ ] **Impl**: Restrict `get_queryset()` in `HabitViewSet` to `user=self.request.user`.

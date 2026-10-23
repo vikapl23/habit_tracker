@@ -91,8 +91,8 @@ def test_pagination_on_habits_and_checkins_list(api_client, habit):
 
 
 @pytest.mark.django_db
-def test_safer_archived_filtering_on_detail_views(api_client):
-    archived_habit = Habit.objects.create(name="Archived Habit", is_archived=True)
+def test_safer_archived_filtering_on_detail_views(api_client, user):
+    archived_habit = Habit.objects.create(user=user, name="Archived Habit", is_archived=True)
 
     # Retrieval of archived habit should succeed
     res = api_client.get(f"/api/v1/habits/{archived_habit.id}/")

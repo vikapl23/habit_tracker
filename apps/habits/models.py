@@ -9,8 +9,6 @@ class Habit(models.Model):
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name='habits',
-        null=True,
-        blank=True
     )
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True, default='')

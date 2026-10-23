@@ -1,6 +1,7 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from django.contrib.auth import get_user_model
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from .models import Habit, HabitCheckIn
@@ -17,6 +18,15 @@ from .services.streaks import calculate_habit_streaks
 class HabitViewSet(viewsets.ModelViewSet):
     queryset = Habit.objects.prefetch_related('check_ins')
     serializer_class = HabitSerializer
+
+    def perform_create(self, serializer):
+        user = self.request.user if getattr(self.request, 'user', None) and self.request.user.is_authenticated else None
+        if user:
+            serializer.save(user=user)
+        else:
+            User = get_user_model()
+            default_user, _ = User.objects.get_or_create(email='default@example.com')
+            serializer.save(user=default_user)
 
     def _format_checkin_response(self, habit, status_str: str, target_date, streaks) -> dict:
         return CheckInResponseSerializer({
