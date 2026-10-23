@@ -199,4 +199,3 @@ def test_habit_recalculates_streaks_on_frequency_change(user, monkeypatch):
     habit.frequency_days = [0, 2, 4]
     habit.save()
     assert recalculate_called is True
-
