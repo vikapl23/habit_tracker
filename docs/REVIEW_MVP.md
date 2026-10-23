@@ -243,7 +243,7 @@ A comprehensive code review of the Habit Tracker MVP was conducted across all fi
 ### 🟢 Nice-to-Have / Polish
 *Code cleanup, index optimizations, Django Admin ergonomics, and framework best practices.*
 
-#### 13. Redundant Database Index on `HabitCheckIn`
+#### 13. Redundant Database Index on `HabitCheckIn` [FIXED]
 - **Location:** `apps/habits/models.py:43-51`, `apps/habits/migrations/0001_initial.py:51-57`
 - **Category:** Database Optimization
 - **Description:** `HabitCheckIn.Meta` specifies both:
@@ -268,7 +268,7 @@ A comprehensive code review of the Habit Tracker MVP was conducted across all fi
 
 ---
 
-#### 15. Redundant URL Route for Swagger Documentation
+#### 15. Redundant URL Route for Swagger Documentation [FIXED]
 - **Location:** `config/urls.py:8-9`
 - **Category:** URL Routing
 - **Description:** Both `path('docs/', ...)` and `path('docs', ...)` are registered:
@@ -281,7 +281,7 @@ A comprehensive code review of the Habit Tracker MVP was conducted across all fi
 
 ---
 
-#### 16. Proliferation of Class Aliases Across Modules
+#### 16. Proliferation of Class Aliases Across Modules [FIXED]
 - **Location:** `apps/habits/models.py:63`, `apps/habits/serializers.py:14`, `apps/habits/admin.py:20`, `apps/habits/views.py:5`
 - **Category:** Code Style & Duplication
 - **Description:** Multiple files create aliases for backward compatibility or convenience:
@@ -301,7 +301,7 @@ A comprehensive code review of the Habit Tracker MVP was conducted across all fi
 
 ---
 
-#### 18. Index Sort Direction Mismatch on `Habit` Model
+#### 18. Index Sort Direction Mismatch on `Habit` Model [FIXED]
 - **Location:** `apps/habits/models.py:22-26`
 - **Category:** Database Indexing
 - **Description:** `Habit.Meta` specifies `ordering = ['-created_at']`, while the compound index is defined as:
@@ -316,7 +316,7 @@ A comprehensive code review of the Habit Tracker MVP was conducted across all fi
 
 ---
 
-#### 19. Duplicated Response Dictionary Construction in `check` and `uncheck`
+#### 19. Duplicated Response Dictionary Construction in `check` and `uncheck` [FIXED]
 - **Location:** `apps/habits/views.py:48-56, 76-84`
 - **Category:** Code Duplication
 - **Description:** The `check` and `uncheck` actions construct identical dictionary responses by hand:
@@ -357,13 +357,13 @@ A comprehensive code review of the Habit Tracker MVP was conducted across all fi
 | 10 | 🟡 Important | Integrity | `apps/habits/models.py:53-56`, `apps/habits/serializers.py:6-10` | [FIXED] Model `clean()` validation bypassed by ModelSerializer and direct ORM |
 | 11 | 🟡 Important | Architecture | `apps/habits/views.py:16-17` | [FIXED] Hardcoded detail action list in `get_queryset` is brittle |
 | 12 | 🟡 Important | Testing | `apps/habits/tests/` | Missing tests for N+1 queries, invalid filter params, and validators |
-| 13 | 🟢 Nice-to-Have | Database | `apps/habits/models.py:43-51` | Redundant index on `(habit, date)` duplicates unique constraint index |
+| 13 | 🟢 Nice-to-Have | Database | `apps/habits/models.py:43-51` | [FIXED] Redundant index on `(habit, date)` duplicates unique constraint index |
 | 14 | 🟢 Nice-to-Have | Admin | `apps/habits/admin.py:12-18` | [FIXED] Missing `list_select_related` on `HabitCheckInAdmin` ($N+1$ in Admin) |
-| 15 | 🟢 Nice-to-Have | Routing | `config/urls.py:8-9` | Redundant non-slashed `/docs` route |
-| 16 | 🟢 Nice-to-Have | Clean Code | `apps/habits/models.py:63`, `serializers.py:14`, `admin.py:20` | Redundant aliases (`CheckIn = HabitCheckIn`) |
+| 15 | 🟢 Nice-to-Have | Routing | `config/urls.py:8-9` | [FIXED] Redundant non-slashed `/docs` route |
+| 16 | 🟢 Nice-to-Have | Clean Code | `apps/habits/models.py:63`, `serializers.py:14`, `admin.py:20` | [FIXED] Redundant aliases (`CheckIn = HabitCheckIn`) |
 | 17 | 🟢 Nice-to-Have | Scalability | `config/settings/base.py:95-97`, `apps/habits/views.py:87-100` | [FIXED] No pagination configured on list endpoints |
-| 18 | 🟢 Nice-to-Have | Database | `apps/habits/models.py:22-26` | Index direction mismatch (`created_at` vs `-created_at`) |
-| 19 | 🟢 Nice-to-Have | DRY | `apps/habits/views.py:48-56, 76-84` | Duplicated response dictionary in `check` and `uncheck` |
+| 18 | 🟢 Nice-to-Have | Database | `apps/habits/models.py:22-26` | [FIXED] Index direction mismatch (`created_at` vs `-created_at`) |
+| 19 | 🟢 Nice-to-Have | DRY | `apps/habits/views.py:48-56, 76-84` | [FIXED] Duplicated response dictionary in `check` and `uncheck` |
 | 20 | 🟢 Nice-to-Have | Clean Code | `config/settings/base.py:10, 19` | [FIXED] Duplicated default value for `ALLOWED_HOSTS` in base settings |
 
 ---

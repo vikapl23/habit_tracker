@@ -23,7 +23,7 @@ class Habit(models.Model):
     class Meta:
         ordering = ['-created_at']
         indexes = [
-            models.Index(fields=['is_archived', 'created_at']),
+            models.Index(fields=['is_archived', '-created_at']),
         ]
 
     def __str__(self):
@@ -41,9 +41,6 @@ class HabitCheckIn(models.Model):
 
     class Meta:
         ordering = ['-date']
-        indexes = [
-            models.Index(fields=['habit', 'date']),
-        ]
         constraints = [
             models.UniqueConstraint(
                 fields=['habit', 'date'],
@@ -63,6 +60,3 @@ class HabitCheckIn(models.Model):
     def __str__(self):
         return f"{self.habit.name} - {self.date}"
 
-
-# Alias CheckIn to HabitCheckIn for clean API / import compatibility
-CheckIn = HabitCheckIn

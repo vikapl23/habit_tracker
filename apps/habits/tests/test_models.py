@@ -3,7 +3,7 @@ from datetime import date, timedelta
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
 from django.contrib import admin
-from apps.habits.models import Habit, CheckIn, HabitCheckIn
+from apps.habits.models import Habit, HabitCheckIn
 
 @pytest.mark.django_db
 def test_create_habit():
@@ -27,7 +27,7 @@ def test_create_habit():
 @pytest.mark.django_db
 def test_create_checkin(habit):
     checkin_date = date.today()
-    checkin = CheckIn.objects.create(habit=habit, date=checkin_date)
+    checkin = HabitCheckIn.objects.create(habit=habit, date=checkin_date)
     assert checkin.id is not None
     assert checkin.habit == habit
     assert checkin.date == checkin_date
@@ -38,15 +38,15 @@ def test_create_checkin(habit):
 @pytest.mark.django_db
 def test_unique_checkin_per_date_constraint(habit):
     checkin_date = date.today()
-    CheckIn.objects.create(habit=habit, date=checkin_date)
+    HabitCheckIn.objects.create(habit=habit, date=checkin_date)
     with pytest.raises(IntegrityError):
-        CheckIn.objects.create(habit=habit, date=checkin_date)
+        HabitCheckIn.objects.create(habit=habit, date=checkin_date)
 
 
 @pytest.mark.django_db
 def test_cannot_create_future_checkin_validation(habit):
     future_date = date.today() + timedelta(days=1)
-    checkin = CheckIn(habit=habit, date=future_date)
+    checkin = HabitCheckIn(habit=habit, date=future_date)
     with pytest.raises(ValidationError):
         checkin.full_clean()
 
@@ -55,23 +55,23 @@ def test_cannot_create_future_checkin_validation(habit):
 def test_cannot_create_future_checkin_orm_create(habit):
     future_date = date.today() + timedelta(days=1)
     with pytest.raises(ValidationError):
-        CheckIn.objects.create(habit=habit, date=future_date)
+        HabitCheckIn.objects.create(habit=habit, date=future_date)
 
 
 @pytest.mark.django_db
 def test_cannot_save_future_checkin_orm_save(habit):
     future_date = date.today() + timedelta(days=1)
-    checkin = CheckIn(habit=habit, date=future_date)
+    checkin = HabitCheckIn(habit=habit, date=future_date)
     with pytest.raises(ValidationError):
         checkin.save()
 
 
 @pytest.mark.django_db
 def test_cascade_delete_habit_deletes_checkins(habit):
-    CheckIn.objects.create(habit=habit, date=date.today())
-    assert CheckIn.objects.filter(habit=habit).count() == 1
+    HabitCheckIn.objects.create(habit=habit, date=date.today())
+    assert HabitCheckIn.objects.filter(habit=habit).count() == 1
     habit.delete()
-    assert CheckIn.objects.filter(habit_id=habit.id).count() == 0
+    assert HabitCheckIn.objects.filter(habit_id=habit.id).count() == 0
 
 
 def test_admin_registration():

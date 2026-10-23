@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Habit, HabitCheckIn, CheckIn
+from .models import Habit, HabitCheckIn
 
 @admin.register(Habit)
 class HabitAdmin(admin.ModelAdmin):
@@ -17,5 +17,3 @@ class HabitCheckInAdmin(admin.ModelAdmin):
     search_fields = ('habit__name',)
     ordering = ('-date',)
 
-
-CheckInAdmin = HabitCheckInAdmin

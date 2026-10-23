@@ -3,7 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema, OpenApiParameter
-from .models import Habit, HabitCheckIn, CheckIn
+from .models import Habit, HabitCheckIn
 from .serializers import (
     HabitSerializer,
     HabitCheckInSerializer,
@@ -17,6 +17,15 @@ from .services.streaks import calculate_habit_streaks
 class HabitViewSet(viewsets.ModelViewSet):
     queryset = Habit.objects.prefetch_related('check_ins')
     serializer_class = HabitSerializer
+
+    def _format_checkin_response(self, habit, status_str: str, target_date, streaks) -> dict:
+        return CheckInResponseSerializer({
+            'status': status_str,
+            'habit_id': habit.id,
+            'date': target_date,
+            'current_streak': streaks.current_streak,
+            'longest_streak': streaks.longest_streak,
+        }).data
 
     def get_queryset(self):
         qs = Habit.objects.prefetch_related('check_ins')
@@ -61,13 +70,7 @@ class HabitViewSet(viewsets.ModelViewSet):
         streaks = calculate_habit_streaks(habit)
 
         return Response(
-            {
-                'status': 'checked',
-                'habit_id': habit.id,
-                'date': str(target_date),
-                'current_streak': streaks.current_streak,
-                'longest_streak': streaks.longest_streak,
-            },
+            self._format_checkin_response(habit, 'checked', target_date, streaks),
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
         )
 
@@ -95,13 +98,7 @@ class HabitViewSet(viewsets.ModelViewSet):
         streaks = calculate_habit_streaks(habit)
 
         return Response(
-            {
-                'status': 'unchecked',
-                'habit_id': habit.id,
-                'date': str(target_date),
-                'current_streak': streaks.current_streak,
-                'longest_streak': streaks.longest_streak,
-            },
+            self._format_checkin_response(habit, 'unchecked', target_date, streaks),
             status=status.HTTP_200_OK,
         )
 

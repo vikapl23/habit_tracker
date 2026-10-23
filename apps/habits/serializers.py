@@ -1,7 +1,7 @@
 from datetime import date
 from rest_framework import serializers
 from django.utils import timezone
-from .models import Habit, CheckIn, HabitCheckIn
+from .models import Habit, HabitCheckIn
 from .services.streaks import calculate_habit_streaks
 
 class HabitCheckInSerializer(serializers.ModelSerializer):
@@ -19,10 +19,6 @@ class HabitCheckInSerializer(serializers.ModelSerializer):
 class CheckInFilterSerializer(serializers.Serializer):
     from_date = serializers.DateField(required=False)
     to_date = serializers.DateField(required=False)
-
-
-# Alias for convenience
-CheckInSerializer = HabitCheckInSerializer
 
 
 class HabitSerializer(serializers.ModelSerializer):
