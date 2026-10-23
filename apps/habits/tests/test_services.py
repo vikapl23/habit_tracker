@@ -616,3 +616,258 @@ def test_recalculate_streaks_management_command(user):
     out_user = StringIO()
     call_command("recalculate_streaks", user_id=user.id, stdout=out_user)
     assert "Successfully recalculated streaks for 2 habit(s)" in out_user.getvalue()
+
+
+# ============================================================================
+# Phase 3.2: Frequency-Aware Streak Calculation Tests
+# ============================================================================
+
+
+def test_weekday_habit_weekend_gap_preserves_streak():
+    """
+    Habit is scheduled Monday through Friday (0, 1, 2, 3, 4).
+    Friday 2026-10-23 is checked.
+    Saturday (24th) and Sunday (25th) are off-schedule rest days.
+    Streak should stay alive across the weekend!
+    """
+    friday = date(2026, 10, 23)
+    saturday = date(2026, 10, 24)
+    sunday = date(2026, 10, 25)
+    monday = date(2026, 10, 26)
+    tuesday = date(2026, 10, 27)
+    weekdays = [0, 1, 2, 3, 4]
+
+    # 1. On Friday, checked Friday
+    res_fri = calculate_streaks(
+        [friday], reference_date=friday, frequency_type="custom", frequency_days=weekdays
+    )
+    assert res_fri.current_streak == 1
+    assert res_fri.longest_streak == 1
+
+    # 2. On Saturday (off-schedule), still 1
+    res_sat = calculate_streaks(
+        [friday], reference_date=saturday, frequency_type="custom", frequency_days=weekdays
+    )
+    assert res_sat.current_streak == 1
+    assert res_sat.longest_streak == 1
+
+    # 3. On Sunday (off-schedule), still 1
+    res_sun = calculate_streaks(
+        [friday], reference_date=sunday, frequency_type="custom", frequency_days=weekdays
+    )
+    assert res_sun.current_streak == 1
+    assert res_sun.longest_streak == 1
+
+    # 4. On Monday morning before checking in: today is scheduled, streak is still alive!
+    res_mon_before = calculate_streaks(
+        [friday], reference_date=monday, frequency_type="custom", frequency_days=weekdays
+    )
+    assert res_mon_before.current_streak == 1
+    assert res_mon_before.longest_streak == 1
+
+    # 5. On Monday after checking in: streak increases to 2
+    res_mon_after = calculate_streaks(
+        [friday, monday], reference_date=monday, frequency_type="custom", frequency_days=weekdays
+    )
+    assert res_mon_after.current_streak == 2
+    assert res_mon_after.longest_streak == 2
+
+    # 6. If Monday was missed, on Tuesday: streak resets to 0
+    res_tue = calculate_streaks(
+        [friday], reference_date=tuesday, frequency_type="custom", frequency_days=weekdays
+    )
+    assert res_tue.current_streak == 0
+    assert res_tue.longest_streak == 1
+
+
+def test_off_schedule_checkin_does_not_affect_streak():
+    """
+    Check-in on an off-schedule day (e.g. Saturday for a Mon-Fri habit) is allowed
+    but must not count towards or break the streak.
+    """
+    friday = date(2026, 10, 23)
+    saturday = date(2026, 10, 24)  # off-schedule
+    monday = date(2026, 10, 26)
+    weekdays = [0, 1, 2, 3, 4]
+
+    # Checked Friday and Saturday
+    res_sat = calculate_streaks(
+        [friday, saturday],
+        reference_date=saturday,
+        frequency_type="custom",
+        frequency_days=weekdays,
+    )
+    assert res_sat.current_streak == 1  # Saturday does not increment streak
+    assert res_sat.longest_streak == 1
+
+    # On Monday, checked Friday, Saturday, and Monday
+    res_mon = calculate_streaks(
+        [friday, saturday, monday],
+        reference_date=monday,
+        frequency_type="custom",
+        frequency_days=weekdays,
+    )
+    assert res_mon.current_streak == 2  # Only Friday + Monday count
+    assert res_mon.longest_streak == 2
+
+
+def test_longest_streak_across_multiple_weeks_with_rest_days():
+    """
+    2 full weeks of weekday check-ins:
+    Week 1: 5 days (Mon-Fri)
+    Week 2: 5 days (Mon-Fri)
+    Total longest streak should be 10 consecutive scheduled days.
+    """
+    # 2026-10-12 is Monday, 2026-10-23 is Friday of week 2
+    check_ins = [
+        date(2026, 10, 12) + timedelta(days=i)
+        for i in range(12)
+        if (date(2026, 10, 12) + timedelta(days=i)).weekday() in [0, 1, 2, 3, 4]
+    ]
+    assert len(check_ins) == 10
+
+    res = calculate_streaks(
+        check_ins,
+        reference_date=date(2026, 10, 23),
+        frequency_type="custom",
+        frequency_days=[0, 1, 2, 3, 4],
+    )
+    assert res.current_streak == 10
+    assert res.longest_streak == 10
+
+
+def test_custom_frequency_gap_on_scheduled_day_breaks_streak():
+    """
+    Custom frequency Mon, Wed, Fri (0, 2, 4).
+    Checked Mon (10-19) and Fri (10-23), but missed Wed (10-21).
+    Streak should break on Wednesday!
+    """
+    mon = date(2026, 10, 19)
+    fri = date(2026, 10, 23)
+    custom_days = [0, 2, 4]
+
+    res = calculate_streaks(
+        [mon, fri],
+        reference_date=fri,
+        frequency_type="custom",
+        frequency_days=custom_days,
+    )
+    assert res.current_streak == 1  # Just Friday
+    assert res.longest_streak == 1
+
+
+@pytest.mark.django_db
+def test_habit_model_weekend_gap_with_freezegun(user):
+    """Test Habit model and get_current_streak across weekend with freezegun."""
+    from apps.habits.services import check_in_habit
+
+    habit = Habit.objects.create(
+        user=user,
+        name="Gym Weekdays",
+        frequency_type="custom",
+        frequency_days=[0, 1, 2, 3, 4],
+    )
+
+    # Friday 2026-10-23 check-in
+    with freeze_time("2026-10-23 12:00:00"):
+        res = check_in_habit(habit=habit)
+        assert res.current_streak == 1
+        assert res.longest_streak == 1
+
+    # Saturday 2026-10-24 (weekend, off-schedule)
+    with freeze_time("2026-10-24 14:00:00"):
+        habit.refresh_from_db()
+        assert habit.get_current_streak() == 1
+
+    # Sunday 2026-10-25 (weekend, off-schedule)
+    with freeze_time("2026-10-25 18:00:00"):
+        habit.refresh_from_db()
+        assert habit.get_current_streak() == 1
+
+    # Monday 2026-10-26 (morning, before check-in)
+    with freeze_time("2026-10-26 08:00:00"):
+        habit.refresh_from_db()
+        assert habit.get_current_streak() == 1
+
+    # Monday 2026-10-26 check-in
+    with freeze_time("2026-10-26 12:00:00"):
+        res = check_in_habit(habit=habit)
+        assert res.current_streak == 2
+        assert res.longest_streak == 2
+
+
+@pytest.mark.django_db
+def test_habit_changing_frequency_mid_streak(user):
+    """
+    Changing habit frequency recalculates streaks stored on the Habit model.
+    """
+    from apps.habits.services import check_in_habit
+
+    habit = Habit.objects.create(
+        user=user,
+        name="Exercise",
+        frequency_type="daily",
+    )
+
+    # Check in Wednesday, Thursday, Friday
+    wed = date(2026, 10, 21)
+    thu = date(2026, 10, 22)
+    fri = date(2026, 10, 23)
+
+    check_in_habit(habit=habit, target_date=wed)
+    check_in_habit(habit=habit, target_date=thu)
+    with freeze_time("2026-10-23 12:00:00"):
+        check_in_habit(habit=habit, target_date=fri)
+        habit.refresh_from_db()
+        assert habit.current_streak == 3
+        assert habit.longest_streak == 3
+
+        # Change frequency mid-streak to Tue, Thu only (1, 3)
+        # On Friday, Thursday was checked, but Wednesday and Friday were off-schedule
+        habit.frequency_type = "custom"
+        habit.frequency_days = [1, 3]
+        habit.save()
+        habit.refresh_from_db()
+
+        # Streak should now only count Thursday (1)
+        assert habit.current_streak == 1
+        assert habit.longest_streak == 1
+
+
+@pytest.mark.django_db
+def test_habit_timezone_near_midnight_scheduling(user):
+    """
+    Near midnight edge case:
+    At 2026-10-23 20:00:00 UTC:
+    User in Asia/Tokyo is at 2026-10-24 05:00 (Saturday - off-schedule for weekday habit).
+    User in America/New_York is at 2026-10-23 16:00 (Friday - scheduled for weekday habit).
+    """
+    User = user.__class__
+    user_tokyo = User.objects.create_user(
+        email="tokyo@example.com", password="password123", timezone="Asia/Tokyo"
+    )
+    user_ny = User.objects.create_user(
+        email="ny@example.com", password="password123", timezone="America/New_York"
+    )
+
+    habit_tokyo = Habit.objects.create(
+        user=user_tokyo,
+        name="Tokyo Gym",
+        frequency_type="custom",
+        frequency_days=[0, 1, 2, 3, 4],  # Weekdays
+    )
+    habit_ny = Habit.objects.create(
+        user=user_ny,
+        name="NY Gym",
+        frequency_type="custom",
+        frequency_days=[0, 1, 2, 3, 4],  # Weekdays
+    )
+
+    with freeze_time("2026-10-23 20:00:00"):
+        # For Tokyo, local date is 2026-10-24 (Saturday) -> off-schedule
+        assert user_tokyo.get_today() == date(2026, 10, 24)
+        assert habit_tokyo.is_scheduled_today() is False
+
+        # For NY, local date is 2026-10-23 (Friday) -> scheduled
+        assert user_ny.get_today() == date(2026, 10, 23)
+        assert habit_ny.is_scheduled_today() is True

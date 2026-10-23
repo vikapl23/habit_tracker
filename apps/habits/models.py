@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -143,10 +143,22 @@ class Habit(models.Model):
             else:
                 reference_date = timezone.localdate()
 
-        days_since = (reference_date - self.last_check_in_date).days
-        if days_since <= 1:
+        if self.last_check_in_date == reference_date:
             return self.current_streak
-        return 0
+
+        if self.last_check_in_date > reference_date:
+            from apps.habits.services.streaks import calculate_habit_streaks
+
+            return calculate_habit_streaks(self, reference_date=reference_date).current_streak
+
+        # Check if any scheduled days were missed between last_check_in_date and reference_date
+        check_date = self.last_check_in_date + timedelta(days=1)
+        while check_date < reference_date:
+            if self.is_scheduled_on(check_date):
+                return 0
+            check_date += timedelta(days=1)
+
+        return self.current_streak
 
 
 class HabitCheckIn(models.Model):

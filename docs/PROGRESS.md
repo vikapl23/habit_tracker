@@ -97,9 +97,9 @@ This checklist tracks the ongoing development progress of the Habit Tracker proj
 ### Phase 3: Habit Scheduling & Custom Frequency
 - [x] **3.1 Frequency Fields on Habit Model (TDD)**
   - [x] **Test & Impl**: Add `frequency_type` (`daily`, `custom`) and `frequency_days` (list of weekday ints 0-6).
-- [ ] **3.2 Frequency-Aware Streak Calculation (TDD)**
-  - [ ] **Test**: Verify that off-schedule days (e.g. weekend for weekday-only habit) do not reset the streak.
-  - [ ] **Impl**: Update `apps.habits.services.streaks` algorithm to evaluate only scheduled dates.
+- [x] **3.2 Frequency-Aware Streak Calculation (TDD)**
+  - [x] **Test**: Verify that off-schedule days (e.g. weekend for weekday-only habit) do not reset the streak.
+  - [x] **Impl**: Update `apps.habits.services.streaks` algorithm to evaluate only scheduled dates.
 - [ ] **3.3 Validation & Serializer Support (TDD)**
   - [ ] Validate valid weekday combinations.
 - [ ] **3.4 API Integration Verification**

@@ -17,23 +17,47 @@ class StreakResult(NamedTuple):
     longest_streak: int
 
 
+def _is_scheduled_day(
+    target_date: date,
+    frequency_type: str = "daily",
+    frequency_days: Iterable[int] | None = None,
+) -> bool:
+    """Return True if target_date is a scheduled day according to habit frequency."""
+    if frequency_type == "daily":
+        return True
+    if not frequency_days:
+        return False
+    return target_date.weekday() in frequency_days
+
+
 def calculate_streaks(
     checkin_dates: Iterable[date | datetime | Any],
     reference_date: date | datetime | None = None,
+    frequency_type: str = "daily",
+    frequency_days: Iterable[int] | None = None,
 ) -> StreakResult:
     """
-    Calculate current_streak and longest_streak for a collection of check-in dates.
+    Calculate current_streak and longest_streak for a collection of check-in dates,
+    accounting for habit scheduling and frequency.
 
     Rules:
-    - current_streak: consecutive checked days ending today (reference_date).
-      If today is not checked yet but yesterday is, the streak is still alive.
-      If neither today nor yesterday is checked, current_streak is 0.
-    - longest_streak: the longest consecutive run ever across all check-ins.
+    - Only scheduled days count towards streaks.
+    - Off-schedule days (e.g. weekends for weekday-only habits) never break a streak.
+    - A check-in on an off-schedule day is ignored for streak calculations.
+    - current_streak:
+      - If today is scheduled and checked, streak includes today and consecutive prior scheduled days.
+      - If today is scheduled but not checked yet, streak is still alive based on prior scheduled days.
+      - If today is off-schedule, streak is alive based on prior scheduled days.
+      - If a scheduled day was missed, current streak is 0.
+    - longest_streak: the longest consecutive run across scheduled check-ins ever.
     """
     if reference_date is None:
         reference_date = timezone.localdate()
     elif isinstance(reference_date, datetime):
         reference_date = reference_date.date()
+
+    if frequency_days is not None:
+        frequency_days = set(frequency_days)
 
     raw_dates: set[date] = set()
     for item in checkin_dates:
@@ -48,45 +72,75 @@ def calculate_streaks(
             elif isinstance(d, date):
                 raw_dates.add(d)
 
-    valid_dates = {d for d in raw_dates if d <= reference_date}
+    # Filter to only scheduled days on or before reference_date
+    scheduled_valid_dates = {
+        d
+        for d in raw_dates
+        if d <= reference_date and _is_scheduled_day(d, frequency_type, frequency_days)
+    }
 
-    if not valid_dates:
+    if frequency_type == "custom" and not frequency_days:
         return StreakResult(current_streak=0, longest_streak=0)
 
     # 1. Current streak calculation
+    cursor: date | None = None
     today = reference_date
-    yesterday = today - timedelta(days=1)
 
-    if today in valid_dates:
-        cursor: date | None = today
-    elif yesterday in valid_dates:
-        cursor = yesterday
+    if _is_scheduled_day(today, frequency_type, frequency_days):
+        if today in scheduled_valid_dates:
+            cursor = today
+        else:
+            # Today is scheduled but not checked yet; streak stays alive if previous scheduled day is checked
+            prev_scheduled = today - timedelta(days=1)
+            while not _is_scheduled_day(prev_scheduled, frequency_type, frequency_days):
+                prev_scheduled -= timedelta(days=1)
+            if prev_scheduled in scheduled_valid_dates:
+                cursor = prev_scheduled
     else:
-        cursor = None
+        # Today is off-schedule; streak stays alive if most recent scheduled day was checked
+        last_scheduled = today - timedelta(days=1)
+        while not _is_scheduled_day(last_scheduled, frequency_type, frequency_days):
+            last_scheduled -= timedelta(days=1)
+        if last_scheduled in scheduled_valid_dates:
+            cursor = last_scheduled
 
     current_streak = 0
     if cursor is not None:
-        while cursor in valid_dates:
+        while cursor in scheduled_valid_dates:
             current_streak += 1
             cursor -= timedelta(days=1)
+            while not _is_scheduled_day(cursor, frequency_type, frequency_days):
+                cursor -= timedelta(days=1)
 
     # 2. Longest streak calculation
-    sorted_dates = sorted(valid_dates)
+    if not scheduled_valid_dates:
+        return StreakResult(current_streak=0, longest_streak=0)
+
+    sorted_dates = sorted(scheduled_valid_dates)
     longest_streak = 1
     curr_run = 1
 
     for i in range(1, len(sorted_dates)):
-        diff = (sorted_dates[i] - sorted_dates[i - 1]).days
-        if diff == 1:
+        prev = sorted_dates[i - 1]
+        curr = sorted_dates[i]
+
+        has_missed_scheduled_day = False
+        check_day = prev + timedelta(days=1)
+        while check_day < curr:
+            if _is_scheduled_day(check_day, frequency_type, frequency_days):
+                has_missed_scheduled_day = True
+                break
+            check_day += timedelta(days=1)
+
+        if not has_missed_scheduled_day:
             curr_run += 1
-        elif diff == 0:
-            continue
         else:
             curr_run = 1
 
         if curr_run > longest_streak:
             longest_streak = curr_run
 
+    longest_streak = max(longest_streak, current_streak)
     return StreakResult(current_streak=current_streak, longest_streak=longest_streak)
 
 
@@ -114,7 +168,12 @@ def calculate_habit_streaks(
     else:
         dates = list(habit.check_ins.values_list("date", flat=True))
 
-    return calculate_streaks(dates, reference_date=reference_date)
+    return calculate_streaks(
+        dates,
+        reference_date=reference_date,
+        frequency_type=habit.frequency_type,
+        frequency_days=habit.frequency_days,
+    )
 
 
 def recalculate_habit_streaks(
@@ -133,7 +192,12 @@ def recalculate_habit_streaks(
             reference_date = timezone.localdate()
 
     dates = list(habit.check_ins.values_list("date", flat=True))
-    streaks = calculate_streaks(dates, reference_date=reference_date)
+    streaks = calculate_streaks(
+        dates,
+        reference_date=reference_date,
+        frequency_type=habit.frequency_type,
+        frequency_days=habit.frequency_days,
+    )
     last_date = max(dates) if dates else None
 
     habit.current_streak = streaks.current_streak
