@@ -83,3 +83,27 @@ def test_base_settings_allowed_hosts_default(monkeypatch):
             del sys.modules[mod]
     base = importlib.import_module('config.settings.base')
     assert base.ALLOWED_HOSTS == ['*']
+
+
+def test_test_settings_uses_md5_password_hasher():
+    test_settings = importlib.import_module('config.settings.test')
+    assert hasattr(test_settings, 'PASSWORD_HASHERS')
+    assert test_settings.PASSWORD_HASHERS[0] == 'django.contrib.auth.hashers.MD5PasswordHasher'
+
+
+def test_local_settings_does_not_use_md5_hasher():
+    local_settings = importlib.import_module('config.settings.local')
+    hashers = getattr(local_settings, 'PASSWORD_HASHERS', None)
+    if hashers:
+        assert 'django.contrib.auth.hashers.MD5PasswordHasher' not in hashers
+
+
+def test_production_settings_does_not_use_md5_hasher(monkeypatch):
+    prod_settings = load_production_settings(monkeypatch, {
+        'SECRET_KEY': 'valid-production-secret-key-for-test-12345',
+        'ALLOWED_HOSTS': 'example.com',
+    })
+    hashers = getattr(prod_settings, 'PASSWORD_HASHERS', None)
+    if hashers:
+        assert 'django.contrib.auth.hashers.MD5PasswordHasher' not in hashers
+
