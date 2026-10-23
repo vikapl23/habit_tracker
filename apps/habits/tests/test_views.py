@@ -30,12 +30,36 @@ def test_list_habits_query_count_constant(api_client, user, django_assert_num_qu
         h = Habit.objects.create(user=user, name=f"Habit {i}")
         h.check_ins.create(date=today)
 
-    # 1 query for count + 1 query to fetch habits + 1 query to prefetch check_ins = 3 queries
-    with django_assert_num_queries(3):
+    # 1 query for count + 1 query to fetch habits (check-ins are not loaded) = 2 queries
+    with django_assert_num_queries(2):
         response = api_client.get("/api/v1/habits/")
         assert response.status_code == status.HTTP_200_OK
         assert response.data["count"] == 5
         assert len(response.data["results"]) == 5
+
+
+@pytest.mark.django_db
+def test_list_habits_does_not_load_checkins(api_client, user, django_assert_num_queries):
+    """
+    Mentor Review item 6: Prove that the habits list view does not load check-ins.
+    Streaks and today's status are evaluated from fields on Habit and the user's today date.
+    """
+    today = date.today()
+    for i in range(5):
+        habit = Habit.objects.create(user=user, name=f"Habit {i}")
+        for day_offset in range(10):
+            habit.check_ins.create(date=today - timedelta(days=day_offset))
+
+    # Exactly 2 queries: 1 count + 1 select habits. ZERO check-in queries.
+    with django_assert_num_queries(2) as ctx:
+        res = api_client.get("/api/v1/habits/")
+        assert res.status_code == status.HTTP_200_OK
+        assert res.data["count"] == 5
+        assert len(res.data["results"]) == 5
+
+    # Verify that habits_habitcheckin table is never queried
+    for query in ctx.captured_queries:
+        assert "habitcheckin" not in query["sql"].lower()
 
 
 @pytest.mark.django_db

@@ -58,3 +58,21 @@ Previously, server `TIME_ZONE` was hardcoded to `Europe/Kyiv`. Business logic fo
   - Strict input validation prevents subtle client bugs and silent parameter corruption.
 - **Trade-offs:**
   - Habit queries and streak calculations now depend on user timezone context. To avoid N+1 queries when evaluating streaks across habit lists, queries select the related user (`select_related("user")`).
+
+## ADR 003: Persisted Habit Streaks and Scoped User Compound Index
+
+### Date
+2026-10-23
+
+### Context & Problem
+Previously, the habits list view (`GET /api/v1/habits/`) executed `prefetch_related("check_ins")` to load every historical check-in for every habit just to calculate `current_streak`, `longest_streak`, and `is_checked_today` in memory via `HabitSerializer`. As users accumulate check-ins over months and years, memory usage and database payload grow without bound (Mentor Review item 6).
+Additionally, the compound database index on `Habit` was `(is_archived, -created_at)`, omitting `user` which is the mandatory scoping filter for authenticated multi-tenant queries.
+
+### Decision
+1. **Model Fields**: Add `current_streak` (`PositiveIntegerField`, default 0), `longest_streak` (`PositiveIntegerField`, default 0), and `last_check_in_date` (`DateField`, nullable) to `Habit`.
+2. **Compound Index**: Replace `(is_archived, -created_at)` with `(user, is_archived, -created_at)`.
+3. **Streak Recalculation Service**: Provide `recalculate_habit_streaks(habit, reference_date)` in `apps/habits/services/streaks.py`. On check-in (`check_in_habit`) and check-in removal (`uncheck_habit`), persist the updated streaks and latest check-in date.
+4. **Management Command**: Provide `python manage.py recalculate_streaks` to recalculate streaks for all habits (with optional `--habit-id` and `--user-id` filters).
+5. **Read-Time Streak Decay**: If days pass without check-ins, `current_streak` becomes 0 dynamically at read time (`Habit.get_current_streak(reference_date)`) by comparing `last_check_in_date` with the user's `today` (elapsed days > 1), without mutating the database and without loading check-ins.
+6. **Query Optimization**: Remove `prefetch_related("check_ins")` from `HabitViewSet.get_queryset()`. In `HabitSerializer`, evaluate `is_checked_today` and `current_streak` without querying check-ins during normal list views.
+

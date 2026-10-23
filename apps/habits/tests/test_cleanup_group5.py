@@ -26,4 +26,4 @@ def test_no_class_aliases_clutter():
 def test_habit_index_sort_direction():
     assert len(Habit._meta.indexes) > 0
     compound_index = Habit._meta.indexes[0]
-    assert compound_index.fields == ["is_archived", "-created_at"]
+    assert compound_index.fields == ["user", "is_archived", "-created_at"]

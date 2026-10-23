@@ -4,7 +4,6 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from .models import Habit, HabitCheckIn
-from .services.streaks import calculate_habit_streaks
 
 
 class HabitCheckInSerializer(serializers.ModelSerializer):
@@ -21,7 +20,6 @@ class CheckInFilterSerializer(serializers.Serializer):
 
 class HabitSerializer(serializers.ModelSerializer):
     current_streak = serializers.SerializerMethodField()
-    longest_streak = serializers.SerializerMethodField()
     is_checked_today = serializers.SerializerMethodField()
 
     class Meta:
@@ -49,13 +47,8 @@ class HabitSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
 
-    def _get_target_date(self, obj=None) -> date:
+    def _get_user_today(self, obj=None) -> date:
         request = self.context.get("request")
-        if request and "date" in request.query_params:
-            try:
-                return serializers.DateField().to_internal_value(request.query_params["date"])
-            except serializers.ValidationError:
-                pass
         if (
             request
             and getattr(request, "user", None)
@@ -67,8 +60,23 @@ class HabitSerializer(serializers.ModelSerializer):
             return obj.user.get_today()
         return timezone.localdate()
 
+    def _get_target_date(self, obj=None) -> date:
+        request = self.context.get("request")
+        if request and "date" in request.query_params:
+            try:
+                return serializers.DateField().to_internal_value(request.query_params["date"])
+            except serializers.ValidationError:
+                pass
+        return self._get_user_today(obj)
+
     def get_is_checked_today(self, obj) -> bool:
         target_date = self._get_target_date(obj)
+        if obj.last_check_in_date is None:
+            return False
+        if obj.last_check_in_date == target_date:
+            return True
+        if target_date > obj.last_check_in_date:
+            return False
         if (
             hasattr(obj, "_prefetched_objects_cache")
             and "check_ins" in obj._prefetched_objects_cache
@@ -76,16 +84,9 @@ class HabitSerializer(serializers.ModelSerializer):
             return any(ci.date == target_date for ci in obj.check_ins.all())
         return obj.check_ins.filter(date=target_date).exists()
 
-    def _get_streaks(self, obj):
-        if not hasattr(obj, "_streaks_cache"):
-            obj._streaks_cache = calculate_habit_streaks(obj)
-        return obj._streaks_cache
-
     def get_current_streak(self, obj) -> int:
-        return self._get_streaks(obj).current_streak
-
-    def get_longest_streak(self, obj) -> int:
-        return self._get_streaks(obj).longest_streak
+        user_today = self._get_user_today(obj)
+        return obj.get_current_streak(reference_date=user_today)
 
 
 class CheckInActionSerializer(serializers.Serializer):

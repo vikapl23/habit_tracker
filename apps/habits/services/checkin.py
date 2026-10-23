@@ -8,7 +8,7 @@ from django.utils import timezone
 from rest_framework.exceptions import NotFound, ValidationError
 
 from apps.habits.models import Habit, HabitCheckIn
-from apps.habits.services.streaks import calculate_streaks
+from apps.habits.services.streaks import recalculate_habit_streaks
 
 
 class CheckInResult(NamedTuple):
@@ -69,16 +69,14 @@ def check_in_habit(
         except HabitCheckIn.DoesNotExist:
             raise
 
-    # Query fresh dates from DB to avoid stale cached/prefetched relations on the habit instance
-    dates = list(HabitCheckIn.objects.filter(habit=habit).values_list("date", flat=True))
-    streaks = calculate_streaks(dates, reference_date=today)
+    recalculate_habit_streaks(habit, reference_date=today)
 
     return CheckInResult(
         status="checked",
         habit_id=habit.id,
         date=target_date,
-        current_streak=streaks.current_streak,
-        longest_streak=streaks.longest_streak,
+        current_streak=habit.get_current_streak(reference_date=today),
+        longest_streak=habit.longest_streak,
         created=created,
     )
 
@@ -105,14 +103,13 @@ def uncheck_habit(
 
     checkin.delete()
 
-    dates = list(HabitCheckIn.objects.filter(habit=habit).values_list("date", flat=True))
-    streaks = calculate_streaks(dates, reference_date=today)
+    recalculate_habit_streaks(habit, reference_date=today)
 
     return CheckInResult(
         status="unchecked",
         habit_id=habit.id,
         date=target_date,
-        current_streak=streaks.current_streak,
-        longest_streak=streaks.longest_streak,
+        current_streak=habit.get_current_streak(reference_date=today),
+        longest_streak=habit.longest_streak,
         created=False,
     )

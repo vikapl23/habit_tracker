@@ -39,7 +39,7 @@ class HabitViewSet(viewsets.ModelViewSet):
         if not user or not user.is_authenticated:
             return Habit.objects.none()
 
-        qs = Habit.objects.filter(user=user).select_related("user").prefetch_related("check_ins")
+        qs = Habit.objects.filter(user=user).select_related("user")
         if getattr(self, "detail", False) or self.action != "list":
             return qs
 

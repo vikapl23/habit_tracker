@@ -109,3 +109,31 @@ def calculate_habit_streaks(
         dates = list(habit.check_ins.values_list("date", flat=True))
 
     return calculate_streaks(dates, reference_date=reference_date)
+
+
+def recalculate_habit_streaks(
+    habit,
+    reference_date: date | None = None,
+):
+    """
+    Recalculate current_streak, longest_streak, and last_check_in_date for a habit,
+    and persist them to the database.
+    """
+    if reference_date is None:
+        user = getattr(habit, "user", None)
+        if user and hasattr(user, "get_today"):
+            reference_date = user.get_today()
+        else:
+            reference_date = timezone.localdate()
+
+    dates = list(habit.check_ins.values_list("date", flat=True))
+    streaks = calculate_streaks(dates, reference_date=reference_date)
+    last_date = max(dates) if dates else None
+
+    habit.current_streak = streaks.current_streak
+    habit.longest_streak = streaks.longest_streak
+    habit.last_check_in_date = last_date
+    habit.save(
+        update_fields=["current_streak", "longest_streak", "last_check_in_date", "updated_at"]
+    )
+    return habit

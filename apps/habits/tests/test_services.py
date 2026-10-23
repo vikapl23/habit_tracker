@@ -485,3 +485,134 @@ def test_uncheck_habit_nonexistent_raises_not_found(habit):
 
     with pytest.raises(NotFound):
         uncheck_habit(habit=habit, target_date=date.today())
+
+
+@pytest.mark.django_db
+@freeze_time("2026-10-23")
+def test_recalculate_habit_streaks_service(habit):
+    from apps.habits.services import recalculate_habit_streaks
+
+    today = date(2026, 10, 23)
+    yesterday = date(2026, 10, 22)
+
+    # Habit with no check-ins
+    recalculate_habit_streaks(habit)
+    habit.refresh_from_db()
+    assert habit.current_streak == 0
+    assert habit.longest_streak == 0
+    assert habit.last_check_in_date is None
+
+    # Add check-ins directly bypassing signals/services to verify recalculate
+    habit.check_ins.bulk_create(
+        [
+            habit.check_ins.model(habit=habit, date=yesterday),
+            habit.check_ins.model(habit=habit, date=today),
+        ]
+    )
+    # Manually reset to 0 to simulate un-recalculated state
+    habit.current_streak = 0
+    habit.longest_streak = 0
+    habit.last_check_in_date = None
+    habit.save()
+
+    recalculate_habit_streaks(habit)
+    habit.refresh_from_db()
+    assert habit.current_streak == 2
+    assert habit.longest_streak == 2
+    assert habit.last_check_in_date == today
+
+
+@pytest.mark.django_db
+@freeze_time("2026-10-23")
+def test_habit_get_current_streak_read_time_decay(habit, django_assert_num_queries):
+    """
+    Current streak must become 0 when days pass without check-ins.
+    Handled at read time using last_check_in_date and the user's today without loading check-ins.
+    """
+    today = date(2026, 10, 23)
+    yesterday = date(2026, 10, 22)
+    two_days_ago = date(2026, 10, 21)
+
+    # 1. Checked today: streak is alive
+    habit.current_streak = 5
+    habit.longest_streak = 10
+    habit.last_check_in_date = today
+    habit.save()
+
+    with django_assert_num_queries(0):
+        assert habit.get_current_streak(reference_date=today) == 5
+
+    # 2. Checked yesterday: streak is alive
+    habit.last_check_in_date = yesterday
+    habit.save()
+
+    with django_assert_num_queries(0):
+        assert habit.get_current_streak(reference_date=today) == 5
+
+    # 3. Checked 2 days ago: streak has lapsed to 0
+    habit.last_check_in_date = two_days_ago
+    habit.save()
+
+    with django_assert_num_queries(0):
+        assert habit.get_current_streak(reference_date=today) == 0
+
+    # Stored current_streak in DB was not modified
+    habit.refresh_from_db()
+    assert habit.current_streak == 5
+
+
+@pytest.mark.django_db
+@freeze_time("2026-10-23")
+def test_recalculate_streaks_management_command(user):
+    from io import StringIO
+
+    from django.core.management import call_command
+
+    from apps.habits.models import Habit
+
+    today = date(2026, 10, 23)
+    yesterday = date(2026, 10, 22)
+
+    h1 = Habit.objects.create(user=user, name="Habit 1")
+    h2 = Habit.objects.create(user=user, name="Habit 2")
+
+    # Insert checkins via bulk_create so signals don't fire
+    h1.check_ins.model.objects.bulk_create(
+        [
+            h1.check_ins.model(habit=h1, date=yesterday),
+            h1.check_ins.model(habit=h1, date=today),
+        ]
+    )
+    h2.check_ins.model.objects.bulk_create(
+        [
+            h2.check_ins.model(habit=h2, date=yesterday),
+        ]
+    )
+
+    h1.refresh_from_db()
+    h2.refresh_from_db()
+    assert h1.current_streak == 0
+    assert h2.current_streak == 0
+
+    out = StringIO()
+    call_command("recalculate_streaks", stdout=out)
+    assert "Successfully recalculated streaks for 2 habit(s)" in out.getvalue()
+
+    h1.refresh_from_db()
+    h2.refresh_from_db()
+    assert h1.current_streak == 2
+    assert h1.longest_streak == 2
+    assert h1.last_check_in_date == today
+    assert h2.current_streak == 1
+    assert h2.longest_streak == 1
+    assert h2.last_check_in_date == yesterday
+
+    # Test filtering with --habit-id
+    out_filtered = StringIO()
+    call_command("recalculate_streaks", habit_id=h1.id, stdout=out_filtered)
+    assert "Successfully recalculated streaks for 1 habit(s)" in out_filtered.getvalue()
+
+    # Test filtering with --user-id
+    out_user = StringIO()
+    call_command("recalculate_streaks", user_id=user.id, stdout=out_user)
+    assert "Successfully recalculated streaks for 2 habit(s)" in out_user.getvalue()
