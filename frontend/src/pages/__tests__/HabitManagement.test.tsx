@@ -226,9 +226,11 @@ describe('Habit Management (Step 5.4)', () => {
     await user.click(editBtn);
 
     // Edit sheet should open prefilled
-    expect(screen.getByRole('dialog', { name: /edit habit/i })).toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: /edit habit/i })).toBeInTheDocument();
     const nameInput = screen.getByLabelText(/habit name/i) as HTMLInputElement;
-    expect(nameInput.value).toBe('Read Books');
+    await waitFor(() => {
+      expect(nameInput.value).toBe('Read Books');
+    });
 
     // Change name
     await user.clear(nameInput);

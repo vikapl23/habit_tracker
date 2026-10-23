@@ -82,7 +82,7 @@ describe('HabitDetailPage (Step 5.5)', () => {
     expect(checkedDayBtn).toHaveAttribute('aria-pressed', 'true');
 
     // Check non-scheduled day is visually muted (e.g. October 11, 2026 is Sunday, not in [0..4])
-    const sundayBtn = screen.getByRole('button', {
+    const sundayBtn = await screen.findByRole('button', {
       name: /2026-10-11.*not scheduled/i,
     });
     expect(sundayBtn).toHaveClass('opacity-40');
@@ -110,9 +110,10 @@ describe('HabitDetailPage (Step 5.5)', () => {
     // Tap the past day to check in
     await user.click(pastDayBtn);
 
-    expect(checkSpy).toHaveBeenCalledWith(1, '2026-10-02');
-    // Day should now be checked
-    expect(pastDayBtn).toHaveAttribute('aria-pressed', 'true');
+    await waitFor(() => {
+      expect(checkSpy).toHaveBeenCalledWith(1, '2026-10-02');
+      expect(pastDayBtn).toHaveAttribute('aria-pressed', 'true');
+    });
     // Streaks updated to 6
     expect(await screen.findByLabelText(/current streak 6 days/i)).toBeInTheDocument();
   });
@@ -141,8 +142,10 @@ describe('HabitDetailPage (Step 5.5)', () => {
     // Tap to uncheck
     await user.click(checkedDayBtn);
 
-    expect(uncheckSpy).toHaveBeenCalledWith(1, '2026-10-02');
-    expect(checkedDayBtn).toHaveAttribute('aria-pressed', 'false');
+    await waitFor(() => {
+      expect(uncheckSpy).toHaveBeenCalledWith(1, '2026-10-02');
+      expect(checkedDayBtn).toHaveAttribute('aria-pressed', 'false');
+    });
     expect(await screen.findByLabelText(/current streak 4 days/i)).toBeInTheDocument();
   });
 

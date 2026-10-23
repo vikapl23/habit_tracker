@@ -173,13 +173,11 @@ describe('DashboardPage Mobile View', () => {
     // Click card to check
     await user.click(habitCard);
 
-    // Optimistically checked immediately
-    expect(habitCard).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByText(/🔥 6/)).toBeInTheDocument();
-
     await waitFor(() => {
       expect(checkSpy).toHaveBeenCalledWith(1);
+      expect(habitCard).toHaveAttribute('aria-pressed', 'true');
     });
+    expect(screen.getByText(/🔥 6/)).toBeInTheDocument();
 
     // Check progress updated: 1 of 1 done today
     expect(screen.getByText('1 of 1 done today')).toBeInTheDocument();
@@ -206,11 +204,9 @@ describe('DashboardPage Mobile View', () => {
     // Click card to uncheck
     await user.click(habitCard);
 
-    // Optimistically unchecked
-    expect(habitCard).toHaveAttribute('aria-pressed', 'false');
-
     await waitFor(() => {
       expect(uncheckSpy).toHaveBeenCalledWith(2);
+      expect(habitCard).toHaveAttribute('aria-pressed', 'false');
     });
 
     // Progress updated: 0 of 1 done today

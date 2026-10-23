@@ -47,8 +47,10 @@ describe('ProfilePage (Step 5.5)', () => {
     const emailInput = screen.getByLabelText(/email address/i);
     expect(emailInput).toHaveAttribute('readOnly');
 
-    const tzSelect = screen.getByLabelText(/timezone selector/i) as HTMLSelectElement;
-    expect(tzSelect.value).toBe('Europe/Kyiv');
+    const tzSelect = screen.getByLabelText(/timezone selector/i);
+    await waitFor(() => {
+      expect(tzSelect).toHaveValue('Europe/Kyiv');
+    });
 
     // Bottom Navigation present
     expect(screen.getByRole('navigation', { name: /bottom navigation/i })).toBeInTheDocument();

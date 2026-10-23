@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { User, Globe, LogOut, Check } from 'lucide-react';
 import { BottomNavigation } from '../components/BottomNavigation';
@@ -44,17 +44,12 @@ const FALLBACK_TIMEZONES = [
 
 export const ProfilePage: React.FC = () => {
   const { user, logout, updateProfile } = useAuth();
-  const [selectedTimezone, setSelectedTimezone] = useState<string>(user?.timezone || 'UTC');
+  const [customTimezone, setCustomTimezone] = useState<string | null>(null);
+  const selectedTimezone = customTimezone ?? user?.timezone ?? 'UTC';
   const [isSaving, setIsSaving] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
-
-  useEffect(() => {
-    if (user?.timezone) {
-      setSelectedTimezone(user.timezone);
-    }
-  }, [user?.timezone]);
 
   const timezoneOptions = useMemo(() => {
     let supported: string[] = [];
@@ -81,6 +76,7 @@ export const ProfilePage: React.FC = () => {
     setSaveSuccess(false);
     try {
       await updateProfile({ timezone: selectedTimezone });
+      setCustomTimezone(null);
       setSaveSuccess(true);
       setToast({
         id: String(Date.now()),
@@ -177,7 +173,7 @@ export const ProfilePage: React.FC = () => {
                   aria-label="Timezone selector"
                   value={selectedTimezone}
                   onChange={(e) => {
-                    setSelectedTimezone(e.target.value);
+                    setCustomTimezone(e.target.value);
                     setSaveSuccess(false);
                   }}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
