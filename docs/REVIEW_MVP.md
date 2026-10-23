@@ -227,7 +227,7 @@ A comprehensive code review of the Habit Tracker MVP was conducted across all fi
 
 ---
 
-#### 12. Missing Critical Tests in Test Suite
+#### 12. Missing Critical Tests in Test Suite [FIXED]
 - **Location:** `apps/habits/tests/`
 - **Category:** Testing
 - **Description:** While basic functionality is covered, several edge cases and performance tests are absent:
@@ -356,7 +356,7 @@ A comprehensive code review of the Habit Tracker MVP was conducted across all fi
 | 9 | 🟡 Important | OpenAPI | `apps/habits/views.py:24-100` | [FIXED] AutoSchema documents wrong request/response models for actions |
 | 10 | 🟡 Important | Integrity | `apps/habits/models.py:53-56`, `apps/habits/serializers.py:6-10` | [FIXED] Model `clean()` validation bypassed by ModelSerializer and direct ORM |
 | 11 | 🟡 Important | Architecture | `apps/habits/views.py:16-17` | [FIXED] Hardcoded detail action list in `get_queryset` is brittle |
-| 12 | 🟡 Important | Testing | `apps/habits/tests/` | Missing tests for N+1 queries, invalid filter params, and validators |
+| 12 | 🟡 Important | Testing | `apps/habits/tests/` | [FIXED] Missing tests for N+1 queries, invalid filter params, and validators |
 | 13 | 🟢 Nice-to-Have | Database | `apps/habits/models.py:43-51` | [FIXED] Redundant index on `(habit, date)` duplicates unique constraint index |
 | 14 | 🟢 Nice-to-Have | Admin | `apps/habits/admin.py:12-18` | [FIXED] Missing `list_select_related` on `HabitCheckInAdmin` ($N+1$ in Admin) |
 | 15 | 🟢 Nice-to-Have | Routing | `config/urls.py:8-9` | [FIXED] Redundant non-slashed `/docs` route |

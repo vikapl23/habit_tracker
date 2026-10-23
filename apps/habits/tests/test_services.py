@@ -246,3 +246,77 @@ def test_habit_serializer_computes_streaks(habit):
     assert serializer_today.data["current_streak"] == 2
     assert serializer_today.data["longest_streak"] == 2
 
+
+@freeze_time("2024-03-01")
+def test_streak_leap_year_boundary():
+    """Verify streaks correctly transition through leap day (Feb 28 -> Feb 29 -> Mar 1)."""
+    checkins = [
+        date(2024, 2, 28),
+        date(2024, 2, 29),
+        date(2024, 3, 1),
+    ]
+    result = calculate_streaks(checkins)
+    assert result.current_streak == 3
+    assert result.longest_streak == 3
+
+
+@freeze_time("2024-03-01")
+def test_streak_leap_year_missing_leap_day():
+    """Missing the leap day (Feb 29) breaks the streak between Feb 28 and Mar 1."""
+    checkins = [
+        date(2024, 2, 28),
+        date(2024, 3, 1),
+    ]
+    result = calculate_streaks(checkins)
+    assert result.current_streak == 1
+    assert result.longest_streak == 1
+
+
+@freeze_time("2025-03-01")
+def test_streak_non_leap_year_feb_to_mar():
+    """In non-leap year (2025), Feb 28 to Mar 1 are consecutive days."""
+    checkins = [
+        date(2025, 2, 28),
+        date(2025, 3, 1),
+    ]
+    result = calculate_streaks(checkins)
+    assert result.current_streak == 2
+    assert result.longest_streak == 2
+
+
+@freeze_time("2026-01-01")
+def test_streak_year_boundary():
+    """Verify streaks correctly continue across year boundary (Dec 30 -> Dec 31 -> Jan 1)."""
+    checkins = [
+        date(2025, 12, 30),
+        date(2025, 12, 31),
+        date(2026, 1, 1),
+    ]
+    result = calculate_streaks(checkins)
+    assert result.current_streak == 3
+    assert result.longest_streak == 3
+
+
+@freeze_time("2026-01-01")
+def test_streak_year_boundary_still_alive_without_today():
+    """Check-in on Dec 31 keeps streak alive on Jan 1 even if Jan 1 is not yet checked."""
+    checkins = [
+        date(2025, 12, 30),
+        date(2025, 12, 31),
+    ]
+    result = calculate_streaks(checkins)
+    assert result.current_streak == 2
+    assert result.longest_streak == 2
+
+
+@freeze_time("2026-01-01")
+def test_streak_year_boundary_broken():
+    """Missing Dec 31 breaks the streak across the year boundary."""
+    checkins = [
+        date(2025, 12, 30),
+        date(2026, 1, 1),
+    ]
+    result = calculate_streaks(checkins)
+    assert result.current_streak == 1
+    assert result.longest_streak == 1
+

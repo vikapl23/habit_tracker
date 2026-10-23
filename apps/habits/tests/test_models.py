@@ -77,3 +77,21 @@ def test_cascade_delete_habit_deletes_checkins(habit):
 def test_admin_registration():
     assert Habit in admin.site._registry
     assert HabitCheckIn in admin.site._registry
+
+
+def test_habit_model_validation_rejects_invalid_color():
+    habit = Habit(name="Test", color="invalid-hex")
+    with pytest.raises(ValidationError):
+        habit.full_clean()
+
+
+def test_habit_model_validation_rejects_invalid_emoji():
+    habit = Habit(name="Test", emoji="💧💧")
+    with pytest.raises(ValidationError):
+        habit.full_clean()
+
+
+def test_habit_model_validation_accepts_valid_complex_emojis():
+    for emoji in ["👍🏽", "🇺🇦", "❤️", "👨👩👧", "👨‍👩‍👧"]:
+        habit = Habit(name="Test", emoji=emoji)
+        habit.full_clean()  # Should not raise
