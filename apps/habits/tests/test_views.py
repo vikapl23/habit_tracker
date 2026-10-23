@@ -635,3 +635,21 @@ def test_list_habits_past_date_avoids_n_plus_one_queries(
         assert res.status_code == status.HTTP_200_OK
         assert res.data["count"] == 5
         assert len(res.data["results"]) == 5
+
+
+@pytest.mark.django_db
+def test_habits_invalid_date_query_param_returns_400(api_client, habit):
+    # Invalid date string on list
+    res_list = api_client.get("/api/v1/habits/?date=invalid-date")
+    assert res_list.status_code == status.HTTP_400_BAD_REQUEST
+    assert "date" in res_list.data
+
+    # Empty date string on list
+    res_empty = api_client.get("/api/v1/habits/?date=")
+    assert res_empty.status_code == status.HTTP_400_BAD_REQUEST
+    assert "date" in res_empty.data
+
+    # Invalid date on detail
+    res_detail = api_client.get(f"/api/v1/habits/{habit.id}/?date=2026-99-99")
+    assert res_detail.status_code == status.HTTP_400_BAD_REQUEST
+    assert "date" in res_detail.data

@@ -12,8 +12,8 @@ This checklist tracks the ongoing development progress of the Habit Tracker proj
 | **Phase 1** | MVP: Core Domain, Streaks & REST API | `[x]` Completed | 7 / 7 |
 | **Phase 2** | JWT Authentication & User Isolation | `[x]` Completed | 5 / 5 |
 | **Phase 3** | Habit Scheduling & Frequency | `[x]` Completed | 4 / 4 |
-| **Phase 4** | Statistics & Analytics | `[ ]` Not Started | 0 / 4 |
-| **Phase 5** | Mobile-First React Frontend (Vite) | `[ ]` Not Started | 0 / 6 |
+| **Phase 4** | Statistics & Analytics | `[ ]` Postponed (after deployment) | 0 / 4 |
+| **Phase 5** | Mobile-First React Frontend (Vite) | `[ ]` In Progress | 2 / 6 |
 | **Phase 6** | Docker & PostgreSQL Environment | `[ ]` Not Started | 0 / 4 |
 | **Phase 7** | Production Deployment (Render.com) | `[ ]` Not Started | 0 / 4 |
 
@@ -109,28 +109,28 @@ This checklist tracks the ongoing development progress of the Habit Tracker proj
 
 ---
 
-### Phase 4: Statistics & Analytics
-- [ ] **4.1 Analytics Aggregation Service (TDD)**
+### Phase 4: Statistics & Analytics (Postponed until after deployment)
+- [ ] **4.1 Analytics Aggregation Service (TDD)** (Postponed)
   - [ ] **Test & Impl**: Compute weekly completion percentage (`checked / scheduled`).
   - [ ] Compute monthly completion percentage.
   - [ ] Compute total lifetime check-ins count.
-- [ ] **4.2 Analytics Endpoints (TDD)**
+- [ ] **4.2 Analytics Endpoints (TDD)** (Postponed)
   - [ ] Add `GET /api/v1/habits/{id}/statistics/`.
   - [ ] Add `GET /api/v1/statistics/summary/` for user-wide dashboard overview.
-- [ ] **4.3 Heatmap & Calendar Matrix Endpoint**
+- [ ] **4.3 Heatmap & Calendar Matrix Endpoint** (Postponed)
   - [ ] Provide optimized endpoint returning date-checkin pairs for frontend calendar grids.
-- [ ] **4.4 Query Optimization**
+- [ ] **4.4 Query Optimization** (Postponed)
   - [ ] Ensure single-query aggregations with zero N+1 database queries.
 
 ---
 
 ### Phase 5: Mobile-First React Frontend (Vite)
-- [ ] **5.1 Project Scaffolding & Setup**
-  - [ ] Initialize React + TypeScript with Vite in `frontend/`.
-  - [ ] Configure Tailwind CSS and mobile viewport meta tags.
-- [ ] **5.2 Authentication Flow**
-  - [ ] Login, registration, and automatic token refresh interceptor.
-  - [ ] Protected route wrapper for authenticated views.
+- [x] **5.1 Project Scaffolding & Setup**
+  - [x] Initialize React + TypeScript with Vite in `frontend/`.
+  - [x] Configure Tailwind CSS and mobile viewport meta tags.
+- [x] **5.2 Authentication Flow**
+  - [x] Login, registration, and automatic token refresh interceptor.
+  - [x] Protected route wrapper for authenticated views.
 - [ ] **5.3 Mobile Dashboard View**
   - [ ] Habit list with optimistic toggle (check/uncheck on tap).
   - [ ] Visual streak badges (`🔥 7`).
