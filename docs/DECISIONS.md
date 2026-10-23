@@ -76,3 +76,36 @@ Additionally, the compound database index on `Habit` was `(is_archived, -created
 5. **Read-Time Streak Decay**: If days pass without check-ins, `current_streak` becomes 0 dynamically at read time (`Habit.get_current_streak(reference_date)`) by comparing `last_check_in_date` with the user's `today` (elapsed days > 1), without mutating the database and without loading check-ins.
 6. **Query Optimization**: Remove `prefetch_related("check_ins")` from `HabitViewSet.get_queryset()`. In `HabitSerializer`, evaluate `is_checked_today` and `current_streak` without querying check-ins during normal list views.
 
+## ADR 004: In-Memory Access Token with Storage Refresh Token and Strict CSP (Option C)
+
+### Date
+2026-10-24
+
+### Context & Problem
+Previously, access and refresh tokens were both stored in `localStorage`, without a Content-Security-Policy (CSP). Any malicious or compromised dependency executing in the page could exfiltrate the 7-day refresh token. Because refresh token rotation blacklists previous tokens, stolen tokens could be continuously rotated by an attacker while simultaneously locking out legitimate users.
+
+Two alternative architectures were evaluated:
+1. **Option B (HttpOnly Refresh Cookie + In-Memory Access Token)**: The backend sets an `HttpOnly` cookie for the refresh token. However, because the production frontend and backend will be hosted on separate Render subdomains (`*.onrender.com`), and `onrender.com` is listed in the Public Suffix List (PSL), cookies cannot be shared across different subdomains as first-party cookies. In browsers with strict privacy protections (e.g. Safari / iOS WebKit ITP), cross-site cookies are blocked by default. Without configuring a custom domain or an API reverse proxy, Option B would break authentication for mobile Safari users.
+2. **Option C (In-Memory Access Token + localStorage Refresh Token + Strict CSP)**: Keep the short-lived access token strictly in JavaScript memory (never written to `localStorage` or `sessionStorage`), store the refresh token in `localStorage`, silently refresh on application mount/reload, coordinate cross-tab refresh via Web Locks API and BroadcastChannel, and enforce a strict CSP on production builds.
+
+### Decision
+1. Adopt **Option C**:
+   - Store access tokens strictly in module-scoped memory (`client.ts`).
+   - Store the refresh token in `localStorage`.
+   - On initial app boot, silently call `refreshTokens()` if a refresh token is present to retrieve a valid in-memory access token.
+2. **Cross-Tab Concurrency (C2)**:
+   - Coordinate token refresh using the `navigator.locks` Web Locks API (with fallback) and broadcast rotation updates via `BroadcastChannel`.
+   - If a tab acquires the lock or encounters a refresh response, it checks whether another tab has already rotated the refresh token in storage before clearing session state.
+3. **Strict Content Security Policy (CSP)**:
+   - Inject CSP meta tags in production builds via Vite HTML plugin:
+     `default-src 'self'; connect-src 'self' <VITE_API_URL>; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'`.
+
+### Trade-offs & Implications
+- **Advantages**:
+  - Functions reliably across arbitrary third-party subdomains without requiring custom domains or cross-site cookie workarounds.
+  - Prevents persistent access token extraction from disk/storage.
+  - Prevents cross-tab race conditions and inadvertent global blacklisting logouts.
+  - Strict CSP mitigates script injection vectors.
+- **Trade-offs**:
+  - The refresh token remains in `localStorage`. If an attacker bypasses the CSP and executes arbitrary script, the refresh token could still be read from `localStorage`. Defense relies on CSP and dependency auditing.
+

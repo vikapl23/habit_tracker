@@ -21,15 +21,13 @@ export interface UserProfile {
   timezone: string;
 }
 
-const ACCESS_TOKEN_KEY = 'habit_tracker_access_token';
+// In-memory access token storage (C1: never persisted in localStorage)
+let memoryAccessToken: string | null = null;
+
 const REFRESH_TOKEN_KEY = 'habit_tracker_refresh_token';
 
 export const getAccessToken = (): string | null => {
-  try {
-    return localStorage.getItem(ACCESS_TOKEN_KEY);
-  } catch {
-    return null;
-  }
+  return memoryAccessToken;
 };
 
 export const getRefreshToken = (): string | null => {
@@ -41,12 +39,16 @@ export const getRefreshToken = (): string | null => {
 };
 
 export const setTokens = (tokens: { access?: string | null; refresh?: string | null }): void => {
+  if (tokens.access !== undefined) {
+    memoryAccessToken = tokens.access;
+  }
   try {
-    if (tokens.access) {
-      localStorage.setItem(ACCESS_TOKEN_KEY, tokens.access);
-    }
-    if (tokens.refresh) {
-      localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refresh);
+    if (tokens.refresh !== undefined) {
+      if (tokens.refresh === null) {
+        localStorage.removeItem(REFRESH_TOKEN_KEY);
+      } else {
+        localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refresh);
+      }
     }
   } catch {
     // Storage access may be restricted
@@ -54,8 +56,8 @@ export const setTokens = (tokens: { access?: string | null; refresh?: string | n
 };
 
 export const clearTokens = (): void => {
+  memoryAccessToken = null;
   try {
-    localStorage.removeItem(ACCESS_TOKEN_KEY);
     localStorage.removeItem(REFRESH_TOKEN_KEY);
   } catch {
     // Storage access may be restricted
@@ -92,14 +94,29 @@ export const getApiBaseUrl = (): string => {
   return base.replace(/\/+$/, '');
 };
 
-// Singleton promise for token refresh to avoid duplicate concurrent calls
+// Broadcast channel for multi-tab token synchronization (C2)
+const TOKEN_BROADCAST_CHANNEL = 'habit_tracker_token_sync';
+let tokenBroadcastChannel: BroadcastChannel | null = null;
+try {
+  if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+    tokenBroadcastChannel = new BroadcastChannel(TOKEN_BROADCAST_CHANNEL);
+    tokenBroadcastChannel.onmessage = (event) => {
+      if (event.data?.type === 'REFRESH_SUCCESS' && event.data?.access) {
+        memoryAccessToken = event.data.access;
+      } else if (event.data?.type === 'LOGOUT') {
+        clearTokens();
+        notifyAuthFailure();
+      }
+    };
+  }
+} catch {
+  // BroadcastChannel unavailable
+}
+
+// Singleton promise for token refresh to avoid duplicate concurrent calls in the same tab
 let refreshPromise: Promise<string | null> | null = null;
 
-export const refreshTokens = async (): Promise<string | null> => {
-  if (refreshPromise) {
-    return refreshPromise;
-  }
-
+const executeTokenRefresh = async (): Promise<string | null> => {
   const currentRefresh = getRefreshToken();
   if (!currentRefresh) {
     clearTokens();
@@ -107,39 +124,88 @@ export const refreshTokens = async (): Promise<string | null> => {
     return null;
   }
 
+  try {
+    const baseUrl = getApiBaseUrl();
+    const response = await fetch(`${baseUrl}/auth/token/refresh/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ refresh: currentRefresh }),
+    });
+
+    if (!response.ok) {
+      // Check if another tab refreshed and updated the refresh token in localStorage in the meantime
+      const latestRefresh = getRefreshToken();
+      if (latestRefresh && latestRefresh !== currentRefresh) {
+        // Retry refresh with the latest token
+        const retryRes = await fetch(`${baseUrl}/auth/token/refresh/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ refresh: latestRefresh }),
+        });
+        if (retryRes.ok) {
+          const retryData = await retryRes.json();
+          if (retryData.access) {
+            setTokens({
+              access: retryData.access,
+              refresh: retryData.refresh || latestRefresh,
+            });
+            tokenBroadcastChannel?.postMessage({
+              type: 'REFRESH_SUCCESS',
+              access: retryData.access,
+            });
+            return retryData.access as string;
+          }
+        }
+      }
+
+      clearTokens();
+      tokenBroadcastChannel?.postMessage({ type: 'LOGOUT' });
+      notifyAuthFailure();
+      return null;
+    }
+
+    const data = await response.json();
+    if (data.access) {
+      setTokens({
+        access: data.access,
+        refresh: data.refresh || currentRefresh,
+      });
+      tokenBroadcastChannel?.postMessage({
+        type: 'REFRESH_SUCCESS',
+        access: data.access,
+      });
+      return data.access as string;
+    }
+
+    clearTokens();
+    tokenBroadcastChannel?.postMessage({ type: 'LOGOUT' });
+    notifyAuthFailure();
+    return null;
+  } catch {
+    clearTokens();
+    notifyAuthFailure();
+    return null;
+  }
+};
+
+export const refreshTokens = async (): Promise<string | null> => {
+  if (refreshPromise) {
+    return refreshPromise;
+  }
+
   refreshPromise = (async () => {
     try {
-      const baseUrl = getApiBaseUrl();
-      const response = await fetch(`${baseUrl}/auth/token/refresh/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ refresh: currentRefresh }),
-      });
-
-      if (!response.ok) {
-        clearTokens();
-        notifyAuthFailure();
-        return null;
-      }
-
-      const data = await response.json();
-      if (data.access) {
-        setTokens({
-          access: data.access,
-          refresh: data.refresh || currentRefresh,
+      // Use Web Locks API if available to coordinate across tabs
+      if (typeof navigator !== 'undefined' && navigator.locks?.request) {
+        return await navigator.locks.request('habit-tracker-token-refresh', async () => {
+          return await executeTokenRefresh();
         });
-        return data.access as string;
       }
-
-      clearTokens();
-      notifyAuthFailure();
-      return null;
-    } catch {
-      clearTokens();
-      notifyAuthFailure();
-      return null;
+      return await executeTokenRefresh();
     } finally {
       refreshPromise = null;
     }
@@ -318,4 +384,6 @@ export const apiClient = {
   updateProfile: async (data: Partial<UserProfile>): Promise<UserProfile> => {
     return apiClient.patch<UserProfile>('/auth/profile/', data);
   },
+
+  refreshTokens,
 };

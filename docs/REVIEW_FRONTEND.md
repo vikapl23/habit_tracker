@@ -32,7 +32,7 @@ The SPA is well structured for an MVP: strict TypeScript is on, the API layer is
 
 Issues that cause security exposure, data loss, logouts across every tab, or guaranteed CI failure.
 
-### C1. Access and refresh tokens are stored in `localStorage`, and there is no CSP
+### C1. Access and refresh tokens are stored in `localStorage`, and there is no CSP [FIXED]
 - **Files**: [client.ts L24-L63](file:///c:/Users/monos.com.ua/.gemini/antigravity/scratch/habit_tracker/frontend/src/api/client.ts#L24-L63), [index.html L3-L10](file:///c:/Users/monos.com.ua/.gemini/antigravity/scratch/habit_tracker/frontend/index.html#L3-L10), [base.py L132-L138](file:///c:/Users/monos.com.ua/.gemini/antigravity/scratch/habit_tracker/config/settings/base.py#L132-L138)
 - **Description**: Both JWTs are kept in `localStorage`, so any JavaScript running in the origin can read them. That includes an XSS bug or a compromised npm dependency. The refresh token lives 7 days, and with `ROTATE_REFRESH_TOKENS=True` an attacker who steals it can rotate it forever, which also blacklists the real user's copy. No exploitable XSS sink was found (React escapes output and nothing uses `dangerouslySetInnerHTML`), so this is a defense-in-depth gap rather than an open hole. Still, there is no Content-Security-Policy to limit the damage, and the access token lasts a long 60 minutes.
 - **Recommendation** (in order of preference):
@@ -40,7 +40,7 @@ Issues that cause security exposure, data loss, logouts across every tab, or gua
   2. At minimum: keep the access token in memory only, cut `ACCESS_TOKEN_LIFETIME` to 5–15 minutes, and ship a strict CSP, e.g. `default-src 'self'; connect-src 'self' <API origin>; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'`.
   3. Add `npm audit` / Dependabot to CI, because supply-chain attacks are the most realistic XSS vector here.
 
-### C2. Refresh race across tabs combined with rotation and blacklisting logs out every tab
+### C2. Refresh race across tabs combined with rotation and blacklisting logs out every tab [FIXED]
 - **Files**: [client.ts L95-L149](file:///c:/Users/monos.com.ua/.gemini/antigravity/scratch/habit_tracker/frontend/src/api/client.ts#L95-L149), [AuthContext.tsx L38-L66](file:///c:/Users/monos.com.ua/.gemini/antigravity/scratch/habit_tracker/frontend/src/context/AuthContext.tsx#L38-L66), [base.py L135-L136](file:///c:/Users/monos.com.ua/.gemini/antigravity/scratch/habit_tracker/config/settings/base.py#L135-L136)
 - **Description**: The `refreshPromise` lock is a module-level variable, so each tab has its own copy. All tabs share one `localStorage`, so their access tokens expire at the same moment. When two tabs get a 401 together, both send `POST /auth/token/refresh/` with the same token R1:
   - Tab A wins: the server issues R2 and blacklists R1, and tab A stores R2.
@@ -62,7 +62,7 @@ Issues that cause security exposure, data loss, logouts across every tab, or gua
   - L70 (`name: /2026/`) fails from 2027.
 - **Recommendation**: In `beforeEach`, call `vi.useFakeTimers({ toFake: ['Date'], shouldAdvanceTime: true })` and `vi.setSystemTime(new Date(2026, 9, 23, 12, 0))`, and call `vi.useRealTimers()` in `afterEach`. Faking only `Date` keeps `userEvent` and `waitFor` working. Alternatively, build the expected date strings from the faked "now" instead of literals.
 
-### C4. Swipe-down-to-dismiss covers the scrollable form, so scrolling closes the sheet and loses input
+### C4. Swipe-down-to-dismiss covers the scrollable form, so scrolling closes the sheet and loses input [FIXED]
 - **File**: [HabitFormBottomSheet.tsx L102-L117](file:///c:/Users/monos.com.ua/.gemini/antigravity/scratch/habit_tracker/frontend/src/components/HabitFormBottomSheet.tsx#L102-L117), [L217-L222](file:///c:/Users/monos.com.ua/.gemini/antigravity/scratch/habit_tracker/frontend/src/components/HabitFormBottomSheet.tsx#L217-L222)
 - **Description**: `onTouchStart`/`onTouchEnd` sit on the **whole sheet**, including the `overflow-y-auto` form. Any vertical move of 75 px or more ends in `onClose()`. That includes the normal "drag down to scroll back up" gesture, or a sloppy tap-drag on the emoji grid or weekday buttons. On a phone the form is taller than the screen (`max-h-[90vh]`), so users hit this constantly, and the state is wiped the next time the sheet opens. It also fires while `isSubmitting` is true. The same applies to backdrop taps (L215) and Escape (L92-L100).
 - **Recommendation**: Attach the swipe handlers to the drag handle and header only (L224-L239). If you keep a whole-sheet swipe, only start it when `formRef.scrollTop === 0`. Ignore close requests while `isSubmitting`, and ask "Discard changes?" when the form is dirty.

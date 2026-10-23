@@ -35,8 +35,9 @@ const renderProfile = () => {
 describe('ProfilePage (Step 5.5)', () => {
   beforeEach(() => {
     localStorage.clear();
-    localStorage.setItem('habit_tracker_access_token', 'mock-access-token');
+    localStorage.setItem('habit_tracker_refresh_token', 'mock-refresh-token');
     vi.restoreAllMocks();
+    vi.spyOn(apiClient, 'refreshTokens').mockResolvedValue('mock-access-token');
     vi.spyOn(apiClient, 'getProfile').mockResolvedValue(mockProfile);
   });
 

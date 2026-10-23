@@ -5,6 +5,7 @@ import {
   getAccessToken,
   getRefreshToken,
   setTokens,
+  refreshTokens,
   onAuthFailure,
   ApiError,
 } from '../client';
@@ -273,6 +274,54 @@ describe('API Client and Auth / Token Refresh logic', () => {
     expect(logoutPayload).toEqual({ refresh: 'my-refresh-token' });
     expect(getAccessToken()).toBeNull();
     expect(getRefreshToken()).toBeNull();
+  });
+
+  it('keeps access token only in memory (does not persist access token to localStorage)', () => {
+    setTokens({ access: 'secret-in-memory-access', refresh: 'stored-refresh' });
+    expect(getAccessToken()).toBe('secret-in-memory-access');
+    expect(localStorage.getItem('habit_tracker_access_token')).toBeNull();
+    expect(localStorage.getItem('habit_tracker_refresh_token')).toBe('stored-refresh');
+    expect(getRefreshToken()).toBe('stored-refresh');
+  });
+
+  it('coordinates cross-tab refresh: if another tab already refreshed, uses newer refresh token without blacklisting 401', async () => {
+    setTokens({ access: null, refresh: 'initial-refresh' });
+
+    let _refreshCallCount = 0;
+    const mockFetch = vi.fn().mockImplementation(async (url: string, init: any) => {
+      if (url.includes('/auth/token/refresh/')) {
+        _refreshCallCount++;
+        const body = JSON.parse(init.body);
+        return {
+          ok: true,
+          status: 200,
+          headers: new Headers({ 'content-type': 'application/json' }),
+          json: async () => ({
+            access: `access-for-${body.refresh}`,
+            refresh: `rotated-after-${body.refresh}`,
+          }),
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({ ok: true }),
+      };
+    });
+    globalThis.fetch = mockFetch;
+
+    // Simulate Tab A refreshing first
+    const token1 = await refreshTokens();
+    expect(token1).toBe('access-for-initial-refresh');
+    expect(getRefreshToken()).toBe('rotated-after-initial-refresh');
+
+    // Simulate Tab B had started with 'initial-refresh' before lock,
+    // but by the time it acquires the lock, localStorage already has 'rotated-after-initial-refresh'
+    // It should refresh using the new token or notice storage changed
+    const token2 = await refreshTokens();
+    expect(token2).toBe('access-for-rotated-after-initial-refresh');
+    expect(getRefreshToken()).toBe('rotated-after-rotated-after-initial-refresh');
   });
 
   it('register sends timezone, auto-logs in, and returns message and tokens', async () => {

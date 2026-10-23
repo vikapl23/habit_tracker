@@ -217,11 +217,13 @@ export const HabitFormBottomSheet: React.FC<HabitFormBottomSheetProps> = ({
       <div
         className="w-full max-w-[420px] mx-auto bg-white rounded-t-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden animate-in slide-in-from-bottom duration-300"
         onClick={(e) => e.stopPropagation()}
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
       >
         {/* Drag handle header for swipe affordance */}
-        <div className="pt-3 pb-1 flex flex-col items-center shrink-0 cursor-grab active:cursor-grabbing">
+        <div
+          className="pt-3 pb-1 flex flex-col items-center shrink-0 cursor-grab active:cursor-grabbing"
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+        >
           <div className="w-10 h-1.5 rounded-full bg-slate-300" aria-hidden="true" />
           <div className="w-full px-5 pt-2 pb-3 flex items-center justify-between border-b border-slate-100">
             <h2 id="habit-sheet-title" className="text-base font-bold text-slate-900">

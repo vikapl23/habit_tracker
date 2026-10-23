@@ -39,10 +39,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let isMounted = true;
 
     const initAuth = async () => {
-      const token = getAccessToken();
       const refresh = getRefreshToken();
+      const access = getAccessToken();
 
-      if (token || refresh) {
+      if (access) {
+        await fetchProfile();
+      } else if (refresh) {
+        // Silently refresh to get a fresh in-memory access token on page reload
+        await apiClient.refreshTokens();
         await fetchProfile();
       }
       if (isMounted) {

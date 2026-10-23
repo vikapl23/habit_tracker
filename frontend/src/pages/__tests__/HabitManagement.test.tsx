@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { DashboardPage } from '../DashboardPage';
@@ -435,5 +435,33 @@ describe('Habit Management (Step 5.4)', () => {
 
     expect(screen.queryByText('Old Habit')).not.toBeInTheDocument();
     expect(await screen.findByText(/no archived habits/i)).toBeInTheDocument();
+  });
+
+  it('does not close bottom sheet when swiping inside the scrollable form, only closes when swiping header/handle', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(habitsApi, 'getAllHabits').mockResolvedValue([]);
+    renderDashboard();
+
+    // Open sheet via FAB
+    const fabButton = await screen.findByRole('button', { name: /new habit/i });
+    await user.click(fabButton);
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+
+    const form = screen.getByRole('dialog').querySelector('form')!;
+    expect(form).toBeInTheDocument();
+
+    // Swiping down inside form should NOT close the sheet
+    fireEvent.touchStart(form, { touches: [{ clientY: 100 }] });
+    fireEvent.touchEnd(form, { changedTouches: [{ clientY: 250 }] });
+
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+    // But swiping down on the drag handle header DOES close the sheet
+    const dragHandle = screen.getByText('New Habit').closest('div')?.parentElement;
+    expect(dragHandle).toBeInTheDocument();
+    fireEvent.touchStart(dragHandle!, { touches: [{ clientY: 100 }] });
+    fireEvent.touchEnd(dragHandle!, { changedTouches: [{ clientY: 250 }] });
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });
