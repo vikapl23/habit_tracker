@@ -97,8 +97,10 @@ Two alternative architectures were evaluated:
    - Coordinate token refresh using the `navigator.locks` Web Locks API (with fallback) and broadcast rotation updates via `BroadcastChannel`.
    - If a tab acquires the lock or encounters a refresh response, it checks whether another tab has already rotated the refresh token in storage before clearing session state.
 3. **Strict Content Security Policy (CSP)**:
-   - Inject CSP meta tags in production builds via Vite HTML plugin:
-     `default-src 'self'; connect-src 'self' <VITE_API_URL>; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'`.
+   - Inject CSP meta tags in production builds only (`apply: 'build'`) via Vite HTML plugin:
+     `default-src 'self'; connect-src 'self' <VITE_API_URL origin>; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; object-src 'none'; base-uri 'none'`.
+   - `frame-ancestors` is omitted from the `<meta>` tag because browsers strictly ignore `frame-ancestors` inside HTML meta elements (W3C CSP Level 2/3 specification).
+   - In production environments, `frame-ancestors 'none'`, along with `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, and `Strict-Transport-Security`, are delivered as standard HTTP response headers from the reverse proxy / web server (nginx in Docker and Render edge).
 
 ### Trade-offs & Implications
 - **Advantages**:
