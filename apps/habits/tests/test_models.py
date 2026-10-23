@@ -1,6 +1,8 @@
+import importlib
 from datetime import date, timedelta
 
 import pytest
+from django.apps import apps
 from django.contrib import admin
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
@@ -199,3 +201,47 @@ def test_habit_recalculates_streaks_on_frequency_change(user, monkeypatch):
     habit.frequency_days = [0, 2, 4]
     habit.save()
     assert recalculate_called is True
+
+
+def test_habit_is_scheduled_on_none_frequency_days_safe():
+    """Edge Case #8 / Item 2.3: Habit.is_scheduled_on should not raise TypeError when frequency_days is None."""
+    habit = Habit(name="Gym", frequency_type="custom", frequency_days=None)
+    assert habit.is_scheduled_on(date(2026, 10, 23)) is False
+
+
+@pytest.mark.django_db
+def test_habit_save_invokes_clean_on_invalid_data(user):
+    """Item 2.4: Habit.save() executes clean(), rejecting invalid frequency data."""
+    with pytest.raises(ValidationError) as exc_info:
+        Habit.objects.create(
+            user=user, name="Bad Custom Habit", frequency_type="custom", frequency_days=[]
+        )
+    assert "frequency_days" in exc_info.value.message_dict
+
+
+@pytest.mark.django_db
+def test_habit_save_does_not_dispatch_extra_select_query(user, django_assert_num_queries):
+    """Item 2.2: Habit.save() uses in-memory loaded values, avoiding extra SELECT queries."""
+    habit = Habit.objects.create(user=user, name="Reading", frequency_type="daily")
+    # Reload habit from DB to simulate standard workflow
+    loaded = Habit.objects.get(id=habit.id)
+    loaded.name = "Reading Books"
+
+    with django_assert_num_queries(1):
+        loaded.save()
+
+
+@pytest.mark.django_db
+def test_data_migration_populates_existing_habits(user):
+    """Items 1.2 & 2.7: set_existing_habits_daily updates all existing habits to daily with frequency_days=[]."""
+    migration_0004 = importlib.import_module("apps.habits.migrations.0004_populate_daily_frequency")
+    set_existing_habits_daily = migration_0004.set_existing_habits_daily
+
+    habit = Habit.objects.create(user=user, name="Old Habit")
+    Habit.objects.filter(id=habit.id).update(frequency_type="", frequency_days=[99])
+
+    set_existing_habits_daily(apps, None)
+
+    habit.refresh_from_db()
+    assert habit.frequency_type == "daily"
+    assert habit.frequency_days == []

@@ -871,3 +871,137 @@ def test_habit_timezone_near_midnight_scheduling(user):
         # For NY, local date is 2026-10-23 (Friday) -> scheduled
         assert user_ny.get_today() == date(2026, 10, 23)
         assert habit_ny.is_scheduled_today() is True
+
+
+def test_calculate_streaks_unrecognized_frequency_type_or_missing_days_safe():
+    """Edge Case #1: Unrecognized frequency_type or empty days must not cause infinite loop."""
+    ref = date(2026, 10, 23)
+    checkins = [date(2026, 10, 22)]
+
+    res1 = calculate_streaks(
+        checkins, reference_date=ref, frequency_type="unknown", frequency_days=None
+    )
+    assert res1.current_streak == 0
+    assert res1.longest_streak == 0
+
+    res2 = calculate_streaks(
+        checkins, reference_date=ref, frequency_type="weekly", frequency_days=[]
+    )
+    assert res2.current_streak == 0
+    assert res2.longest_streak == 0
+
+
+def test_calculate_streaks_off_schedule_checkin_after_missed_scheduled_day():
+    """Edge Case #2: Off-schedule check-in after missed scheduled day yields current_streak = 0."""
+    # Custom habit on Mon-Fri ([0, 1, 2, 3, 4])
+    # Thursday (2026-10-22) checked
+    # Friday (2026-10-23) missed
+    # Saturday (2026-10-24, off-schedule) checked
+    freq_days = [0, 1, 2, 3, 4]
+    checkins = [date(2026, 10, 22), date(2026, 10, 24)]
+    # Reference date is Saturday 2026-10-24
+    res = calculate_streaks(
+        checkins,
+        reference_date=date(2026, 10, 24),
+        frequency_type="custom",
+        frequency_days=freq_days,
+    )
+    # Friday was scheduled and missed, so current streak must be 0
+    assert res.current_streak == 0
+
+
+def test_calculate_streaks_single_day_per_week_across_three_weeks():
+    """Edge Case #3: 1 day/week habit across 3 weeks maintains streak across 6-day rest gaps."""
+    # Habit scheduled only on Mondays (weekday 0)
+    # Weeks: Mon Oct 5, Mon Oct 12, Mon Oct 19
+    freq_days = [0]
+    checkins = [date(2026, 10, 5), date(2026, 10, 12), date(2026, 10, 19)]
+
+    # Evaluated on Wednesday Oct 21 (off-schedule day)
+    res = calculate_streaks(
+        checkins,
+        reference_date=date(2026, 10, 21),
+        frequency_type="custom",
+        frequency_days=freq_days,
+    )
+    assert res.current_streak == 3
+    assert res.longest_streak == 3
+
+    # Evaluated on Tuesday Oct 27 when Mon Oct 26 was missed
+    res_broken = calculate_streaks(
+        checkins,
+        reference_date=date(2026, 10, 27),
+        frequency_type="custom",
+        frequency_days=freq_days,
+    )
+    assert res_broken.current_streak == 0
+    assert res_broken.longest_streak == 3
+
+
+def test_calculate_streaks_all_seven_weekdays_matches_daily():
+    """Edge Case #7: Custom habit with [0, 1, 2, 3, 4, 5, 6] behaves identically to daily habit."""
+    all_days = [0, 1, 2, 3, 4, 5, 6]
+    checkins = [
+        date(2026, 10, 20),
+        date(2026, 10, 21),
+        date(2026, 10, 22),
+        date(2026, 10, 23),
+    ]
+    ref = date(2026, 10, 23)
+
+    daily_res = calculate_streaks(checkins, reference_date=ref, frequency_type="daily")
+    custom_res = calculate_streaks(
+        checkins, reference_date=ref, frequency_type="custom", frequency_days=all_days
+    )
+    assert daily_res.current_streak == custom_res.current_streak == 4
+    assert daily_res.longest_streak == custom_res.longest_streak == 4
+
+
+@pytest.mark.django_db
+def test_checkin_and_uncheck_triggers_recalculation_only_once(habit, monkeypatch):
+    """Edge Case #9 / Item 1.4: check_in_habit and uncheck_habit should trigger recalculation only once."""
+    from apps.habits.services import checkin as checkin_module
+    from apps.habits.services import streaks as streaks_module
+
+    call_count = 0
+    orig_recalc = streaks_module.recalculate_habit_streaks
+
+    def spy_recalculate(h, reference_date=None):
+        nonlocal call_count
+        call_count += 1
+        return orig_recalc(h, reference_date=reference_date)
+
+    monkeypatch.setattr(streaks_module, "recalculate_habit_streaks", spy_recalculate)
+    monkeypatch.setattr(checkin_module, "recalculate_habit_streaks", spy_recalculate)
+
+    call_count = 0
+    checkin_module.check_in_habit(habit, target_date=date(2026, 10, 23))
+    assert call_count == 1, (
+        f"check_in_habit called recalculate_habit_streaks {call_count} times, expected 1"
+    )
+
+    call_count = 0
+    checkin_module.uncheck_habit(habit, target_date=date(2026, 10, 23))
+    assert call_count == 1, (
+        f"uncheck_habit called recalculate_habit_streaks {call_count} times, expected 1"
+    )
+
+
+@pytest.mark.django_db
+def test_direct_orm_checkin_triggers_signal_recalculation(habit, monkeypatch):
+    """Direct ORM checkin creation still triggers the post_save signal recalculation."""
+    from apps.habits.models import HabitCheckIn
+    from apps.habits.services import streaks as streaks_module
+
+    call_count = 0
+    orig_recalc = streaks_module.recalculate_habit_streaks
+
+    def spy_recalculate(h, reference_date=None):
+        nonlocal call_count
+        call_count += 1
+        return orig_recalc(h, reference_date=reference_date)
+
+    monkeypatch.setattr(streaks_module, "recalculate_habit_streaks", spy_recalculate)
+
+    HabitCheckIn.objects.create(habit=habit, date=date(2026, 10, 23))
+    assert call_count == 1

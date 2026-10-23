@@ -3,16 +3,6 @@
 from django.db import migrations, models
 
 
-def set_existing_habits_daily(apps, schema_editor):
-    Habit = apps.get_model('habits', 'Habit')
-    Habit.objects.filter(
-        models.Q(frequency_type__isnull=True) | models.Q(frequency_type="")
-    ).update(
-        frequency_type="daily",
-        frequency_days=[],
-    )
-
-
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -28,7 +18,10 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='habit',
             name='frequency_type',
-            field=models.CharField(choices=[('daily', 'Daily'), ('custom', 'Custom')], default='daily', max_length=10),
+            field=models.CharField(
+                choices=[('daily', 'Daily'), ('custom', 'Custom')],
+                default='daily',
+                max_length=10,
+            ),
         ),
-        migrations.RunPython(set_existing_habits_daily, reverse_code=migrations.RunPython.noop),
     ]

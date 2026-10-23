@@ -25,9 +25,23 @@ def _is_scheduled_day(
     """Return True if target_date is a scheduled day according to habit frequency."""
     if frequency_type == "daily":
         return True
-    if not frequency_days:
+    if frequency_type != "custom" or not frequency_days:
         return False
     return target_date.weekday() in frequency_days
+
+
+def _find_prev_scheduled_day(
+    from_date: date,
+    frequency_type: str = "daily",
+    frequency_days: Iterable[int] | None = None,
+    max_lookback: int = 7,
+) -> date | None:
+    """Find the most recent scheduled day strictly prior to from_date within max_lookback days."""
+    for i in range(1, max_lookback + 1):
+        candidate = from_date - timedelta(days=i)
+        if _is_scheduled_day(candidate, frequency_type, frequency_days):
+            return candidate
+    return None
 
 
 def calculate_streaks(
@@ -79,7 +93,9 @@ def calculate_streaks(
         if d <= reference_date and _is_scheduled_day(d, frequency_type, frequency_days)
     }
 
-    if frequency_type == "custom" and not frequency_days:
+    if frequency_type not in ("daily", "custom") or (
+        frequency_type == "custom" and not frequency_days
+    ):
         return StreakResult(current_streak=0, longest_streak=0)
 
     # 1. Current streak calculation
@@ -91,26 +107,23 @@ def calculate_streaks(
             cursor = today
         else:
             # Today is scheduled but not checked yet; streak stays alive if previous scheduled day is checked
-            prev_scheduled = today - timedelta(days=1)
-            while not _is_scheduled_day(prev_scheduled, frequency_type, frequency_days):
-                prev_scheduled -= timedelta(days=1)
-            if prev_scheduled in scheduled_valid_dates:
+            prev_scheduled = _find_prev_scheduled_day(today, frequency_type, frequency_days)
+            if prev_scheduled and prev_scheduled in scheduled_valid_dates:
                 cursor = prev_scheduled
     else:
         # Today is off-schedule; streak stays alive if most recent scheduled day was checked
-        last_scheduled = today - timedelta(days=1)
-        while not _is_scheduled_day(last_scheduled, frequency_type, frequency_days):
-            last_scheduled -= timedelta(days=1)
-        if last_scheduled in scheduled_valid_dates:
+        last_scheduled = _find_prev_scheduled_day(today, frequency_type, frequency_days)
+        if last_scheduled and last_scheduled in scheduled_valid_dates:
             cursor = last_scheduled
 
     current_streak = 0
     if cursor is not None:
         while cursor in scheduled_valid_dates:
             current_streak += 1
-            cursor -= timedelta(days=1)
-            while not _is_scheduled_day(cursor, frequency_type, frequency_days):
-                cursor -= timedelta(days=1)
+            prev = _find_prev_scheduled_day(cursor, frequency_type, frequency_days)
+            if prev is None:
+                break
+            cursor = prev
 
     # 2. Longest streak calculation
     if not scheduled_valid_dates:

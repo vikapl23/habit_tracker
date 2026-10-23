@@ -3,7 +3,8 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
-from django.db.models import QuerySet
+from django.db import connection
+from django.db.models import Q, QuerySet
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import permissions, serializers, status, viewsets
@@ -38,6 +39,12 @@ class HabitViewSet(viewsets.ModelViewSet):
                 serializers.DateField().to_internal_value(date_param)
             except serializers.ValidationError as exc:
                 raise serializers.ValidationError({"date": exc.detail}) from exc
+        if "scheduled_today" in request.query_params:
+            val = request.query_params.get("scheduled_today", "").lower()
+            if val not in ["true", "1", "false", "0"]:
+                raise serializers.ValidationError(
+                    {"scheduled_today": "Must be a valid boolean ('true', 'false', '1', or '0')."}
+                )
 
     def perform_create(self, serializer: serializers.BaseSerializer) -> None:
         """Persist new habit associated with the authenticated user."""
@@ -95,6 +102,9 @@ class HabitViewSet(viewsets.ModelViewSet):
         if getattr(self, "detail", False) or self.action != "list":
             return qs
 
+        if "date" in self.request.query_params:
+            qs = qs.prefetch_related("check_ins")
+
         include_archived = self.request.query_params.get("include_archived", "false").lower() in [
             "true",
             "1",
@@ -109,19 +119,15 @@ class HabitViewSet(viewsets.ModelViewSet):
                 target_weekday = target_date.weekday()
                 want_scheduled = param in ["true", "1"]
 
-                candidates = Habit.objects.filter(user=user)
-                if not include_archived:
-                    candidates = candidates.filter(is_archived=False)
+                if connection.vendor == "postgresql":
+                    contains_lookup = Q(frequency_days__contains=target_weekday)
+                else:
+                    contains_lookup = Q(frequency_days__icontains=str(target_weekday))
 
-                matching_ids = []
-                for item in candidates.values("id", "frequency_type", "frequency_days"):
-                    freq_type = item["frequency_type"]
-                    freq_days = item["frequency_days"] or []
-                    is_scheduled = True if freq_type == "daily" else target_weekday in freq_days
-                    if is_scheduled == want_scheduled:
-                        matching_ids.append(item["id"])
-
-                qs = qs.filter(id__in=matching_ids)
+                if want_scheduled:
+                    qs = qs.filter(Q(frequency_type="daily") | contains_lookup)
+                else:
+                    qs = qs.filter(frequency_type="custom").exclude(contains_lookup)
 
         return qs
 

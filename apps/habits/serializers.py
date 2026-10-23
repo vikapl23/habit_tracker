@@ -133,6 +133,20 @@ class HabitSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({"frequency_days": "Weekdays must be unique."})
             attrs["frequency_days"] = sorted(freq_days)
         elif freq_type == FrequencyType.DAILY:
+            if (
+                self.instance
+                and self.instance.frequency_type == FrequencyType.DAILY
+                and "frequency_type" not in attrs
+                and "frequency_days" in attrs
+                and attrs["frequency_days"]
+            ):
+                raise serializers.ValidationError(
+                    {
+                        "frequency_days": (
+                            "Cannot set frequency_days for a daily habit. Change frequency_type to 'custom'."
+                        )
+                    }
+                )
             attrs["frequency_days"] = []
 
         return attrs

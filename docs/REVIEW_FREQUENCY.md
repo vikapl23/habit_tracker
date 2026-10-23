@@ -23,7 +23,7 @@ However, several critical and important issues require attention prior to moving
 
 Issues that cause crashes, infinite loops, data loss, dead migration logic, or significant degradation in production.
 
-### 1.1 Unbounded Infinite While Loop in Backwards Date Traversal
+### 1.1 Unbounded Infinite While Loop in Backwards Date Traversal [FIXED]
 - **File**: [`apps/habits/services/streaks.py`](file:///c:/Users/monos.com.ua/.gemini/antigravity/scratch/habit_tracker/apps/habits/services/streaks.py#L94-L114)
 - **Lines**: 94–96, 101–103, 112–113
 - **Description**:
@@ -41,7 +41,7 @@ Issues that cause crashes, infinite loops, data loss, dead migration logic, or s
 
 ---
 
-### 1.2 Ineffective / Dead Data Migration Query
+### 1.2 Ineffective / Dead Data Migration Query [FIXED]
 - **File**: [`apps/habits/migrations/0003_habit_frequency_days_habit_frequency_type.py`](file:///c:/Users/monos.com.ua/.gemini/antigravity/scratch/habit_tracker/apps/habits/migrations/0003_habit_frequency_days_habit_frequency_type.py#L6-L13)
 - **Lines**: 6–13, 28–33
 - **Description**:
@@ -69,7 +69,7 @@ Issues that cause crashes, infinite loops, data loss, dead migration logic, or s
 
 ---
 
-### 1.3 Silent Erasure of Client Input on Partial Update (`PATCH`)
+### 1.3 Silent Erasure of Client Input on Partial Update (`PATCH`) [FIXED]
 - **File**: [`apps/habits/serializers.py`](file:///c:/Users/monos.com.ua/.gemini/antigravity/scratch/habit_tracker/apps/habits/serializers.py#L135-L136)
 - **Lines**: 135–136
 - **Description**:
@@ -87,7 +87,7 @@ Issues that cause crashes, infinite loops, data loss, dead migration logic, or s
 
 ---
 
-### 1.4 Double Recalculation & Redundant DB Writes on Every Check-In/Uncheck
+### 1.4 Double Recalculation & Redundant DB Writes on Every Check-In/Uncheck [FIXED]
 - **File**: [`apps/habits/models.py`](file:///c:/Users/monos.com.ua/.gemini/antigravity/scratch/habit_tracker/apps/habits/models.py#L179-L187), [`apps/habits/services/checkin.py`](file:///c:/Users/monos.com.ua/.gemini/antigravity/scratch/habit_tracker/apps/habits/services/checkin.py#L73)
 - **Lines**: `models.py:179-187`, `checkin.py:73, 108`
 - **Description**:
@@ -106,7 +106,7 @@ Issues that cause crashes, infinite loops, data loss, dead migration logic, or s
 
 Issues affecting maintainability, query performance, edge-case consistency, and database indexing.
 
-### 2.1 Full Table Scan and In-Memory Filtering for `?scheduled_today=`
+### 2.1 Full Table Scan and In-Memory Filtering for `?scheduled_today=` [FIXED]
 - **File**: [`apps/habits/views.py`](file:///c:/Users/monos.com.ua/.gemini/antigravity/scratch/habit_tracker/apps/habits/views.py#L112-L124)
 - **Lines**: 112–124
 - **Description**:
@@ -133,7 +133,7 @@ Issues affecting maintainability, query performance, edge-case consistency, and 
 
 ---
 
-### 2.2 Hidden Database Query on Every `Habit.save()` Call
+### 2.2 Hidden Database Query on Every `Habit.save()` Call [FIXED]
 - **File**: [`apps/habits/models.py`](file:///c:/Users/monos.com.ua/.gemini/antigravity/scratch/habit_tracker/apps/habits/models.py#L113-L122)
 - **Lines**: 113–122
 - **Description**:
@@ -148,7 +148,7 @@ Issues affecting maintainability, query performance, edge-case consistency, and 
 
 ---
 
-### 2.3 Unhandled `TypeError` in `Habit.is_scheduled_on` if `frequency_days` is `None`
+### 2.3 Unhandled `TypeError` in `Habit.is_scheduled_on` if `frequency_days` is `None` [FIXED]
 - **File**: [`apps/habits/models.py`](file:///c:/Users/monos.com.ua/.gemini/antigravity/scratch/habit_tracker/apps/habits/models.py#L86-L87)
 - **Lines**: 86–87
 - **Description**:
@@ -163,7 +163,7 @@ Issues affecting maintainability, query performance, edge-case consistency, and 
 
 ---
 
-### 2.4 Model `clean()` Not Executed on Direct Model `save()`
+### 2.4 Model `clean()` Not Executed on Direct Model `save()` [FIXED]
 - **File**: [`apps/habits/models.py`](file:///c:/Users/monos.com.ua/.gemini/antigravity/scratch/habit_tracker/apps/habits/models.py#L53-L81), [`apps/habits/models.py#L99-L130`](file:///c:/Users/monos.com.ua/.gemini/antigravity/scratch/habit_tracker/apps/habits/models.py#L99-L130)
 - **Lines**: 53–81, 99–130
 - **Description**:
@@ -173,7 +173,7 @@ Issues affecting maintainability, query performance, edge-case consistency, and 
 
 ---
 
-### 2.5 Silent Fallback on Invalid `?scheduled_today=` Query Parameter
+### 2.5 Silent Fallback on Invalid `?scheduled_today=` Query Parameter [FIXED]
 - **File**: [`apps/habits/views.py`](file:///c:/Users/monos.com.ua/.gemini/antigravity/scratch/habit_tracker/apps/habits/views.py#L105-L107)
 - **Lines**: 105–107
 - **Description**:
@@ -183,7 +183,7 @@ Issues affecting maintainability, query performance, edge-case consistency, and 
 
 ---
 
-### 2.6 N+1 Query Risk on Past-Date Habit Serialization
+### 2.6 N+1 Query Risk on Past-Date Habit Serialization [FIXED]
 - **File**: [`apps/habits/serializers.py`](file:///c:/Users/monos.com.ua/.gemini/antigravity/scratch/habit_tracker/apps/habits/serializers.py#L178), [`apps/habits/models.py#L150-L152`](file:///c:/Users/monos.com.ua/.gemini/antigravity/scratch/habit_tracker/apps/habits/models.py#L150-L152)
 - **Lines**: `serializers.py:178, 183`, `models.py:150-152`
 - **Description**:
@@ -196,7 +196,7 @@ Issues affecting maintainability, query performance, edge-case consistency, and 
 
 ---
 
-### 2.7 Mixing DDL and DML in Migration 0003
+### 2.7 Mixing DDL and DML in Migration 0003 [FIXED]
 - **File**: [`apps/habits/migrations/0003_habit_frequency_days_habit_frequency_type.py`](file:///c:/Users/monos.com.ua/.gemini/antigravity/scratch/habit_tracker/apps/habits/migrations/0003_habit_frequency_days_habit_frequency_type.py#L22-L33)
 - **Lines**: 22–33
 - **Description**:

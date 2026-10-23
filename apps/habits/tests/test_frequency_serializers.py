@@ -129,3 +129,13 @@ def test_habit_serializer_update_frequency(user):
     updated = serializer.save()
     assert updated.frequency_type == "custom"
     assert updated.frequency_days == [1, 3, 5]
+
+
+@pytest.mark.django_db
+def test_habit_serializer_patch_frequency_days_on_daily_habit_rejects(user):
+    """Edge Case #4 / Item 1.3: PATCH updating frequency_days on a daily habit without frequency_type must be rejected."""
+    habit = Habit.objects.create(user=user, name="Reading", frequency_type="daily")
+    serializer = HabitSerializer(instance=habit, data={"frequency_days": [0, 2, 4]}, partial=True)
+    assert not serializer.is_valid()
+    assert "frequency_days" in serializer.errors
+    assert "Cannot set frequency_days for a daily habit" in str(serializer.errors["frequency_days"])

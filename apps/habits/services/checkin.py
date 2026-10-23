@@ -7,7 +7,7 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 from rest_framework.exceptions import NotFound, ValidationError
 
-from apps.habits.models import Habit, HabitCheckIn
+from apps.habits.models import Habit, HabitCheckIn, suppress_streak_signals
 from apps.habits.services.streaks import recalculate_habit_streaks
 
 if TYPE_CHECKING:
@@ -60,15 +60,16 @@ def check_in_habit(
     validate_checkin_date(target_date, user=user, habit=habit)
 
     created = False
-    try:
-        with transaction.atomic():
-            _, created = HabitCheckIn.objects.get_or_create(habit=habit, date=target_date)
-    except IntegrityError:
+    with suppress_streak_signals():
         try:
-            HabitCheckIn.objects.get(habit=habit, date=target_date)
-            created = False
-        except HabitCheckIn.DoesNotExist:
-            raise
+            with transaction.atomic():
+                _, created = HabitCheckIn.objects.get_or_create(habit=habit, date=target_date)
+        except IntegrityError:
+            try:
+                HabitCheckIn.objects.get(habit=habit, date=target_date)
+                created = False
+            except HabitCheckIn.DoesNotExist:
+                raise
 
     recalculate_habit_streaks(habit, reference_date=today)
 
@@ -98,7 +99,8 @@ def uncheck_habit(
     if not checkin:
         raise NotFound(f"No check-in found for habit {habit.id} on {target_date}.")
 
-    checkin.delete()
+    with suppress_streak_signals():
+        checkin.delete()
 
     recalculate_habit_streaks(habit, reference_date=today)
 

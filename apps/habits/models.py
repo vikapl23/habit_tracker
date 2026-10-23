@@ -1,3 +1,4 @@
+import threading
 from datetime import date, timedelta
 
 from django.conf import settings
@@ -79,12 +80,24 @@ class Habit(models.Model):
             if self.frequency_days:
                 self.frequency_days = []
 
+    @classmethod
+    def from_db(cls, db, field_names, values):
+        instance = super().from_db(db, field_names, values)
+        if "frequency_type" in field_names:
+            instance._loaded_frequency_type = values[field_names.index("frequency_type")]
+        if "frequency_days" in field_names:
+            raw_days = values[field_names.index("frequency_days")]
+            instance._loaded_frequency_days = (
+                list(raw_days) if isinstance(raw_days, list) else raw_days
+            )
+        return instance
+
     def is_scheduled_on(self, target: date | int) -> bool:
         """Return True if the habit is scheduled on target (date or weekday integer 0-6)."""
         if self.frequency_type == FrequencyType.DAILY:
             return True
         weekday = target.weekday() if hasattr(target, "weekday") else target
-        return weekday in self.frequency_days
+        return weekday in (self.frequency_days or [])
 
     def is_scheduled_today(self, reference_date: date | None = None) -> bool:
         """Return True if the habit is scheduled today (relative to user's timezone)."""
@@ -97,6 +110,7 @@ class Habit(models.Model):
         return self.is_scheduled_on(reference_date)
 
     def save(self, *args, **kwargs):
+        self.clean()
         if self.frequency_type == FrequencyType.CUSTOM and isinstance(self.frequency_days, list):
             self.frequency_days = sorted(self.frequency_days)
         elif self.frequency_type == FrequencyType.DAILY:
@@ -110,18 +124,32 @@ class Habit(models.Model):
                 or "frequency_type" in update_fields
                 or "frequency_days" in update_fields
             ):
-                orig = (
-                    Habit.objects.filter(pk=self.pk)
-                    .values("frequency_type", "frequency_days")
-                    .first()
-                )
-                if orig and (
-                    orig["frequency_type"] != self.frequency_type
-                    or orig["frequency_days"] != self.frequency_days
-                ):
-                    frequency_changed = True
+                if hasattr(self, "_loaded_frequency_type"):
+                    if (
+                        self._loaded_frequency_type != self.frequency_type
+                        or self._loaded_frequency_days != self.frequency_days
+                    ):
+                        frequency_changed = True
+                else:
+                    orig = (
+                        Habit.objects.filter(pk=self.pk)
+                        .values("frequency_type", "frequency_days")
+                        .first()
+                    )
+                    if orig and (
+                        orig["frequency_type"] != self.frequency_type
+                        or orig["frequency_days"] != self.frequency_days
+                    ):
+                        frequency_changed = True
 
         super().save(*args, **kwargs)
+
+        self._loaded_frequency_type = self.frequency_type
+        self._loaded_frequency_days = (
+            list(self.frequency_days)
+            if isinstance(self.frequency_days, list)
+            else self.frequency_days
+        )
 
         if frequency_changed:
             from apps.habits.services.streaks import recalculate_habit_streaks
@@ -176,12 +204,37 @@ class HabitCheckIn(models.Model):
         return f"{self.habit.name} - {self.date}"
 
 
+_streak_signals_suppressed = threading.local()
+
+
+class suppress_streak_signals:
+    """Context manager to suppress automatic post_save/post_delete streak calculation signals."""
+
+    def __enter__(self):
+        _streak_signals_suppressed.value = True
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        _streak_signals_suppressed.value = False
+
+
+def are_streak_signals_suppressed() -> bool:
+    return getattr(_streak_signals_suppressed, "value", False)
+
+
 @receiver([post_save, post_delete], sender=HabitCheckIn)
 def on_checkin_saved_or_deleted(sender, instance, **kwargs):
+    if are_streak_signals_suppressed():
+        return
+
     from apps.habits.services.streaks import recalculate_habit_streaks
 
     if instance.habit_id:
         try:
-            recalculate_habit_streaks(instance.habit)
+            user = getattr(instance.habit, "user", None)
+            ref_date = (
+                user.get_today() if user and hasattr(user, "get_today") else timezone.localdate()
+            )
+            recalculate_habit_streaks(instance.habit, reference_date=ref_date)
         except Exception:
             pass

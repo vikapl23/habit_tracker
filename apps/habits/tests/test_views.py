@@ -567,3 +567,71 @@ def test_postman_collection_contains_weekday_habit():
     habits_folder = next(item for item in data["item"] if item["name"] == "2. Habits")
     request_names = [r["name"] for r in habits_folder["item"]]
     assert "Create weekday-only habit" in request_names
+
+
+@pytest.mark.django_db
+def test_filter_habits_scheduled_today_invalid_param_returns_400(api_client, user):
+    """Edge Case #5 / Item 2.5: Invalid query param ?scheduled_today=notabool returns 400 Bad Request."""
+    res = api_client.get("/api/v1/habits/?scheduled_today=notabool")
+    assert res.status_code == status.HTTP_400_BAD_REQUEST
+    assert "scheduled_today" in res.data
+
+
+@pytest.mark.django_db
+def test_filter_habits_scheduled_today_non_utc_timezone_near_midnight(api_client, user):
+    """Edge Case #6: User in non-UTC timezone filtering ?scheduled_today=true near midnight adheres to local day."""
+    user.timezone = "Asia/Tokyo"
+    user.save()
+
+    # Habit scheduled only on Saturdays (weekday 5)
+    Habit.objects.create(
+        user=user,
+        name="Saturday Habit",
+        frequency_type="custom",
+        frequency_days=[5],
+    )
+    # At 2026-10-23 20:00:00 UTC:
+    # UTC is Friday 2026-10-23
+    # Tokyo is Saturday 2026-10-24 05:00:00
+    with freeze_time("2026-10-23 20:00:00"):
+        res = api_client.get("/api/v1/habits/?scheduled_today=true")
+        assert res.status_code == status.HTTP_200_OK
+        assert res.data["count"] == 1
+        assert res.data["results"][0]["name"] == "Saturday Habit"
+
+
+@pytest.mark.django_db
+def test_filter_habits_scheduled_today_executes_in_two_queries(
+    api_client, user, django_assert_num_queries
+):
+    """Item 2.1: Filtering by scheduled_today must use ORM filtering in 2 queries, no in-memory table scan."""
+    Habit.objects.create(user=user, name="Daily Habit", frequency_type="daily")
+    Habit.objects.create(
+        user=user, name="Custom Habit", frequency_type="custom", frequency_days=[0, 2, 4]
+    )
+
+    with django_assert_num_queries(2):
+        res = api_client.get("/api/v1/habits/?scheduled_today=true")
+        assert res.status_code == status.HTTP_200_OK
+        assert res.data["count"] == 2
+
+
+@pytest.mark.django_db
+def test_list_habits_past_date_avoids_n_plus_one_queries(
+    api_client, user, django_assert_num_queries
+):
+    """Item 2.6: GET /api/v1/habits/?date=YYYY-MM-DD prefetches check-ins and executes in constant 3 queries."""
+    today = date(2026, 10, 23)
+    past_date = date(2026, 10, 20)
+
+    for i in range(5):
+        h = Habit.objects.create(user=user, name=f"Habit {i}")
+        h.check_ins.create(date=today)
+        h.check_ins.create(date=past_date)
+
+    # 1 count + 1 select habits + 1 prefetch check_ins = 3 queries
+    with django_assert_num_queries(3):
+        res = api_client.get(f"/api/v1/habits/?date={past_date}")
+        assert res.status_code == status.HTTP_200_OK
+        assert res.data["count"] == 5
+        assert len(res.data["results"]) == 5
