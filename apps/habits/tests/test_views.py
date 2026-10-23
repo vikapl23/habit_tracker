@@ -33,6 +33,8 @@ def test_create_habit(api_client):
     assert response.data["color"] == "#10B981"
     assert response.data["emoji"] == "🧘"
     assert response.data["is_archived"] is False
+    assert response.data["current_streak"] == 0
+    assert response.data["longest_streak"] == 0
 
 
 @pytest.mark.django_db
@@ -255,3 +257,83 @@ def test_swagger_docs_accessible(api_client):
     assert response_no_slash.status_code in [status.HTTP_200_OK, status.HTTP_301_MOVED_PERMANENTLY]
     schema_response = api_client.get("/api/schema/")
     assert schema_response.status_code == status.HTTP_200_OK
+
+
+# ---------------------------------------------------------------------------
+# MVP Step 3: Streak Calculation in API responses
+# ---------------------------------------------------------------------------
+from freezegun import freeze_time
+
+@pytest.mark.django_db
+@freeze_time("2026-10-23")
+def test_habit_api_exposes_streaks_empty(api_client, habit):
+    # Habit with no check-ins
+    res = api_client.get(f"/api/v1/habits/{habit.id}/")
+    assert res.status_code == status.HTTP_200_OK
+    assert "current_streak" in res.data
+    assert "longest_streak" in res.data
+    assert res.data["current_streak"] == 0
+    assert res.data["longest_streak"] == 0
+
+    # Also in list habits
+    list_res = api_client.get("/api/v1/habits/")
+    assert list_res.status_code == status.HTTP_200_OK
+    habit_data = next(h for h in list_res.data if h["id"] == habit.id)
+    assert habit_data["current_streak"] == 0
+    assert habit_data["longest_streak"] == 0
+
+
+@pytest.mark.django_db
+@freeze_time("2026-10-23")
+def test_habit_api_check_and_uncheck_updates_streaks(api_client, habit):
+    # 1. Check in yesterday: streak alive ending yesterday
+    yesterday = date(2026, 10, 22)
+    res1 = api_client.post(f"/api/v1/habits/{habit.id}/check/", {"date": str(yesterday)})
+    assert res1.status_code == status.HTTP_201_CREATED
+    assert res1.data["current_streak"] == 1
+    assert res1.data["longest_streak"] == 1
+
+    # Detail API reflects streak=1
+    detail_res1 = api_client.get(f"/api/v1/habits/{habit.id}/")
+    assert detail_res1.data["current_streak"] == 1
+    assert detail_res1.data["longest_streak"] == 1
+
+    # 2. Check in today: consecutive streak reaches 2
+    today = date(2026, 10, 23)
+    res2 = api_client.post(f"/api/v1/habits/{habit.id}/check/", {"date": str(today)})
+    assert res2.status_code == status.HTTP_201_CREATED
+    assert res2.data["current_streak"] == 2
+    assert res2.data["longest_streak"] == 2
+
+    detail_res2 = api_client.get(f"/api/v1/habits/{habit.id}/")
+    assert detail_res2.data["current_streak"] == 2
+    assert detail_res2.data["longest_streak"] == 2
+
+    # 3. Undo check-in for today: streak reverts to yesterday (1), longest was 2
+    uncheck_res = api_client.post(f"/api/v1/habits/{habit.id}/uncheck/", {"date": str(today)})
+    assert uncheck_res.status_code == status.HTTP_200_OK
+    assert uncheck_res.data["current_streak"] == 1
+    assert uncheck_res.data["longest_streak"] == 1
+
+    detail_res3 = api_client.get(f"/api/v1/habits/{habit.id}/")
+    assert detail_res3.data["current_streak"] == 1
+    assert detail_res3.data["longest_streak"] == 1
+
+
+@pytest.mark.django_db
+@freeze_time("2026-10-23")
+def test_habit_api_longest_past_streak_in_response(api_client, habit):
+    # Create a 3-day streak in the past: Oct 10, 11, 12
+    for offset in [13, 12, 11]:
+        d = date(2026, 10, 23) - timedelta(days=offset)
+        habit.check_ins.create(date=d)
+
+    # Check in today only (current streak 1, longest streak 3)
+    today = date(2026, 10, 23)
+    habit.check_ins.create(date=today)
+
+    res = api_client.get(f"/api/v1/habits/{habit.id}/")
+    assert res.status_code == status.HTTP_200_OK
+    assert res.data["current_streak"] == 1
+    assert res.data["longest_streak"] == 3
+

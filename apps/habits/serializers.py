@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from django.utils import timezone
 from .models import Habit, CheckIn, HabitCheckIn
+from .services.streaks import calculate_habit_streaks
 
 class HabitCheckInSerializer(serializers.ModelSerializer):
     class Meta:
@@ -14,6 +15,9 @@ CheckInSerializer = HabitCheckInSerializer
 
 
 class HabitSerializer(serializers.ModelSerializer):
+    current_streak = serializers.SerializerMethodField()
+    longest_streak = serializers.SerializerMethodField()
+
     class Meta:
         model = Habit
         fields = [
@@ -23,10 +27,30 @@ class HabitSerializer(serializers.ModelSerializer):
             'color',
             'emoji',
             'is_archived',
+            'current_streak',
+            'longest_streak',
             'created_at',
             'updated_at',
         ]
-        read_only_fields = ['id', 'is_archived', 'created_at', 'updated_at']
+        read_only_fields = [
+            'id',
+            'is_archived',
+            'current_streak',
+            'longest_streak',
+            'created_at',
+            'updated_at',
+        ]
+
+    def _get_streaks(self, obj):
+        if not hasattr(obj, '_streaks_cache'):
+            obj._streaks_cache = calculate_habit_streaks(obj)
+        return obj._streaks_cache
+
+    def get_current_streak(self, obj) -> int:
+        return self._get_streaks(obj).current_streak
+
+    def get_longest_streak(self, obj) -> int:
+        return self._get_streaks(obj).longest_streak
 
 
 class CheckInActionSerializer(serializers.Serializer):
