@@ -128,6 +128,64 @@ Open your browser at **[http://localhost:5173](http://localhost:5173)**. You can
 
 ---
 
+## 🐳 Run with Docker
+
+You can run the entire stack (PostgreSQL 16, Django Backend API with Gunicorn, and React Frontend served with Nginx) using Docker Compose.
+
+### 1. Prerequisites
+- [Docker Desktop for Windows](https://www.docker.com/products/docker-desktop/) installed and running.
+
+### 2. Environment Configuration
+Ensure your `.env` is configured or copy the defaults from `.env.example`:
+
+```powershell
+copy .env.example .env
+```
+
+### 3. Build and Start the Containers
+
+From the repository root on Windows (PowerShell or CMD):
+
+```powershell
+docker compose up --build
+```
+
+*(To run in detached background mode, add `-d`: `docker compose up --build -d`)*
+
+Docker Compose will:
+1. Start the **PostgreSQL 16** database (`db`) and wait until its healthcheck passes.
+2. Build the **Backend** image (Python 3.12-slim, non-root user `appuser`, `requirements/production.txt`).
+3. Automatically execute database migrations (`python manage.py migrate --noinput`) and collect static assets (`python manage.py collectstatic --noinput`).
+4. Launch **Gunicorn** on port `8000`.
+5. Build the multi-stage **Frontend** image (Node 20 build stage with `VITE_API_URL=http://localhost:8000/api/v1`, served via Nginx with SPA fallback and security headers).
+6. Expose the frontend on port `3000`.
+
+### 4. Which URLs to Open
+
+Once the containers are running, open your browser:
+- **Frontend Web Application (React App):** [http://localhost:3000](http://localhost:3000)
+- **Backend REST API Root:** [http://localhost:8000/api/v1/](http://localhost:8000/api/v1/)
+- **Interactive Swagger Documentation:** [http://localhost:8000/docs/](http://localhost:8000/docs/)
+- **Django Admin Interface:** [http://localhost:8000/admin/](http://localhost:8000/admin/)
+
+### 5. Create a Superuser in Docker (Optional)
+
+To create a superuser for accessing the Django Admin:
+
+```powershell
+docker compose exec backend python manage.py createsuperuser
+```
+
+### 6. Stopping the Containers
+
+```powershell
+docker compose down
+```
+*(To stop and also delete database volumes: `docker compose down -v`)*
+
+
+---
+
 ## 🧪 Running Tests & Linting
 
 ### Running Tests

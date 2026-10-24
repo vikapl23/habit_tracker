@@ -14,7 +14,7 @@ This checklist tracks the ongoing development progress of the Habit Tracker proj
 | **Phase 3** | Habit Scheduling & Frequency | `[x]` Completed | 4 / 4 |
 | **Phase 4** | Statistics & Analytics | `[ ]` Postponed (after deployment) | 0 / 4 |
 | **Phase 5** | Mobile-First React Frontend (Vite) | `[ ]` In Progress | 5 / 6 |
-| **Phase 6** | Docker & PostgreSQL Environment | `[ ]` Not Started | 0 / 4 |
+| **Phase 6** | Docker & PostgreSQL Environment | `[x]` Completed | 4 / 4 |
 | **Phase 7** | Production Deployment (Render.com) | `[ ]` Not Started | 0 / 4 |
 
 ---
@@ -163,16 +163,20 @@ This checklist tracks the ongoing development progress of the Habit Tracker proj
 ---
 
 ### Phase 6: Docker & PostgreSQL Integration
-- [ ] **6.1 Multi-Stage Dockerfile**
-  - [ ] Python 3.12-slim base, non-root user, optimized layer caching.
-- [ ] **6.2 Docker Compose Configuration**
-  - [ ] Define `web` service (Django) and `db` service (PostgreSQL 16).
-  - [ ] Configure named volume for persistent Postgres storage.
-  - [ ] Add database healthcheck to ensure Postgres is ready before Django starts.
-- [ ] **6.3 Entrypoint & Automated Migrations**
-  - [ ] Add entrypoint script executing `python manage.py migrate` and `collectstatic`.
-- [ ] **6.4 Local Verification**
-  - [ ] Confirm end-to-end tests and API functionality inside Docker containers.
+- [x] **6.1 Multi-Stage Dockerfile & Container Setup**
+  - [x] Backend Dockerfile: Python 3.12-slim base, non-root user `appuser`, installs `requirements/production.txt`, runs gunicorn.
+  - [x] Frontend Dockerfile: multi-stage build (Node 20 Alpine, Nginx 1.27 Alpine), `VITE_API_URL` build arg, SPA fallback, security headers.
+  - [x] `.dockerignore` for root backend and frontend.
+- [x] **6.2 Docker Compose Configuration**
+  - [x] Define `backend`, `frontend`, and `db` (PostgreSQL 16) services.
+  - [x] Configure named volume `postgres_data` for persistent Postgres storage.
+  - [x] Add database healthcheck (`pg_isready`) and configure backend `depends_on` service_healthy.
+  - [x] Configure `.env.example` and `.env` with compose hosts (`ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`).
+- [x] **6.3 Entrypoint & Automated Migrations**
+  - [x] Backend startup runs `python manage.py migrate --noinput` and `python manage.py collectstatic --noinput` before launching Gunicorn.
+- [x] **6.4 CI Pipeline & Verification**
+  - [x] Add GitHub Actions `docker` job to build both backend and frontend images.
+  - [x] Document Windows execution steps and URLs in README.md.
 
 ---
 
