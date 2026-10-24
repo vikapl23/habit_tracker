@@ -142,6 +142,9 @@ Ensure your `.env` is configured or copy the defaults from `.env.example`:
 copy .env.example .env
 ```
 
+> [!NOTE]
+> `SECRET_KEY` is read directly from `.env` in `docker-compose.yml` (no insecure default fallback). Ensure `SECRET_KEY` is defined in `.env` before starting Docker Compose.
+
 ### 3. Build and Start the Containers
 
 From the repository root on Windows (PowerShell or CMD):
@@ -155,10 +158,10 @@ docker compose up --build
 Docker Compose will:
 1. Start the **PostgreSQL 16** database (`db`) and wait until its healthcheck passes.
 2. Build the **Backend** image (Python 3.12-slim, non-root user `appuser`, `requirements/production.txt`).
-3. Automatically execute database migrations (`python manage.py migrate --noinput`) and collect static assets (`python manage.py collectstatic --noinput`).
-4. Launch **Gunicorn** on port `8000`.
+3. Execute the image entrypoint (`scripts/entrypoint.sh`), which automatically runs database migrations (`python manage.py migrate --noinput`), collects static assets (`python manage.py collectstatic --noinput`), and launches **Gunicorn** on port `8000`.
+4. Wait for the backend healthcheck (`/health/`) to become healthy.
 5. Build the multi-stage **Frontend** image (Node 20 build stage with `VITE_API_URL=http://localhost:8000/api/v1`, served via Nginx with SPA fallback and security headers).
-6. Expose the frontend on port `3000`.
+6. Start the frontend on port `3000` once the backend is healthy.
 
 ### 4. Which URLs to Open
 

@@ -281,6 +281,10 @@ def test_storages_configured_in_base_settings():
     assert hasattr(base_settings, "STORAGES")
     assert "default" in base_settings.STORAGES
     assert "staticfiles" in base_settings.STORAGES
+    assert (
+        base_settings.STORAGES["staticfiles"]["BACKEND"]
+        == "whitenoise.storage.CompressedManifestStaticFilesStorage"
+    )
     assert not hasattr(base_settings, "STATICFILES_STORAGE")
 
 
@@ -299,3 +303,46 @@ def test_production_uses_storages_instead_of_staticfiles_storage(monkeypatch):
     )
     assert "default" in prod_settings.STORAGES
     assert not hasattr(prod_settings, "STATICFILES_STORAGE")
+
+
+def test_production_configurable_security_settings_defaults(monkeypatch):
+    prod_settings = load_production_settings(
+        monkeypatch,
+        {
+            "SECRET_KEY": "valid-production-secret-key-for-test-12345",
+            "ALLOWED_HOSTS": "example.com",
+        },
+    )
+    assert prod_settings.SECURE_SSL_REDIRECT is True
+    assert prod_settings.SESSION_COOKIE_SECURE is True
+    assert prod_settings.CSRF_COOKIE_SECURE is True
+    assert prod_settings.SECURE_HSTS_SECONDS == 31536000
+    assert prod_settings.SECURE_HSTS_INCLUDE_SUBDOMAINS is True
+    assert prod_settings.SECURE_HSTS_PRELOAD is True
+    assert prod_settings.CORS_REQUIRE_HTTPS is True
+
+
+def test_production_configurable_security_settings_relaxation(monkeypatch):
+    prod_settings = load_production_settings(
+        monkeypatch,
+        {
+            "SECRET_KEY": "valid-production-secret-key-for-test-12345",
+            "ALLOWED_HOSTS": "example.com",
+            "CORS_ALLOWED_ORIGINS": "http://localhost:3000",
+            "CORS_REQUIRE_HTTPS": "False",
+            "SECURE_SSL_REDIRECT": "False",
+            "SESSION_COOKIE_SECURE": "False",
+            "CSRF_COOKIE_SECURE": "False",
+            "SECURE_HSTS_SECONDS": "0",
+            "SECURE_HSTS_INCLUDE_SUBDOMAINS": "False",
+            "SECURE_HSTS_PRELOAD": "False",
+        },
+    )
+    assert prod_settings.SECURE_SSL_REDIRECT is False
+    assert prod_settings.SESSION_COOKIE_SECURE is False
+    assert prod_settings.CSRF_COOKIE_SECURE is False
+    assert prod_settings.SECURE_HSTS_SECONDS == 0
+    assert prod_settings.SECURE_HSTS_INCLUDE_SUBDOMAINS is False
+    assert prod_settings.SECURE_HSTS_PRELOAD is False
+    assert prod_settings.CORS_REQUIRE_HTTPS is False
+    assert prod_settings.CORS_ALLOWED_ORIGINS == ["http://localhost:3000"]

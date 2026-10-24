@@ -111,3 +111,48 @@ Two alternative architectures were evaluated:
 - **Trade-offs**:
   - The refresh token remains in `localStorage`. If an attacker bypasses the CSP and executes arbitrary script, the refresh token could still be read from `localStorage`. Defense relies on CSP and dependency auditing.
 
+## ADR 005: Production-Parity Docker Setup, WhiteNoise, and Standalone Container Entrypoint
+
+### Date
+2026-10-24
+
+### Context & Problem
+Review of the initial Phase 6 Docker Compose setup revealed four issues:
+1. `docker-compose.yml` ran with `DJANGO_SETTINGS_MODULE=config.settings.base` because `config.settings.production` enforced strict HTTPS rules (`SECURE_SSL_REDIRECT`, HTTPS cookies, HSTS, and https:// origin validation on CORS). Under `config.settings.base`, WhiteNoise was not enabled and static files (e.g. `/static/admin/css/base.css`) returned 404 in Docker (breaking Django admin styling). Furthermore, running `base` settings failed to test production-like behavior.
+2. Database migration, static collection, and server boot were embedded as an inline command in `docker-compose.yml` rather than packaged inside the Docker container image. As a result, deploying the container directly to platforms like Render required duplicate configuration or external orchestration.
+3. `docker-compose.yml` hardcoded a fallback value for `SECRET_KEY`, potentially masking missing secrets and risking insecure production secrets.
+4. The frontend container started immediately without verifying whether backend services were initialized and responsive, leading to startup race conditions.
+
+### Decision
+1. **WhiteNoise in Base Settings**:
+   - Promoted `whitenoise.middleware.WhiteNoiseMiddleware` into `config/settings/base.py` `MIDDLEWARE` directly following `SecurityMiddleware`.
+   - Set `STORAGES["staticfiles"]["BACKEND"] = "whitenoise.storage.CompressedManifestStaticFilesStorage"` in base settings so all environments (local, Docker, and production) serve static files consistently.
+2. **Configurable Production HTTPS Settings**:
+   - In `config/settings/production.py`, made HTTPS enforcement flags configurable via environment variables while defaulting to secure values (`True` / 1 year HSTS):
+     - `SECURE_SSL_REDIRECT` (default `True`)
+     - `SESSION_COOKIE_SECURE` (default `True`)
+     - `CSRF_COOKIE_SECURE` (default `True`)
+     - `SECURE_HSTS_SECONDS` (default `31536000`)
+     - `SECURE_HSTS_INCLUDE_SUBDOMAINS` (default `True`)
+     - `SECURE_HSTS_PRELOAD` (default `True`)
+     - `CORS_REQUIRE_HTTPS` (default `True`)
+   - `docker-compose.yml` now runs `DJANGO_SETTINGS_MODULE=config.settings.production` with these flags relaxed for local HTTP testing.
+3. **Container Entrypoint Script (`scripts/entrypoint.sh`)**:
+   - Added `scripts/entrypoint.sh` executing `python manage.py migrate --noinput` and `python manage.py collectstatic --noinput` prior to executing the runtime command (`exec "$@"`).
+   - Configured `ENTRYPOINT ["/app/scripts/entrypoint.sh"]` in `Dockerfile` and removed the inline composite command from `docker-compose.yml`.
+4. **Mandatory Secret Key in Docker**:
+   - Removed the hardcoded fallback `SECRET_KEY` in `docker-compose.yml`. It now reads directly from `.env` (`${SECRET_KEY}`), documented in `.env.example` and `README.md`.
+5. **Backend Healthcheck & Dependency Orchestration**:
+   - Implemented `/health/` endpoint in Django (`config/views.py` returning `{"status": "ok"}`).
+   - Added backend Docker healthcheck querying `/health/` via `curl`.
+   - Updated frontend service in `docker-compose.yml` with `depends_on: { backend: { condition: service_healthy } }`.
+
+### Trade-offs & Implications
+- **Advantages**:
+  - Full production parity in Docker Compose: testing catches settings and static asset delivery discrepancies locally.
+  - The backend Docker image is fully self-contained and ready for deployment to Render or cloud orchestrators without extra compose files.
+  - No secret keys are hardcoded in repository files.
+  - Frontend waits reliably for backend schema migrations and gunicorn startup before serving traffic.
+- **Trade-offs**:
+  - Relaxing HTTPS flags in `docker-compose.yml` requires environment variables; in staging or production, these variables must remain unset or set to `True`.
+

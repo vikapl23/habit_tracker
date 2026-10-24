@@ -34,30 +34,25 @@ if not CORS_ALLOWED_ORIGINS or "*" in CORS_ALLOWED_ORIGINS:
         "CORS_ALLOWED_ORIGINS must be explicitly defined without wildcards in production."
     )
 
-for origin in CORS_ALLOWED_ORIGINS:
-    if origin.startswith("http://") or not origin.startswith("https://"):
-        raise ImproperlyConfigured(
-            f"CORS_ALLOWED_ORIGINS in production must use https:// schemes: {origin}"
-        )
+# Allow relaxing HTTPS-only CORS check (default: True)
+CORS_REQUIRE_HTTPS = env.bool("CORS_REQUIRE_HTTPS", default=True)
+
+if CORS_REQUIRE_HTTPS:
+    for origin in CORS_ALLOWED_ORIGINS:
+        if origin.startswith("http://") or not origin.startswith("https://"):
+            raise ImproperlyConfigured(
+                f"CORS_ALLOWED_ORIGINS in production must use https:// schemes: {origin}"
+            )
 
 
-# Production security settings
+# Production security settings (configurable via env, default secure)
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-SESSION_COOKIE_SECURE = True
-CSRF_COOKIE_SECURE = True
-SECURE_SSL_REDIRECT = True
-SECURE_HSTS_SECONDS = 31536000
-SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-SECURE_HSTS_PRELOAD = True
-
-# Static files with WhiteNoise
-MIDDLEWARE.insert(1, "whitenoise.middleware.WhiteNoiseMiddleware")
-STORAGES = {
-    **STORAGES,
-    "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
-    },
-}
+SESSION_COOKIE_SECURE = env.bool("SESSION_COOKIE_SECURE", default=True)
+CSRF_COOKIE_SECURE = env.bool("CSRF_COOKIE_SECURE", default=True)
+SECURE_SSL_REDIRECT = env.bool("SECURE_SSL_REDIRECT", default=True)
+SECURE_HSTS_SECONDS = env.int("SECURE_HSTS_SECONDS", default=31536000)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = env.bool("SECURE_HSTS_INCLUDE_SUBDOMAINS", default=True)
+SECURE_HSTS_PRELOAD = env.bool("SECURE_HSTS_PRELOAD", default=True)
 
 AUTH_THROTTLE_RATE = env("AUTH_THROTTLE_RATE", default="5/minute")
 REST_FRAMEWORK = {

@@ -22,10 +22,12 @@ COPY . /app/
 # Create a non-root user and set permissions
 RUN useradd -m -u 1000 appuser \
     && mkdir -p /app/staticfiles \
+    && chmod +x /app/scripts/entrypoint.sh \
     && chown -R appuser:appuser /app
 
 USER appuser
 
 EXPOSE 8000
 
+ENTRYPOINT ["/app/scripts/entrypoint.sh"]
 CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "3", "config.wsgi:application"]
