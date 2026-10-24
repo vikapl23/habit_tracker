@@ -35,7 +35,7 @@ export const Toast: React.FC<ToastProps> = ({ toast, onDismiss, duration = 4000 
     <div
       role="alert"
       aria-live="assertive"
-      className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-full max-w-[390px] px-4 pointer-events-none"
+      className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom,0px))] left-1/2 -translate-x-1/2 z-50 w-full max-w-[390px] px-4 pointer-events-none"
     >
       <div className="pointer-events-auto flex items-center justify-between gap-3 p-3.5 bg-slate-900 text-white rounded-xl shadow-lg border border-slate-800 transition-all animate-in fade-in slide-in-from-bottom-2">
         <div className="flex items-center gap-2.5 min-w-0 flex-1">

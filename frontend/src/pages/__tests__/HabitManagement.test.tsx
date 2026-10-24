@@ -136,10 +136,10 @@ describe('Habit Management (Step 5.4)', () => {
         frequency_type: 'daily',
         frequency_days: [],
       });
+      expect(screen.queryByRole('dialog', { name: /new habit/i })).not.toBeInTheDocument();
     });
 
-    // Form closes and new habit appears on dashboard
-    expect(screen.queryByRole('dialog', { name: /new habit/i })).not.toBeInTheDocument();
+    // New habit appears on dashboard
     expect(await screen.findByText('Drink 2L Water')).toBeInTheDocument();
   });
 
@@ -279,10 +279,8 @@ describe('Habit Management (Step 5.4)', () => {
 
     await waitFor(() => {
       expect(deleteSpy).toHaveBeenCalledWith(10);
+      expect(screen.queryByText('Read Books')).not.toBeInTheDocument();
     });
-
-    // Habit is removed from list
-    expect(screen.queryByText('Read Books')).not.toBeInTheDocument();
   });
 
   it('archives a habit from menu and updates list without reload', async () => {
@@ -305,9 +303,8 @@ describe('Habit Management (Step 5.4)', () => {
 
     await waitFor(() => {
       expect(archiveSpy).toHaveBeenCalledWith(10);
+      expect(screen.queryByText('Read Books')).not.toBeInTheDocument();
     });
-
-    expect(screen.queryByText('Read Books')).not.toBeInTheDocument();
   });
 
   it('displays validation errors from backend under the respective form fields', async () => {
@@ -379,8 +376,7 @@ describe('Habit Management (Step 5.4)', () => {
   it('scrolls first validation error into view on submit error', async () => {
     const user = userEvent.setup();
     vi.spyOn(habitsApi, 'getAllHabits').mockResolvedValue([]);
-    const scrollIntoViewMock = vi.fn();
-    window.HTMLElement.prototype.scrollIntoView = scrollIntoViewMock;
+    const scrollSpy = vi.spyOn(window.HTMLElement.prototype, 'scrollIntoView').mockImplementation(() => {});
 
     renderDashboard();
 
@@ -398,7 +394,7 @@ describe('Habit Management (Step 5.4)', () => {
     await user.click(screen.getByRole('button', { name: /create habit/i }));
 
     await waitFor(() => {
-      expect(scrollIntoViewMock).toHaveBeenCalled();
+      expect(scrollSpy).toHaveBeenCalled();
     });
   });
 
@@ -431,9 +427,9 @@ describe('Habit Management (Step 5.4)', () => {
 
     await waitFor(() => {
       expect(unarchiveSpy).toHaveBeenCalledWith(20);
+      expect(screen.queryByText('Old Habit')).not.toBeInTheDocument();
     });
 
-    expect(screen.queryByText('Old Habit')).not.toBeInTheDocument();
     expect(await screen.findByText(/no archived habits/i)).toBeInTheDocument();
   });
 

@@ -249,7 +249,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onCreateHabit }) =
       {/* Mobile-first Container (responsive max-w-[420px], no horizontal scroll at 320px) */}
       <div className="w-full max-w-[420px] min-h-screen flex flex-col bg-white shadow-sm border-x border-slate-100 overflow-x-hidden">
         {/* Top App Header */}
-        <header className="px-5 py-4 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white/95 backdrop-blur z-10">
+        <header className="px-5 py-4 pt-[calc(1rem+env(safe-area-inset-top,0px))] border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white/95 backdrop-blur z-10">
           <div className="flex items-center gap-2 min-w-0">
             <span className="text-2xl select-none shrink-0" role="img" aria-label="Target">🎯</span>
             <div className="min-w-0">
@@ -262,7 +262,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onCreateHabit }) =
         </header>
 
         {/* Main Content Area */}
-        <main className="flex-1 p-4 sm:p-5 pb-28 sm:pb-8 space-y-5">
+        <main className="flex-1 p-4 sm:p-5 pb-28 space-y-5">
           {isLoading ? (
             <DashboardSkeleton />
           ) : fetchError ? (
@@ -454,7 +454,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onCreateHabit }) =
         </main>
 
         {/* Floating Action Button (FAB) for New Habit - positioned above bottom navigation */}
-        <div className="fixed bottom-20 right-6 z-20 sm:static sm:bottom-auto sm:right-auto sm:p-5 sm:pt-0">
+        <div className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom,0px))] right-[max(1.5rem,calc(50vw-210px+1.5rem))] z-20">
           <button
             type="button"
             onClick={handleCreateHabitClick}

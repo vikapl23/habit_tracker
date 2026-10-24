@@ -214,13 +214,13 @@ export const HabitDetailPage: React.FC = () => {
 
       <div className="w-full max-w-[420px] min-h-screen flex flex-col bg-white shadow-sm border-x border-slate-100 overflow-x-hidden relative">
         {/* Header */}
-        <header className="px-5 py-4 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white/95 backdrop-blur z-10">
+        <header className="px-5 py-4 pt-[calc(1rem+env(safe-area-inset-top,0px))] border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white/95 backdrop-blur z-10">
           <div className="flex items-center gap-3 min-w-0">
             <button
               type="button"
               onClick={() => navigate('/')}
               aria-label="Back to dashboard"
-              className="p-2 -ml-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 active:bg-slate-200 transition"
+              className="min-w-[44px] min-h-[44px] -ml-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 active:bg-slate-200 transition flex items-center justify-center"
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
@@ -236,7 +236,7 @@ export const HabitDetailPage: React.FC = () => {
         </header>
 
         {/* Content */}
-        <main className="flex-1 p-4 sm:p-5 pb-28 sm:pb-8 space-y-5">
+        <main className="flex-1 p-4 sm:p-5 pb-28 space-y-5">
           {isLoadingHabit ? (
             <div className="space-y-4 animate-pulse">
               <div className="h-24 bg-slate-100 rounded-2xl" />
@@ -342,7 +342,7 @@ export const HabitDetailPage: React.FC = () => {
                       type="button"
                       onClick={handlePrevMonth}
                       aria-label="Previous month"
-                      className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 active:bg-slate-200 transition"
+                      className="min-w-[44px] min-h-[44px] rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 active:bg-slate-200 transition flex items-center justify-center"
                     >
                       <ChevronLeft className="w-5 h-5" />
                     </button>
@@ -350,7 +350,7 @@ export const HabitDetailPage: React.FC = () => {
                       type="button"
                       onClick={handleNextMonth}
                       aria-label="Next month"
-                      className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 active:bg-slate-200 transition"
+                      className="min-w-[44px] min-h-[44px] rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 active:bg-slate-200 transition flex items-center justify-center"
                     >
                       <ChevronRight className="w-5 h-5" />
                     </button>
@@ -423,7 +423,7 @@ export const HabitDetailPage: React.FC = () => {
                         }`}
                         aria-pressed={isChecked}
                         style={cellStyle}
-                        className={`aspect-square min-h-[38px] flex flex-col items-center justify-center rounded-xl text-xs font-semibold transition-all select-none relative focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                        className={`aspect-square min-h-[44px] flex flex-col items-center justify-center rounded-xl text-xs font-semibold transition-all select-none relative focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                           isFuture
                             ? 'cursor-not-allowed opacity-30 text-slate-300 bg-slate-50/50'
                             : isChecked

@@ -111,7 +111,7 @@ export const ProfilePage: React.FC = () => {
 
       <div className="w-full max-w-[420px] min-h-screen flex flex-col bg-white shadow-sm border-x border-slate-100 overflow-x-hidden relative">
         {/* Header */}
-        <header className="px-5 py-4 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white/95 backdrop-blur z-10">
+        <header className="px-5 py-4 pt-[calc(1rem+env(safe-area-inset-top,0px))] border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white/95 backdrop-blur z-10">
           <div className="flex items-center gap-2">
             <User className="w-5 h-5 text-blue-600" />
             <h1 className="text-base font-bold text-slate-900 leading-tight">Profile & Settings</h1>
@@ -119,7 +119,7 @@ export const ProfilePage: React.FC = () => {
         </header>
 
         {/* Content */}
-        <main className="flex-1 p-4 sm:p-5 pb-28 sm:pb-8 space-y-6">
+        <main className="flex-1 p-4 sm:p-5 pb-28 space-y-6">
           {/* User Info Card */}
           <section aria-labelledby="account-details-heading" className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-sm space-y-4">
             <div className="flex items-center gap-3">
@@ -176,7 +176,7 @@ export const ProfilePage: React.FC = () => {
                     setCustomTimezone(e.target.value);
                     setSaveSuccess(false);
                   }}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 text-base sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                 >
                   {timezoneOptions.map((tz) => (
                     <option key={tz} value={tz}>

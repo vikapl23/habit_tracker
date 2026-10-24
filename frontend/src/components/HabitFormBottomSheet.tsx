@@ -220,6 +220,15 @@ export const HabitFormBottomSheet: React.FC<HabitFormBottomSheetProps> = ({
     }
   };
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   return (
@@ -231,7 +240,7 @@ export const HabitFormBottomSheet: React.FC<HabitFormBottomSheetProps> = ({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-[420px] mx-auto bg-white rounded-t-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden animate-in slide-in-from-bottom duration-300"
+        className="w-full max-w-[420px] mx-auto bg-white rounded-t-3xl shadow-2xl flex flex-col max-h-[90dvh] max-h-[90vh] overflow-hidden animate-in slide-in-from-bottom duration-300"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Drag handle header for swipe affordance */}
@@ -249,7 +258,7 @@ export const HabitFormBottomSheet: React.FC<HabitFormBottomSheetProps> = ({
               type="button"
               onClick={onClose}
               aria-label="Close bottom sheet"
-              className="p-1 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
+              className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
             >
               <X className="w-5 h-5" />
             </button>
@@ -289,7 +298,7 @@ export const HabitFormBottomSheet: React.FC<HabitFormBottomSheetProps> = ({
                 }
               }}
               placeholder="e.g. Read 20 pages"
-              className={`w-full h-11 px-3.5 rounded-xl border text-sm text-slate-900 bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition ${
+              className={`w-full h-11 px-3.5 rounded-xl border text-base sm:text-sm text-slate-900 bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition ${
                 fieldErrors.name ? 'border-red-500 bg-red-50/20' : 'border-slate-200'
               }`}
             />
@@ -311,7 +320,7 @@ export const HabitFormBottomSheet: React.FC<HabitFormBottomSheetProps> = ({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Why this habit matters..."
-              className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-sm text-slate-900 bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition resize-none"
+              className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-base sm:text-sm text-slate-900 bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition resize-none"
             />
             {fieldErrors.description && (
               <p data-form-error="true" className="text-[11px] font-medium text-red-600 animate-in fade-in">
@@ -344,11 +353,15 @@ export const HabitFormBottomSheet: React.FC<HabitFormBottomSheetProps> = ({
                     }}
                     aria-label={`Select color ${c}`}
                     aria-pressed={isSelected}
-                    className={`w-8 h-8 rounded-full transition-transform active:scale-90 flex items-center justify-center ${
-                      isSelected ? 'ring-2 ring-offset-2 ring-slate-800 scale-110 shadow-sm' : ''
-                    }`}
-                    style={{ backgroundColor: c }}
-                  />
+                    className="min-w-[44px] min-h-[44px] flex items-center justify-center p-1"
+                  >
+                    <span
+                      className={`w-8 h-8 rounded-full transition-transform active:scale-90 flex items-center justify-center ${
+                        isSelected ? 'ring-2 ring-offset-2 ring-slate-800 scale-110 shadow-sm' : ''
+                      }`}
+                      style={{ backgroundColor: c }}
+                    />
+                  </button>
                 );
               })}
             </div>
@@ -383,9 +396,9 @@ export const HabitFormBottomSheet: React.FC<HabitFormBottomSheetProps> = ({
                     }}
                     aria-label={`Select emoji ${em}`}
                     aria-pressed={isSelected}
-                    className={`w-9 h-9 text-lg rounded-lg flex items-center justify-center transition-all ${
+                    className={`min-w-[44px] min-h-[44px] text-lg rounded-xl flex items-center justify-center transition-all ${
                       isSelected
-                        ? 'bg-white shadow-sm ring-2 ring-blue-500 scale-110'
+                        ? 'bg-white shadow-sm ring-2 ring-blue-500 scale-105'
                         : 'hover:bg-slate-200/60 active:scale-95'
                     }`}
                   >
@@ -496,7 +509,7 @@ export const HabitFormBottomSheet: React.FC<HabitFormBottomSheetProps> = ({
           </div>
 
           {/* Bottom Actions */}
-          <div className="pt-3 pb-2 sticky bottom-0 bg-white border-t border-slate-100 flex gap-2.5">
+          <div className="pt-3 pb-[calc(0.5rem+env(safe-area-inset-bottom,0px))] sticky bottom-0 bg-white border-t border-slate-100 flex gap-2.5">
             <button
               type="button"
               onClick={onClose}

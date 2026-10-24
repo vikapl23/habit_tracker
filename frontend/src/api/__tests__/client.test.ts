@@ -63,7 +63,20 @@ describe('API Client and Auth / Token Refresh logic', () => {
     setTokens({ access: 'expired-access-token', refresh: 'old-refresh-token' });
 
     let callCount = 0;
+    const recordedCalls: Array<{ url: string; authHeader: string | null; body: any }> = [];
+
     const mockFetch = vi.fn().mockImplementation(async (url: string, init: any) => {
+      const authHeader = init?.headers?.get ? init.headers.get('Authorization') : init?.headers?.['Authorization'] || null;
+      let parsedBody = null;
+      if (init?.body) {
+        try {
+          parsedBody = JSON.parse(init.body);
+        } catch {
+          parsedBody = init.body;
+        }
+      }
+      recordedCalls.push({ url, authHeader, body: parsedBody });
+
       if (url.includes('/test-resource/')) {
         callCount++;
         if (callCount === 1) {
@@ -76,7 +89,6 @@ describe('API Client and Auth / Token Refresh logic', () => {
           };
         }
         // Second attempt (retry) succeeds with new token
-        expect(init.headers.get('Authorization')).toBe('Bearer new-access-token-123');
         return {
           ok: true,
           status: 200,
@@ -86,7 +98,6 @@ describe('API Client and Auth / Token Refresh logic', () => {
       }
 
       if (url.includes('/auth/token/refresh/')) {
-        expect(JSON.parse(init.body)).toEqual({ refresh: 'old-refresh-token' });
         return {
           ok: true,
           status: 200,
@@ -106,6 +117,14 @@ describe('API Client and Auth / Token Refresh logic', () => {
 
     expect(result).toEqual({ data: 'protected-data' });
     expect(callCount).toBe(2);
+
+    // Assert fetch call arguments outside mockFetch callback
+    const refreshCall = recordedCalls.find((c) => c.url.includes('/auth/token/refresh/'));
+    expect(refreshCall?.body).toEqual({ refresh: 'old-refresh-token' });
+
+    const retryCall = recordedCalls.filter((c) => c.url.includes('/test-resource/'))[1];
+    expect(retryCall?.authHeader).toBe('Bearer new-access-token-123');
+
     // Both new tokens must be stored in localStorage
     expect(getAccessToken()).toBe('new-access-token-123');
     expect(getRefreshToken()).toBe('new-refresh-token-456');
@@ -118,6 +137,7 @@ describe('API Client and Auth / Token Refresh logic', () => {
     let resource1Calls = 0;
     let resource2Calls = 0;
     let resource3Calls = 0;
+    const recordedRetryAuths: string[] = [];
 
     const mockFetch = vi.fn().mockImplementation(async (url: string, init: any) => {
       if (url.includes('/auth/token/refresh/')) {
@@ -145,7 +165,8 @@ describe('API Client and Auth / Token Refresh logic', () => {
             json: async () => ({ detail: 'Token expired' }),
           };
         }
-        expect(init.headers.get('Authorization')).toBe('Bearer refreshed-access-token');
+        const auth = init?.headers?.get ? init.headers.get('Authorization') : init?.headers?.['Authorization'];
+        recordedRetryAuths.push(auth);
         return {
           ok: true,
           status: 200,
@@ -164,7 +185,8 @@ describe('API Client and Auth / Token Refresh logic', () => {
             json: async () => ({ detail: 'Token expired' }),
           };
         }
-        expect(init.headers.get('Authorization')).toBe('Bearer refreshed-access-token');
+        const auth = init?.headers?.get ? init.headers.get('Authorization') : init?.headers?.['Authorization'];
+        recordedRetryAuths.push(auth);
         return {
           ok: true,
           status: 200,
@@ -183,7 +205,8 @@ describe('API Client and Auth / Token Refresh logic', () => {
             json: async () => ({ detail: 'Token expired' }),
           };
         }
-        expect(init.headers.get('Authorization')).toBe('Bearer refreshed-access-token');
+        const auth = init?.headers?.get ? init.headers.get('Authorization') : init?.headers?.['Authorization'];
+        recordedRetryAuths.push(auth);
         return {
           ok: true,
           status: 200,
@@ -206,6 +229,13 @@ describe('API Client and Auth / Token Refresh logic', () => {
     expect(res1).toEqual({ id: 1, name: 'Res1' });
     expect(res2).toEqual({ id: 2, name: 'Res2' });
     expect(res3).toEqual({ id: 3, name: 'Res3' });
+
+    // Assert that retry requests used the new refreshed access token outside mockFetch
+    expect(recordedRetryAuths).toEqual([
+      'Bearer refreshed-access-token',
+      'Bearer refreshed-access-token',
+      'Bearer refreshed-access-token',
+    ]);
 
     // CRITICAL: Exactly ONE refresh call made despite 3 parallel 401s
     expect(refreshCallCount).toBe(1);

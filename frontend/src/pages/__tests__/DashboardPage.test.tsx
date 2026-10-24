@@ -159,7 +159,7 @@ describe('DashboardPage Mobile View', () => {
       status: 'created',
       habit_id: 1,
       date: '2026-10-23',
-      current_streak: 6,
+      current_streak: 9,
       longest_streak: 12,
     });
 
@@ -177,7 +177,8 @@ describe('DashboardPage Mobile View', () => {
       expect(checkSpy).toHaveBeenCalledWith(1);
       expect(habitCard).toHaveAttribute('aria-pressed', 'true');
     });
-    expect(screen.getByText(/🔥 6/)).toBeInTheDocument();
+    // Server streak (9) applied, verifying it doesn't only stay on the optimistic 5+1=6
+    expect(await screen.findByText(/🔥 9/)).toBeInTheDocument();
 
     // Check progress updated: 1 of 1 done today
     expect(screen.getByText('1 of 1 done today')).toBeInTheDocument();
@@ -303,9 +304,10 @@ describe('DashboardPage Mobile View', () => {
     expect(screen.getByRole('link', { name: /archive/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /profile/i })).toBeInTheDocument();
 
-    // Check that FAB is rendered with bottom-20 (above the bottom navigation bar)
+    // Check that FAB is rendered and positioned above bottom navigation bar
     const fab = screen.getByRole('button', { name: /new habit/i });
-    expect(fab.parentElement).toHaveClass('bottom-20');
+    expect(fab).toBeInTheDocument();
+    expect(fab.parentElement?.className).toContain('bottom-[');
   });
 
   it('tapping on habit name/emoji triggers view details rather than toggling check-in', async () => {

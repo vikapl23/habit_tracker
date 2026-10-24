@@ -134,13 +134,17 @@ export const HabitCard: React.FC<HabitCardProps> = ({
           disabled={disabled}
           aria-label={`Toggle ${habit.name}, currently ${isChecked ? 'completed' : 'incomplete'}`}
           aria-pressed={isChecked}
-          className={`w-7 h-7 rounded-full flex items-center justify-center transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
-            isChecked
-              ? 'bg-emerald-500 text-white shadow-sm ring-2 ring-emerald-500/20'
-              : 'border-2 border-slate-300 hover:border-slate-400 bg-white'
-          }`}
+          className="min-w-[44px] min-h-[44px] -m-2 flex items-center justify-center rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
         >
-          {isChecked && <Check className="w-4 h-4 stroke-[2.5]" />}
+          <div
+            className={`w-7 h-7 rounded-full flex items-center justify-center transition-all duration-200 pointer-events-none ${
+              isChecked
+                ? 'bg-emerald-500 text-white shadow-sm ring-2 ring-emerald-500/20'
+                : 'border-2 border-slate-300 hover:border-slate-400 bg-white'
+            }`}
+          >
+            {isChecked && <Check className="w-4 h-4 stroke-[2.5]" />}
+          </div>
         </button>
 
         {(onEdit || onArchive || onDelete) && (
@@ -151,7 +155,7 @@ export const HabitCard: React.FC<HabitCardProps> = ({
               aria-label={`More options for ${habit.name}`}
               aria-haspopup="menu"
               aria-expanded={isMenuOpen}
-              className="min-h-[44px] min-w-[36px] flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition"
+              className="min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition"
             >
               <MoreHorizontal className="w-5 h-5" />
             </button>

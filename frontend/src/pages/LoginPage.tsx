@@ -123,7 +123,7 @@ export const LoginPage: React.FC = () => {
                 placeholder="you@example.com"
                 aria-invalid={!!fieldErrors.email}
                 aria-describedby={fieldErrors.email ? 'email-error' : undefined}
-                className={`w-full rounded-xl border px-3.5 py-2.5 text-sm outline-none transition duration-150 ${
+                className={`w-full rounded-xl border px-3.5 py-2.5 text-base sm:text-sm outline-none transition duration-150 ${
                   fieldErrors.email
                     ? 'border-red-400 focus:border-red-500 focus:ring-2 focus:ring-red-100 bg-red-50/20'
                     : 'border-slate-300 focus:border-blue-600 focus:ring-2 focus:ring-blue-100'
@@ -153,7 +153,7 @@ export const LoginPage: React.FC = () => {
                 placeholder="••••••••"
                 aria-invalid={!!fieldErrors.password}
                 aria-describedby={fieldErrors.password ? 'password-error' : undefined}
-                className={`w-full rounded-xl border px-3.5 py-2.5 text-sm outline-none transition duration-150 ${
+                className={`w-full rounded-xl border px-3.5 py-2.5 text-base sm:text-sm outline-none transition duration-150 ${
                   fieldErrors.password
                     ? 'border-red-400 focus:border-red-500 focus:ring-2 focus:ring-red-100 bg-red-50/20'
                     : 'border-slate-300 focus:border-blue-600 focus:ring-2 focus:ring-blue-100'

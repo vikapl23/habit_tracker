@@ -16,6 +16,22 @@ export const DeleteConfirmDialog: React.FC<DeleteConfirmDialogProps> = ({
   onConfirm,
   onCancel,
 }) => {
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !isDeleting) {
+        onCancel();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen, isDeleting, onCancel]);
+
   if (!isOpen) return null;
 
   return (
@@ -25,7 +41,9 @@ export const DeleteConfirmDialog: React.FC<DeleteConfirmDialogProps> = ({
       aria-labelledby="delete-dialog-title"
       aria-describedby="delete-dialog-desc"
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200"
-      onClick={onCancel}
+      onClick={() => {
+        if (!isDeleting) onCancel();
+      }}
     >
       <div
         className="w-full max-w-[340px] rounded-2xl bg-white p-5 shadow-xl border border-slate-100 space-y-4"

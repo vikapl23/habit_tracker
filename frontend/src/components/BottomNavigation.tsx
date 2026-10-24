@@ -24,7 +24,7 @@ export const BottomNavigation: React.FC = () => {
   return (
     <nav
       aria-label="Bottom Navigation"
-      className="fixed bottom-0 left-0 right-0 max-w-[420px] mx-auto bg-white/95 backdrop-blur-md border-t border-slate-200 z-30 h-16 flex items-center justify-around px-2 shadow-sm"
+      className="fixed bottom-0 left-0 right-0 max-w-[420px] mx-auto bg-white/95 backdrop-blur-md border-t border-slate-200 z-30 h-16 pb-[env(safe-area-inset-bottom,0px)] flex items-center justify-around px-2 shadow-sm"
     >
       {navItems.map((item) => {
         const Icon = item.icon;
