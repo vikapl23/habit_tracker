@@ -23,6 +23,23 @@ if not ALLOWED_HOSTS or "*" in ALLOWED_HOSTS:
         "ALLOWED_HOSTS must be explicitly defined without wildcards in production."
     )
 
+if "CORS_ALLOWED_ORIGINS" not in os.environ or not os.environ["CORS_ALLOWED_ORIGINS"].strip():
+    raise ImproperlyConfigured(
+        "CORS_ALLOWED_ORIGINS environment variable must be set in production."
+    )
+
+CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS")
+if not CORS_ALLOWED_ORIGINS or "*" in CORS_ALLOWED_ORIGINS:
+    raise ImproperlyConfigured(
+        "CORS_ALLOWED_ORIGINS must be explicitly defined without wildcards in production."
+    )
+
+for origin in CORS_ALLOWED_ORIGINS:
+    if origin.startswith("http://") or not origin.startswith("https://"):
+        raise ImproperlyConfigured(
+            f"CORS_ALLOWED_ORIGINS in production must use https:// schemes: {origin}"
+        )
+
 
 # Production security settings
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")

@@ -11,6 +11,18 @@ import { useAuth } from '../context/AuthContext';
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
+// Calculates contrast text color (black or white) based on relative luminance of hex color
+const getContrastTextColor = (hex: string): string => {
+  const cleanHex = hex.replace('#', '');
+  if (cleanHex.length !== 6) return '#ffffff';
+  const r = parseInt(cleanHex.substring(0, 2), 16) / 255;
+  const g = parseInt(cleanHex.substring(2, 4), 16) / 255;
+  const b = parseInt(cleanHex.substring(4, 6), 16) / 255;
+  const toLinear = (c: number) => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+  const L = 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
+  return L > 0.35 ? '#0f172a' : '#ffffff';
+};
+
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 export const HabitDetailPage: React.FC = () => {
@@ -70,7 +82,7 @@ export const HabitDetailPage: React.FC = () => {
     try {
       const data = await habitsApi.getHabit(habitId);
       setHabit(data);
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (err instanceof ApiError && err.status === 404) {
         setHabitError('Habit not found.');
       } else {
@@ -170,7 +182,7 @@ export const HabitDetailPage: React.FC = () => {
             }
           : null
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Revert optimistic update
       setCheckInDates((prev) => {
         const next = new Set(prev);
@@ -184,7 +196,7 @@ export const HabitDetailPage: React.FC = () => {
       setToast({
         id: String(Date.now()),
         type: 'error',
-        message: err?.data?.detail || err?.message || 'Failed to update check-in.',
+        message: getErrorMessage(err, 'Failed to update check-in.'),
       });
     } finally {
       setTogglingDate(null);
@@ -376,7 +388,7 @@ export const HabitDetailPage: React.FC = () => {
                 {/* Weekday Labels (Mon - Sun) */}
                 <div className="grid grid-cols-7 gap-1 text-center">
                   {WEEKDAYS.map((wd) => (
-                    <div key={wd} className="text-[11px] font-semibold text-slate-400 py-1">
+                    <div key={wd} className="text-[11px] font-semibold text-slate-500 py-1">
                       {wd}
                     </div>
                   ))}
@@ -403,10 +415,11 @@ export const HabitDetailPage: React.FC = () => {
                     const isToggling = togglingDate === dateStr;
 
                     let cellStyle: React.CSSProperties = {};
+                    const contrastText = getContrastTextColor(habitColor);
                     if (isChecked) {
                       cellStyle = {
                         backgroundColor: habitColor,
-                        color: '#ffffff',
+                        color: contrastText,
                       };
                     }
 
@@ -427,15 +440,18 @@ export const HabitDetailPage: React.FC = () => {
                           isFuture
                             ? 'cursor-not-allowed opacity-30 text-slate-300 bg-slate-50/50'
                             : isChecked
-                            ? 'shadow-sm active:scale-95 text-white'
+                            ? 'shadow-sm active:scale-95'
                             : !isScheduled
-                            ? 'opacity-40 text-slate-400 bg-slate-50/50 border border-dashed border-slate-200/60 hover:opacity-80 active:scale-95'
+                            ? 'opacity-40 text-slate-600 bg-slate-50/50 border border-dashed border-slate-300 hover:opacity-100 active:scale-95'
                             : 'bg-slate-50 border border-slate-200/90 text-slate-700 hover:bg-slate-100 hover:border-slate-300 active:scale-95'
                         } ${isToday ? 'ring-2 ring-blue-500 ring-offset-1' : ''}`}
                       >
                         <span className="leading-none">{day}</span>
                         {isChecked && (
-                          <Check className="w-3 h-3 stroke-[3] mt-0.5 text-white shrink-0" />
+                          <Check
+                            className="w-3 h-3 stroke-[3] mt-0.5 shrink-0"
+                            style={{ color: contrastText }}
+                          />
                         )}
                       </button>
                     );
@@ -452,7 +468,7 @@ export const HabitDetailPage: React.FC = () => {
                     <span>Completed</span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <span className="w-3 h-3 rounded-full inline-block border border-dashed border-slate-300 bg-slate-50/50 opacity-50" />
+                    <span className="w-3 h-3 rounded-full inline-block border border-dashed border-slate-400 bg-slate-50/50 opacity-70" />
                     <span>Non-scheduled</span>
                   </div>
                   <div className="flex items-center gap-1.5">

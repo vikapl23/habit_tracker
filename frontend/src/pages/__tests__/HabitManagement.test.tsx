@@ -116,7 +116,7 @@ describe('Habit Management (Step 5.4)', () => {
     await user.type(screen.getByLabelText(/description/i), 'Stay hydrated');
 
     // Select color
-    const colorBtn = screen.getByRole('button', { name: /select color #10B981/i });
+    const colorBtn = screen.getByRole('button', { name: /select color Emerald/i });
     await user.click(colorBtn);
 
     // Select emoji

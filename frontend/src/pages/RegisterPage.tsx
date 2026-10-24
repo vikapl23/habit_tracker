@@ -47,7 +47,7 @@ export const RegisterPage: React.FC = () => {
 
       await register(email.trim(), password, browserTimezone);
       navigate('/', { replace: true });
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (err instanceof ApiError) {
         const data = err.data;
         const newFieldErrors: Record<string, string> = {};

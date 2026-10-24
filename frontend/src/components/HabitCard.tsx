@@ -27,18 +27,26 @@ export const HabitCard: React.FC<HabitCardProps> = ({
   const accentColor = habit.color || '#3B82F6';
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
+    if (!isMenuOpen) return;
     const handleOutsideClick = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setIsMenuOpen(false);
       }
     };
-    if (isMenuOpen) {
-      document.addEventListener('mousedown', handleOutsideClick);
-    }
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsMenuOpen(false);
+        menuButtonRef.current?.focus();
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    window.addEventListener('keydown', handleKeyDown);
     return () => {
       document.removeEventListener('mousedown', handleOutsideClick);
+      window.removeEventListener('keydown', handleKeyDown);
     };
   }, [isMenuOpen]);
 
@@ -98,7 +106,7 @@ export const HabitCard: React.FC<HabitCardProps> = ({
           <div className="flex items-center gap-2">
             <h3
               className={`text-sm font-semibold truncate transition-colors ${
-                isChecked ? 'line-through text-slate-400' : 'text-slate-900'
+                isChecked ? 'line-through text-slate-500' : 'text-slate-900'
               }`}
             >
               {habit.name}
@@ -114,7 +122,7 @@ export const HabitCard: React.FC<HabitCardProps> = ({
               🔥 {habit.current_streak}
             </span>
             <span
-              className="text-[11px] font-medium text-slate-400"
+              className="text-[11px] font-medium text-slate-500"
               aria-label={`Longest streak ${habit.longest_streak} days`}
             >
               best {habit.longest_streak}d
@@ -129,12 +137,16 @@ export const HabitCard: React.FC<HabitCardProps> = ({
           type="button"
           onClick={(e) => {
             e.stopPropagation();
-            onToggle(habit);
+            if (!disabled) {
+              onToggle(habit);
+            }
           }}
-          disabled={disabled}
+          aria-disabled={disabled}
           aria-label={`Toggle ${habit.name}, currently ${isChecked ? 'completed' : 'incomplete'}`}
           aria-pressed={isChecked}
-          className="min-w-[44px] min-h-[44px] -m-2 flex items-center justify-center rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+          className={`min-w-[44px] min-h-[44px] -m-2 flex items-center justify-center rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
+            disabled ? 'opacity-60 cursor-not-allowed' : ''
+          }`}
         >
           <div
             className={`w-7 h-7 rounded-full flex items-center justify-center transition-all duration-200 pointer-events-none ${
@@ -150,12 +162,13 @@ export const HabitCard: React.FC<HabitCardProps> = ({
         {(onEdit || onArchive || onDelete) && (
           <div className="relative" ref={menuRef}>
             <button
+              ref={menuButtonRef}
               type="button"
               onClick={handleMenuToggle}
               aria-label={`More options for ${habit.name}`}
               aria-haspopup="menu"
               aria-expanded={isMenuOpen}
-              className="min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition"
+              className="min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition"
             >
               <MoreHorizontal className="w-5 h-5" />
             </button>

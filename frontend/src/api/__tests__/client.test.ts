@@ -63,12 +63,23 @@ describe('API Client and Auth / Token Refresh logic', () => {
     setTokens({ access: 'expired-access-token', refresh: 'old-refresh-token' });
 
     let callCount = 0;
-    const recordedCalls: Array<{ url: string; authHeader: string | null; body: any }> = [];
+    const recordedCalls: Array<{ url: string; authHeader: string | null; body: unknown }> = [];
 
-    const mockFetch = vi.fn().mockImplementation(async (url: string, init: any) => {
-      const authHeader = init?.headers?.get ? init.headers.get('Authorization') : init?.headers?.['Authorization'] || null;
+    const mockFetch = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+      const initHeaders = init?.headers;
+      let authHeader: string | null = null;
+      if (initHeaders) {
+        if (initHeaders instanceof Headers) {
+          authHeader = initHeaders.get('Authorization');
+        } else if (Array.isArray(initHeaders)) {
+          const found = initHeaders.find(([k]) => k.toLowerCase() === 'authorization');
+          authHeader = found ? found[1] : null;
+        } else {
+          authHeader = (initHeaders as Record<string, string>)['Authorization'] || null;
+        }
+      }
       let parsedBody = null;
-      if (init?.body) {
+      if (init?.body && typeof init.body === 'string') {
         try {
           parsedBody = JSON.parse(init.body);
         } catch {
@@ -139,7 +150,7 @@ describe('API Client and Auth / Token Refresh logic', () => {
     let resource3Calls = 0;
     const recordedRetryAuths: string[] = [];
 
-    const mockFetch = vi.fn().mockImplementation(async (url: string, init: any) => {
+    const mockFetch = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
       if (url.includes('/auth/token/refresh/')) {
         refreshCallCount++;
         // Simulate network latency
@@ -165,8 +176,8 @@ describe('API Client and Auth / Token Refresh logic', () => {
             json: async () => ({ detail: 'Token expired' }),
           };
         }
-        const auth = init?.headers?.get ? init.headers.get('Authorization') : init?.headers?.['Authorization'];
-        recordedRetryAuths.push(auth);
+        const auth = init?.headers instanceof Headers ? init.headers.get('Authorization') : (init?.headers as Record<string, string>)?.[ 'Authorization'];
+        recordedRetryAuths.push(auth || '');
         return {
           ok: true,
           status: 200,
@@ -185,8 +196,8 @@ describe('API Client and Auth / Token Refresh logic', () => {
             json: async () => ({ detail: 'Token expired' }),
           };
         }
-        const auth = init?.headers?.get ? init.headers.get('Authorization') : init?.headers?.['Authorization'];
-        recordedRetryAuths.push(auth);
+        const auth = init?.headers instanceof Headers ? init.headers.get('Authorization') : (init?.headers as Record<string, string>)?.[ 'Authorization'];
+        recordedRetryAuths.push(auth || '');
         return {
           ok: true,
           status: 200,
@@ -205,8 +216,8 @@ describe('API Client and Auth / Token Refresh logic', () => {
             json: async () => ({ detail: 'Token expired' }),
           };
         }
-        const auth = init?.headers?.get ? init.headers.get('Authorization') : init?.headers?.['Authorization'];
-        recordedRetryAuths.push(auth);
+        const auth = init?.headers instanceof Headers ? init.headers.get('Authorization') : (init?.headers as Record<string, string>)?.[ 'Authorization'];
+        recordedRetryAuths.push(auth || '');
         return {
           ok: true,
           status: 200,
@@ -284,10 +295,10 @@ describe('API Client and Auth / Token Refresh logic', () => {
   it('logout calls /auth/logout/ with refresh token and clears tokens', async () => {
     setTokens({ access: 'my-access-token', refresh: 'my-refresh-token' });
 
-    let logoutPayload: any = null;
-    const mockFetch = vi.fn().mockImplementation(async (url: string, init: any) => {
+    let logoutPayload: unknown = null;
+    const mockFetch = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
       if (url.includes('/auth/logout/')) {
-        logoutPayload = JSON.parse(init.body);
+        logoutPayload = init?.body ? JSON.parse(init.body as string) : null;
         return {
           ok: true,
           status: 200,
@@ -318,10 +329,10 @@ describe('API Client and Auth / Token Refresh logic', () => {
     setTokens({ access: null, refresh: 'initial-refresh' });
 
     let _refreshCallCount = 0;
-    const mockFetch = vi.fn().mockImplementation(async (url: string, init: any) => {
+    const mockFetch = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
       if (url.includes('/auth/token/refresh/')) {
         _refreshCallCount++;
-        const body = JSON.parse(init.body);
+        const body = JSON.parse(init?.body as string);
         return {
           ok: true,
           status: 200,
@@ -355,12 +366,12 @@ describe('API Client and Auth / Token Refresh logic', () => {
   });
 
   it('register sends timezone, auto-logs in, and returns message and tokens', async () => {
-    let registerBody: any = null;
-    let loginBody: any = null;
+    let registerBody: unknown = null;
+    let loginBody: unknown = null;
 
-    const mockFetch = vi.fn().mockImplementation(async (url: string, init: any) => {
+    const mockFetch = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
       if (url.includes('/auth/register/')) {
-        registerBody = JSON.parse(init.body);
+        registerBody = JSON.parse(init?.body as string);
         return {
           ok: true,
           status: 201,
@@ -370,7 +381,7 @@ describe('API Client and Auth / Token Refresh logic', () => {
       }
 
       if (url.includes('/auth/token/')) {
-        loginBody = JSON.parse(init.body);
+        loginBody = JSON.parse(init?.body as string);
         return {
           ok: true,
           status: 200,
@@ -420,10 +431,11 @@ describe('API Client and Auth / Token Refresh logic', () => {
     try {
       await apiRequest('/auth/register/', { method: 'POST', body: '{}' });
       expect.fail('Should have thrown an error');
-    } catch (err: any) {
+    } catch (err: unknown) {
       expect(err).toBeInstanceOf(ApiError);
-      expect(err.status).toBe(400);
-      expect(err.data).toEqual({
+      const apiErr = err as ApiError;
+      expect(apiErr.status).toBe(400);
+      expect(apiErr.data).toEqual({
         email: ['Enter a valid email address.'],
         password: ['Password is too common.'],
       });
@@ -432,13 +444,13 @@ describe('API Client and Auth / Token Refresh logic', () => {
 
   it('updateProfile calls PATCH /auth/profile/ with updated data', async () => {
     let patchUrl = '';
-    let patchBody: any = null;
+    let patchBody: unknown = null;
     let patchMethod = '';
 
-    const mockFetch = vi.fn().mockImplementation(async (url: string, init: any) => {
+    const mockFetch = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
       patchUrl = url;
-      patchMethod = init.method;
-      patchBody = JSON.parse(init.body);
+      patchMethod = init?.method || '';
+      patchBody = JSON.parse(init?.body as string);
       return {
         ok: true,
         status: 200,

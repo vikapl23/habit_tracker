@@ -22,7 +22,7 @@ export const ArchivedHabitsPage: React.FC = () => {
       const all = await habitsApi.getAllHabits(true);
       const archivedOnly = all.filter((h) => h.is_archived);
       setHabits(archivedOnly);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setFetchError(getErrorMessage(err, 'Failed to load archived habits.'));
     } finally {
       setIsLoading(false);
@@ -43,11 +43,11 @@ export const ArchivedHabitsPage: React.FC = () => {
         type: 'success',
         message: `Habit "${habit.name}" restored to dashboard.`,
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       setToast({
         id: String(Date.now()),
         type: 'error',
-        message: err?.data?.detail || err?.message || 'Failed to unarchive habit.',
+        message: getErrorMessage(err, 'Failed to unarchive habit.'),
       });
     } finally {
       setUnarchivingId(null);
@@ -99,7 +99,7 @@ export const ArchivedHabitsPage: React.FC = () => {
             </div>
           ) : habits.length === 0 ? (
             <div className="rounded-2xl border-2 border-dashed border-slate-200 p-8 text-center space-y-3">
-              <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
+              <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-500 flex items-center justify-center mx-auto">
                 <Sparkles className="w-6 h-6" />
               </div>
               <h2 className="text-sm font-bold text-slate-800">No archived habits</h2>
@@ -134,7 +134,7 @@ export const ArchivedHabitsPage: React.FC = () => {
                         <h3 className="text-sm font-semibold text-slate-800 truncate">
                           {habit.name}
                         </h3>
-                        <p className="text-[11px] text-slate-400 mt-0.5">
+                        <p className="text-[11px] text-slate-500 mt-0.5">
                           Streak: {habit.current_streak}d (best {habit.longest_streak}d)
                         </p>
                       </div>

@@ -10,11 +10,23 @@ def load_production_settings(monkeypatch, env_vars=None):
     monkeypatch.setattr("environ.Env.read_env", lambda *a, **kw: None)
     monkeypatch.delenv("SECRET_KEY", raising=False)
     monkeypatch.delenv("ALLOWED_HOSTS", raising=False)
+    monkeypatch.delenv("CORS_ALLOWED_ORIGINS", raising=False)
     monkeypatch.delenv("AUTH_THROTTLE_RATE", raising=False)
 
+    default_env = {
+        "SECRET_KEY": "valid-production-secret-key-for-test-12345",
+        "ALLOWED_HOSTS": "example.com",
+        "CORS_ALLOWED_ORIGINS": "https://app.example.com",
+    }
     if env_vars:
         for k, v in env_vars.items():
-            monkeypatch.setenv(k, v)
+            if v is None:
+                default_env.pop(k, None)
+            else:
+                default_env[k] = v
+
+    for k, v in default_env.items():
+        monkeypatch.setenv(k, v)
 
     for mod in ["config.settings.production", "config.settings.base"]:
         if mod in sys.modules:
@@ -25,7 +37,7 @@ def load_production_settings(monkeypatch, env_vars=None):
 
 def test_production_fails_without_secret_key(monkeypatch):
     with pytest.raises(ImproperlyConfigured, match="SECRET_KEY"):
-        load_production_settings(monkeypatch, {"ALLOWED_HOSTS": "example.com"})
+        load_production_settings(monkeypatch, {"SECRET_KEY": None})
 
 
 def test_production_fails_with_insecure_default_secret_key(monkeypatch):
@@ -34,7 +46,6 @@ def test_production_fails_with_insecure_default_secret_key(monkeypatch):
             monkeypatch,
             {
                 "SECRET_KEY": "django-insecure-development-secret-key-change-in-production-12345",
-                "ALLOWED_HOSTS": "example.com",
             },
         )
 
@@ -44,7 +55,7 @@ def test_production_fails_without_allowed_hosts(monkeypatch):
         load_production_settings(
             monkeypatch,
             {
-                "SECRET_KEY": "valid-production-secret-key-for-test-12345",
+                "ALLOWED_HOSTS": None,
             },
         )
 
@@ -82,16 +93,36 @@ def test_production_fails_with_empty_allowed_hosts(monkeypatch):
         )
 
 
+def test_production_fails_without_cors_allowed_origins(monkeypatch):
+    with pytest.raises(ImproperlyConfigured, match="CORS_ALLOWED_ORIGINS"):
+        load_production_settings(monkeypatch, {"CORS_ALLOWED_ORIGINS": None})
+
+
+def test_production_fails_with_wildcard_cors_allowed_origins(monkeypatch):
+    with pytest.raises(ImproperlyConfigured, match="CORS_ALLOWED_ORIGINS"):
+        load_production_settings(monkeypatch, {"CORS_ALLOWED_ORIGINS": "*"})
+
+
+def test_production_fails_with_insecure_http_cors_allowed_origins(monkeypatch):
+    with pytest.raises(ImproperlyConfigured, match="https://"):
+        load_production_settings(monkeypatch, {"CORS_ALLOWED_ORIGINS": "http://app.example.com"})
+
+
 def test_production_succeeds_with_valid_env(monkeypatch):
     settings = load_production_settings(
         monkeypatch,
         {
             "SECRET_KEY": "valid-production-secret-key-for-test-12345",
             "ALLOWED_HOSTS": "example.com,api.example.com",
+            "CORS_ALLOWED_ORIGINS": "https://app.example.com,https://dashboard.example.com",
         },
     )
     assert settings.DEBUG is False
     assert settings.ALLOWED_HOSTS == ["example.com", "api.example.com"]
+    assert settings.CORS_ALLOWED_ORIGINS == [
+        "https://app.example.com",
+        "https://dashboard.example.com",
+    ]
     assert settings.SECRET_KEY == "valid-production-secret-key-for-test-12345"
 
 

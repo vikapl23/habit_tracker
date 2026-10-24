@@ -16,19 +16,50 @@ export const DeleteConfirmDialog: React.FC<DeleteConfirmDialogProps> = ({
   onConfirm,
   onCancel,
 }) => {
+  const dialogRef = React.useRef<HTMLDivElement>(null);
+  const cancelBtnRef = React.useRef<HTMLButtonElement>(null);
+  const previousActiveElement = React.useRef<HTMLElement | null>(null);
+
   React.useEffect(() => {
     if (!isOpen) return;
+    previousActiveElement.current = document.activeElement as HTMLElement | null;
     const originalOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
+
+    // Move initial focus to Cancel button
+    setTimeout(() => {
+      cancelBtnRef.current?.focus();
+    }, 0);
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && !isDeleting) {
         onCancel();
+        return;
+      }
+
+      if (e.key === 'Tab' && dialogRef.current) {
+        const focusable = dialogRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
       }
     };
+
     window.addEventListener('keydown', handleKeyDown);
     return () => {
       document.body.style.overflow = originalOverflow;
       window.removeEventListener('keydown', handleKeyDown);
+      previousActiveElement.current?.focus?.();
     };
   }, [isOpen, isDeleting, onCancel]);
 
@@ -36,6 +67,7 @@ export const DeleteConfirmDialog: React.FC<DeleteConfirmDialogProps> = ({
 
   return (
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-labelledby="delete-dialog-title"
@@ -66,6 +98,7 @@ export const DeleteConfirmDialog: React.FC<DeleteConfirmDialogProps> = ({
 
         <div className="flex gap-2.5 pt-1">
           <button
+            ref={cancelBtnRef}
             type="button"
             onClick={onCancel}
             disabled={isDeleting}

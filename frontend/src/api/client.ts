@@ -1,14 +1,24 @@
+export type DrfErrorBody = {
+  detail?: string;
+  non_field_errors?: string[];
+  [field: string]: string | string[] | undefined;
+};
+
 export class ApiError extends Error {
   status: number;
-  data: Record<string, any>;
+  data: DrfErrorBody;
 
-  constructor(message: string, status: number, data: Record<string, any> = {}) {
+  constructor(message: string, status: number, data: DrfErrorBody = {}) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.data = data;
   }
 }
+
+export const isApiError = (err: unknown): err is ApiError => {
+  return err instanceof ApiError;
+};
 
 export interface Tokens {
   access: string;
@@ -222,7 +232,7 @@ export interface RequestOptions extends RequestInit {
   _isRetry?: boolean;
 }
 
-export const apiRequest = async <T = any>(
+export const apiRequest = async <T = unknown>(
   endpoint: string,
   options: RequestOptions = {}
 ): Promise<T> => {
@@ -246,8 +256,9 @@ export const apiRequest = async <T = any>(
       ...options,
       headers,
     });
-  } catch (err: any) {
-    throw new ApiError(err?.message || 'Network request failed', 0, {});
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Network request failed';
+    throw new ApiError(message, 0, {});
   }
 
   // Handle 401 Unauthorized
@@ -274,7 +285,7 @@ export const apiRequest = async <T = any>(
     }
   }
 
-  let data: any = null;
+  let data: unknown = null;
   const contentType = response.headers.get('content-type');
   if (contentType && contentType.includes('application/json')) {
     try {
@@ -294,14 +305,12 @@ export const apiRequest = async <T = any>(
 
   if (!response.ok) {
     let errorMsg = 'Request failed';
-    if (data && typeof data === 'object') {
-      if (typeof data.detail === 'string' && !data.detail.trim().startsWith('<')) {
-        errorMsg = data.detail;
-      } else if (Object.keys(data).length > 0) {
-        errorMsg = 'Validation error';
-      }
-    } else {
-      data = {};
+    const parsedData: DrfErrorBody =
+      data && typeof data === 'object' ? (data as DrfErrorBody) : {};
+    if (typeof parsedData.detail === 'string' && !parsedData.detail.trim().startsWith('<')) {
+      errorMsg = parsedData.detail;
+    } else if (Object.keys(parsedData).length > 0) {
+      errorMsg = 'Validation error';
     }
 
     if (errorMsg === 'Request failed') {
@@ -318,7 +327,7 @@ export const apiRequest = async <T = any>(
       }
     }
 
-    throw new ApiError(errorMsg, response.status, data || {});
+    throw new ApiError(errorMsg, response.status, parsedData);
   }
 
   return data as T;
@@ -326,31 +335,31 @@ export const apiRequest = async <T = any>(
 
 // Convenience methods
 export const apiClient = {
-  get: <T = any>(endpoint: string, options?: RequestOptions) =>
+  get: <T = unknown>(endpoint: string, options?: RequestOptions) =>
     apiRequest<T>(endpoint, { ...options, method: 'GET' }),
 
-  post: <T = any>(endpoint: string, body?: any, options?: RequestOptions) =>
+  post: <T = unknown>(endpoint: string, body?: unknown, options?: RequestOptions) =>
     apiRequest<T>(endpoint, {
       ...options,
       method: 'POST',
       body: body !== undefined ? JSON.stringify(body) : undefined,
     }),
 
-  put: <T = any>(endpoint: string, body?: any, options?: RequestOptions) =>
+  put: <T = unknown>(endpoint: string, body?: unknown, options?: RequestOptions) =>
     apiRequest<T>(endpoint, {
       ...options,
       method: 'PUT',
       body: body !== undefined ? JSON.stringify(body) : undefined,
     }),
 
-  patch: <T = any>(endpoint: string, body?: any, options?: RequestOptions) =>
+  patch: <T = unknown>(endpoint: string, body?: unknown, options?: RequestOptions) =>
     apiRequest<T>(endpoint, {
       ...options,
       method: 'PATCH',
       body: body !== undefined ? JSON.stringify(body) : undefined,
     }),
 
-  delete: <T = any>(endpoint: string, options?: RequestOptions) =>
+  delete: <T = unknown>(endpoint: string, options?: RequestOptions) =>
     apiRequest<T>(endpoint, { ...options, method: 'DELETE' }),
 
   // Auth specific methods
@@ -368,7 +377,7 @@ export const apiClient = {
     email: string,
     password: string,
     timezone?: string
-  ): Promise<{ message: string; tokens: Tokens }> => {
+  ): Promise<{ message: string; tokens: Tokens | null }> => {
     const tz = timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
     const regRes = await apiClient.post<{ detail: string }>(
       '/auth/register/',
@@ -387,7 +396,7 @@ export const apiClient = {
       // If login fails (e.g. rate limit / auth throttle), return null tokens so caller can redirect with notice
       return {
         message: regRes.detail || 'User registered successfully.',
-        tokens: null as any,
+        tokens: null,
       };
     }
   },

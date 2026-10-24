@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { User, Globe, LogOut, Check } from 'lucide-react';
 import { BottomNavigation } from '../components/BottomNavigation';
 import { Toast, ToastMessage } from '../components/Toast';
+import { getErrorMessage } from '../utils/errorUtils';
 
 const FALLBACK_TIMEZONES = [
   'UTC',
@@ -54,9 +55,8 @@ export const ProfilePage: React.FC = () => {
   const timezoneOptions = useMemo(() => {
     let supported: string[] = [];
     try {
-      const intlAny = Intl as any;
-      if (typeof intlAny !== 'undefined' && typeof intlAny.supportedValuesOf === 'function') {
-        supported = intlAny.supportedValuesOf('timeZone');
+      if (typeof Intl !== 'undefined' && 'supportedValuesOf' in Intl) {
+        supported = Intl.supportedValuesOf('timeZone');
       }
     } catch {
       supported = [];
@@ -83,11 +83,11 @@ export const ProfilePage: React.FC = () => {
         type: 'success',
         message: 'Timezone updated successfully.',
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       setToast({
         id: String(Date.now()),
         type: 'error',
-        message: err?.data?.timezone?.[0] || err?.data?.detail || err?.message || 'Failed to update timezone.',
+        message: getErrorMessage(err, 'Failed to update timezone.'),
       });
     } finally {
       setIsSaving(false);
@@ -144,10 +144,9 @@ export const ProfilePage: React.FC = () => {
                 readOnly
                 disabled
                 value={user?.email || ''}
-                aria-label="Email Address"
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-600 text-sm cursor-not-allowed select-all"
               />
-              <p className="text-[11px] text-slate-400">Email is read-only and managed by authentication.</p>
+              <p className="text-[11px] text-slate-500">Email is read-only and managed by authentication.</p>
             </div>
           </section>
 
@@ -170,7 +169,6 @@ export const ProfilePage: React.FC = () => {
                 </label>
                 <select
                   id="timezone-select"
-                  aria-label="Timezone selector"
                   value={selectedTimezone}
                   onChange={(e) => {
                     setCustomTimezone(e.target.value);

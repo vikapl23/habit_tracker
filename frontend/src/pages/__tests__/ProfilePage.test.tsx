@@ -48,7 +48,7 @@ describe('ProfilePage (Step 5.5)', () => {
     const emailInput = screen.getByLabelText(/email address/i);
     expect(emailInput).toHaveAttribute('readOnly');
 
-    const tzSelect = screen.getByLabelText(/timezone selector/i);
+    const tzSelect = screen.getByLabelText(/select timezone/i);
     await waitFor(() => {
       expect(tzSelect).toHaveValue('Europe/Kyiv');
     });
@@ -70,7 +70,7 @@ describe('ProfilePage (Step 5.5)', () => {
 
     renderProfile();
 
-    const tzSelect = await screen.findByLabelText(/timezone selector/i);
+    const tzSelect = await screen.findByLabelText(/select timezone/i);
 
     // Change timezone
     await user.selectOptions(tzSelect, 'Europe/Warsaw');

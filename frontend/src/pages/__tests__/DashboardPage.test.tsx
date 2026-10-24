@@ -218,7 +218,7 @@ describe('DashboardPage Mobile View', () => {
     const user = userEvent.setup();
     vi.spyOn(habitsApi, 'getAllHabits').mockResolvedValue([mockScheduledHabit]);
 
-    let rejectPromise!: (err: any) => void;
+    let rejectPromise!: (err: unknown) => void;
     vi.spyOn(habitsApi, 'checkHabit').mockReturnValue(
       new Promise((_, reject) => {
         rejectPromise = reject;

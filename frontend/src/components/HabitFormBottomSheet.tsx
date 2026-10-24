@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 import { Habit, HabitFormData, FrequencyType } from '../types/habit';
+import { ApiError } from '../api/client';
 import { getErrorMessage } from '../utils/errorUtils';
 
 interface HabitFormBottomSheetProps {
@@ -10,17 +11,17 @@ interface HabitFormBottomSheetProps {
   onSubmit: (data: HabitFormData) => Promise<void>;
 }
 
-const PRESET_COLORS = [
-  '#3B82F6', // Blue
-  '#10B981', // Emerald
-  '#F59E0B', // Amber
-  '#EF4444', // Red
-  '#8B5CF6', // Purple
-  '#EC4899', // Pink
-  '#06B6D4', // Cyan
-  '#14B8A6', // Teal
-  '#F97316', // Orange
-  '#6366F1', // Indigo
+const PRESET_COLORS: Array<{ hex: string; name: string }> = [
+  { hex: '#3B82F6', name: 'Blue' },
+  { hex: '#10B981', name: 'Emerald' },
+  { hex: '#F59E0B', name: 'Amber' },
+  { hex: '#EF4444', name: 'Red' },
+  { hex: '#8B5CF6', name: 'Purple' },
+  { hex: '#EC4899', name: 'Pink' },
+  { hex: '#06B6D4', name: 'Cyan' },
+  { hex: '#14B8A6', name: 'Teal' },
+  { hex: '#F97316', name: 'Orange' },
+  { hex: '#6366F1', name: 'Indigo' },
 ];
 
 const PRESET_EMOJIS = [
@@ -47,7 +48,7 @@ export const HabitFormBottomSheet: React.FC<HabitFormBottomSheetProps> = ({
 }) => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [color, setColor] = useState(PRESET_COLORS[0]);
+  const [color, setColor] = useState(PRESET_COLORS[0].hex);
   const [emoji, setEmoji] = useState(PRESET_EMOJIS[0]);
   const [frequencyType, setFrequencyType] = useState<FrequencyType>('daily');
   const [frequencyDays, setFrequencyDays] = useState<number[]>([]);
@@ -66,14 +67,14 @@ export const HabitFormBottomSheet: React.FC<HabitFormBottomSheetProps> = ({
       if (habit) {
         setName(habit.name);
         setDescription(habit.description || '');
-        setColor(habit.color || PRESET_COLORS[0]);
+        setColor(habit.color || PRESET_COLORS[0].hex);
         setEmoji(habit.emoji || PRESET_EMOJIS[0]);
         setFrequencyType(habit.frequency_type || 'daily');
         setFrequencyDays(habit.frequency_days || []);
       } else {
         setName('');
         setDescription('');
-        setColor(PRESET_COLORS[0]);
+        setColor(PRESET_COLORS[0].hex);
         setEmoji(PRESET_EMOJIS[0]);
         setFrequencyType('daily');
         setFrequencyDays([]);
@@ -182,8 +183,8 @@ export const HabitFormBottomSheet: React.FC<HabitFormBottomSheetProps> = ({
         frequency_days: frequencyType === 'daily' ? [] : frequencyDays,
       });
       onClose();
-    } catch (err: any) {
-      if (err?.data && typeof err.data === 'object') {
+    } catch (err: unknown) {
+      if (err instanceof ApiError && err.data && typeof err.data === 'object') {
         const nextFieldErrors: Record<string, string> = {};
         const unhandledErrors: string[] = [];
         const knownFields = new Set(['name', 'description', 'color', 'emoji', 'frequency_type', 'frequency_days']);
@@ -220,19 +221,52 @@ export const HabitFormBottomSheet: React.FC<HabitFormBottomSheetProps> = ({
     }
   };
 
+  const sheetDialogRef = useRef<HTMLDivElement>(null);
+  const previousActiveElement = useRef<HTMLElement | null>(null);
+
   useEffect(() => {
     if (!isOpen) return;
+    previousActiveElement.current = document.activeElement as HTMLElement | null;
     const originalOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !isSubmitting) {
+        onClose();
+        return;
+      }
+
+      if (e.key === 'Tab' && sheetDialogRef.current) {
+        const focusable = sheetDialogRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
     return () => {
       document.body.style.overflow = originalOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+      previousActiveElement.current?.focus?.();
     };
-  }, [isOpen]);
+  }, [isOpen, isSubmitting, onClose]);
 
   if (!isOpen) return null;
 
   return (
     <div
+      ref={sheetDialogRef}
       role="dialog"
       aria-modal="true"
       aria-labelledby="habit-sheet-title"
@@ -258,7 +292,7 @@ export const HabitFormBottomSheet: React.FC<HabitFormBottomSheetProps> = ({
               type="button"
               onClick={onClose}
               aria-label="Close bottom sheet"
-              className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
+              className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition"
             >
               <X className="w-5 h-5" />
             </button>
@@ -269,6 +303,7 @@ export const HabitFormBottomSheet: React.FC<HabitFormBottomSheetProps> = ({
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
           {generalError && (
             <div
+              role="alert"
               data-form-error="true"
               className="p-3 rounded-xl bg-red-50 text-red-700 text-xs font-medium border border-red-200"
             >
@@ -286,6 +321,8 @@ export const HabitFormBottomSheet: React.FC<HabitFormBottomSheetProps> = ({
               id="habit-name"
               type="text"
               required
+              aria-invalid={!!fieldErrors.name}
+              aria-describedby={fieldErrors.name ? 'habit-name-error' : undefined}
               value={name}
               onChange={(e) => {
                 setName(e.target.value);
@@ -303,7 +340,7 @@ export const HabitFormBottomSheet: React.FC<HabitFormBottomSheetProps> = ({
               }`}
             />
             {fieldErrors.name && (
-              <p data-form-error="true" className="text-[11px] font-medium text-red-600 animate-in fade-in">
+              <p id="habit-name-error" data-form-error="true" className="text-[11px] font-medium text-red-600 animate-in fade-in">
                 {fieldErrors.name}
               </p>
             )}
@@ -312,7 +349,7 @@ export const HabitFormBottomSheet: React.FC<HabitFormBottomSheetProps> = ({
           {/* Description Field */}
           <div className="space-y-1.5">
             <label htmlFor="habit-description" className="block text-xs font-bold text-slate-700">
-              Description <span className="text-slate-400 font-normal">(optional)</span>
+              Description <span className="text-slate-500 font-normal">(optional)</span>
             </label>
             <textarea
               id="habit-description"
@@ -320,22 +357,24 @@ export const HabitFormBottomSheet: React.FC<HabitFormBottomSheetProps> = ({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Why this habit matters..."
+              aria-invalid={!!fieldErrors.description}
+              aria-describedby={fieldErrors.description ? 'habit-description-error' : undefined}
               className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-base sm:text-sm text-slate-900 bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition resize-none"
             />
             {fieldErrors.description && (
-              <p data-form-error="true" className="text-[11px] font-medium text-red-600 animate-in fade-in">
+              <p id="habit-description-error" data-form-error="true" className="text-[11px] font-medium text-red-600 animate-in fade-in">
                 {fieldErrors.description}
               </p>
             )}
           </div>
 
           {/* Color Picker */}
-          <div className="space-y-2">
-            <label className="block text-xs font-bold text-slate-700">
+          <fieldset className="space-y-2 border-0 p-0 m-0">
+            <legend className="block text-xs font-bold text-slate-700">
               Color Accent
-            </label>
+            </legend>
             <div className="flex items-center gap-2.5 flex-wrap">
-              {PRESET_COLORS.map((c) => {
+              {PRESET_COLORS.map(({ hex: c, name: colorName }) => {
                 const isSelected = color.toUpperCase() === c.toUpperCase();
                 return (
                   <button
@@ -351,7 +390,7 @@ export const HabitFormBottomSheet: React.FC<HabitFormBottomSheetProps> = ({
                         });
                       }
                     }}
-                    aria-label={`Select color ${c}`}
+                    aria-label={`Select color ${colorName} (${c})`}
                     aria-pressed={isSelected}
                     className="min-w-[44px] min-h-[44px] flex items-center justify-center p-1"
                   >
@@ -370,13 +409,13 @@ export const HabitFormBottomSheet: React.FC<HabitFormBottomSheetProps> = ({
                 {fieldErrors.color}
               </p>
             )}
-          </div>
+          </fieldset>
 
           {/* Emoji Picker */}
-          <div className="space-y-2">
-            <label className="block text-xs font-bold text-slate-700">
+          <fieldset className="space-y-2 border-0 p-0 m-0">
+            <legend className="block text-xs font-bold text-slate-700">
               Emoji Icon
-            </label>
+            </legend>
             <div className="grid grid-cols-5 sm:grid-cols-10 gap-1.5 p-2 rounded-xl bg-slate-50 border border-slate-100">
               {PRESET_EMOJIS.map((em) => {
                 const isSelected = emoji === em;
@@ -433,13 +472,13 @@ export const HabitFormBottomSheet: React.FC<HabitFormBottomSheetProps> = ({
                 {fieldErrors.emoji}
               </p>
             )}
-          </div>
+          </fieldset>
 
           {/* Frequency Selector */}
-          <div className="space-y-2.5 pb-6">
-            <label className="block text-xs font-bold text-slate-700">
+          <fieldset className="space-y-2.5 pb-6 border-0 p-0 m-0">
+            <legend className="block text-xs font-bold text-slate-700">
               Frequency
-            </label>
+            </legend>
             <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-xl">
               <button
                 type="button"
@@ -506,7 +545,7 @@ export const HabitFormBottomSheet: React.FC<HabitFormBottomSheetProps> = ({
                 {fieldErrors.frequency_days || fieldErrors.frequency}
               </p>
             )}
-          </div>
+          </fieldset>
 
           {/* Bottom Actions */}
           <div className="pt-3 pb-[calc(0.5rem+env(safe-area-inset-bottom,0px))] sticky bottom-0 bg-white border-t border-slate-100 flex gap-2.5">

@@ -48,8 +48,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onCreateHabit }) =
     try {
       const data = await habitsApi.getAllHabits();
       setHabits(data);
-    } catch (err: any) {
-      setFetchError(err?.message || 'Failed to load habits. Please check your connection.');
+    } catch (err: unknown) {
+      setFetchError(getErrorMessage(err, 'Failed to load habits. Please check your connection.'));
     } finally {
       setIsLoading(false);
     }
@@ -102,7 +102,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onCreateHabit }) =
             : h
         )
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
       // I5: Roll back ONLY the affected habit, not the entire list
       setHabits((prev) => prev.map((h) => (h.id === habit.id ? originalHabit : h)));
       const errorMsg = getErrorMessage(err, 'Failed to update habit. Please try again.');
@@ -205,11 +205,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onCreateHabit }) =
         type: 'info',
         message: `Habit "${habit.name}" archived.`,
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       setToast({
         id: String(Date.now()),
         type: 'error',
-        message: err?.data?.detail || err?.message || 'Failed to archive habit.',
+        message: getErrorMessage(err, 'Failed to archive habit.'),
       });
     }
   };
@@ -230,11 +230,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onCreateHabit }) =
         message: `Habit "${deletingHabit.name}" deleted.`,
       });
       setDeletingHabit(null);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setToast({
         id: String(Date.now()),
         type: 'error',
-        message: err?.data?.detail || err?.message || 'Failed to delete habit.',
+        message: getErrorMessage(err, 'Failed to delete habit.'),
       });
     } finally {
       setIsDeleting(false);
@@ -357,7 +357,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onCreateHabit }) =
                   <p className="mt-2 text-2xl font-bold text-slate-800">
                     {bestCurrentStreak} <span className="text-xs font-normal text-slate-500">days</span>
                   </p>
-                  <p className="text-[10px] text-slate-400 mt-0.5 truncate">Best active streak</p>
+                  <p className="text-[10px] text-slate-500 mt-0.5 truncate">Best active streak</p>
                 </div>
 
                 <div className="p-3.5 sm:p-4 rounded-xl bg-slate-50 border border-slate-100">
@@ -367,7 +367,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onCreateHabit }) =
                   <p className="mt-2 text-2xl font-bold text-slate-800">
                     {completedScheduled} <span className="text-xs font-normal text-slate-500">/ {totalScheduled}</span>
                   </p>
-                  <p className="text-[10px] text-slate-400 mt-0.5 truncate">Scheduled habits</p>
+                  <p className="text-[10px] text-slate-500 mt-0.5 truncate">Scheduled habits</p>
                 </div>
               </div>
 
@@ -422,7 +422,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onCreateHabit }) =
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-1 text-xs text-slate-400">
+                    <div className="flex items-center gap-1 text-xs text-slate-500">
                       <span>{isNotTodayExpanded ? 'Hide' : 'Show'}</span>
                       {isNotTodayExpanded ? (
                         <ChevronUp className="w-4 h-4" />

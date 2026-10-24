@@ -51,7 +51,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await apiClient.refreshTokens();
         await fetchProfile();
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (err instanceof ApiError && (err.status === 0 || err.status >= 500)) {
         setInitError('Unable to reach server. Please check your network connection.');
       } else {
