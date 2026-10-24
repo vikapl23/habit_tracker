@@ -4,6 +4,11 @@ set -e
 echo "==> Running database migrations..."
 python manage.py migrate --noinput
 
+if [ -n "$DJANGO_SUPERUSER_EMAIL" ] && [ -n "$DJANGO_SUPERUSER_PASSWORD" ]; then
+    echo "==> Creating superuser non-interactively..."
+    python manage.py createsuperuser --noinput || true
+fi
+
 echo "==> Collecting static files..."
 python manage.py collectstatic --noinput
 

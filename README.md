@@ -262,17 +262,19 @@ Redeploy Backend
 
 ### 3. Creating a Django Superuser on Render
 
-To access the Django Admin (`/admin/`) in production:
+On Render's free plan, interactive SSH / Shell access is not available. To create an initial admin superuser:
 
-1. In the Render Dashboard, click on the **habit-tracker-backend** service.
-2. Open the **Shell** tab on the left navigation menu.
-3. Click **Start Shell** to connect an interactive terminal session inside the running container.
-4. Run:
-   ```bash
-   python manage.py createsuperuser
-   ```
-5. Follow the interactive prompts to enter an email and a strong password.
-6. Open `https://<your-backend-url>/admin/` in your browser and sign in.
+1. In the Render Dashboard, navigate to your **habit-tracker-backend** service.
+2. Go to the **Environment** tab.
+3. Set the following environment variables:
+   - `DJANGO_SUPERUSER_EMAIL`: your admin email address (e.g. `admin@example.com`).
+   - `DJANGO_SUPERUSER_PASSWORD`: a strong, secure admin password.
+4. Save changes. On deployment/startup, `scripts/entrypoint.sh` runs database migrations and then creates the superuser non-interactively via `python manage.py createsuperuser --noinput` (it will not fail or overwrite if the user already exists, and the password is never logged).
+5. Open `https://<your-backend-url>/admin/` in your browser and sign in.
+6. *(Recommended)* Once the superuser is created, you may remove `DJANGO_SUPERUSER_PASSWORD` from the Render environment variables if desired.
+
+> [!NOTE]
+> On paid Render plans with interactive Shell access, you can also run `python manage.py createsuperuser` directly in the web shell.
 
 ---
 
