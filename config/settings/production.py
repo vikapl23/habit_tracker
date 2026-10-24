@@ -18,6 +18,10 @@ if "ALLOWED_HOSTS" not in os.environ or not os.environ["ALLOWED_HOSTS"].strip():
     raise ImproperlyConfigured("ALLOWED_HOSTS environment variable must be set in production.")
 
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS")
+render_external_hostname = os.environ.get("RENDER_EXTERNAL_HOSTNAME", "").strip()
+if render_external_hostname and render_external_hostname not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(render_external_hostname)
+
 if not ALLOWED_HOSTS or "*" in ALLOWED_HOSTS:
     raise ImproperlyConfigured(
         "ALLOWED_HOSTS must be explicitly defined without wildcards in production."

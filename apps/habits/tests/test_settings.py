@@ -10,6 +10,7 @@ def load_production_settings(monkeypatch, env_vars=None):
     monkeypatch.setattr("environ.Env.read_env", lambda *a, **kw: None)
     monkeypatch.delenv("SECRET_KEY", raising=False)
     monkeypatch.delenv("ALLOWED_HOSTS", raising=False)
+    monkeypatch.delenv("RENDER_EXTERNAL_HOSTNAME", raising=False)
     monkeypatch.delenv("CORS_ALLOWED_ORIGINS", raising=False)
     monkeypatch.delenv("AUTH_THROTTLE_RATE", raising=False)
 
@@ -124,6 +125,30 @@ def test_production_succeeds_with_valid_env(monkeypatch):
         "https://dashboard.example.com",
     ]
     assert settings.SECRET_KEY == "valid-production-secret-key-for-test-12345"
+
+
+def test_production_automatically_adds_render_external_hostname(monkeypatch):
+    settings = load_production_settings(
+        monkeypatch,
+        {
+            "SECRET_KEY": "valid-production-secret-key-for-test-12345",
+            "ALLOWED_HOSTS": "example.com",
+            "RENDER_EXTERNAL_HOSTNAME": "habit-tracker-backend.onrender.com",
+        },
+    )
+    assert settings.ALLOWED_HOSTS == ["example.com", "habit-tracker-backend.onrender.com"]
+
+
+def test_production_does_not_duplicate_render_external_hostname(monkeypatch):
+    settings = load_production_settings(
+        monkeypatch,
+        {
+            "SECRET_KEY": "valid-production-secret-key-for-test-12345",
+            "ALLOWED_HOSTS": "example.com,habit-tracker-backend.onrender.com",
+            "RENDER_EXTERNAL_HOSTNAME": "habit-tracker-backend.onrender.com",
+        },
+    )
+    assert settings.ALLOWED_HOSTS == ["example.com", "habit-tracker-backend.onrender.com"]
 
 
 def test_base_settings_fails_when_secret_key_is_missing(monkeypatch):

@@ -1,10 +1,11 @@
-services:
-  # Managed PostgreSQL database (Render free tier)
-  - type: postgres
-    name: habit-tracker-db
+databases:
+  - name: habit-tracker-db
     plan: free
+    databaseName: habit_tracker
+    user: habit_user
     ipAllowList: []
 
+services:
   # Backend Web Service (Django + Gunicorn)
   - type: web
     name: habit-tracker-backend
@@ -32,12 +33,12 @@ services:
         sync: false
 
   # Frontend Static Site (React + Vite)
-  - type: static
+  - type: web
     name: habit-tracker-frontend
+    runtime: static
     plan: free
-    rootDir: frontend
-    buildCommand: npm ci && npm run build
-    publishPath: dist
+    buildCommand: cd frontend && npm ci && npm run build
+    staticPublishPath: ./frontend/dist
     envVars:
       - key: VITE_API_URL
         sync: false
@@ -58,3 +59,4 @@ services:
       - path: /*
         name: Referrer-Policy
         value: strict-origin-when-cross-origin
+
