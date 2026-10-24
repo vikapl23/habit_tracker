@@ -85,10 +85,11 @@ jobs:
           context: .
           file: ./Dockerfile
           push: false
+          load: true
           tags: habit-tracker-backend:latest
 
       - name: Smoke check backend image timezone database
-        run: docker run --rm habit-tracker-backend:latest python -c "import zoneinfo; zoneinfo.ZoneInfo('Europe/Kyiv')"
+        run: docker run --rm --entrypoint python habit-tracker-backend:latest -c "import zoneinfo; zoneinfo.ZoneInfo('Europe/Kyiv')"
 
       - name: Build Frontend Docker Image
         uses: docker/build-push-action@v5
