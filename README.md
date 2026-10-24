@@ -189,6 +189,93 @@ docker compose down
 
 ---
 
+## ☁️ Deployment (Render.com)
+
+The application includes a [Render Blueprint](https://render.com/docs/blueprint-spec) (`render.yaml`) to deploy the complete stack using free plans:
+- **Managed PostgreSQL Database** (`habit-tracker-db`): Free PostgreSQL instance.
+- **Backend Web Service** (`habit-tracker-backend`): Docker container running Django, automated migrations, static asset collection, and Gunicorn.
+- **Frontend Static Site** (`habit-tracker-frontend`): Built with Vite and served globally with custom security headers and SPA routing rewrites.
+
+> [!WARNING]
+> **Free Tier Limitations on Render:**
+> - **Temporary Database:** Render's free PostgreSQL instances are temporary (expire after 30 days of creation). For long-term production use, upgrade to a paid PostgreSQL instance or export periodic backups.
+> - **Instance Spin-down / Cold Starts:** Free web services spin down (sleep) after 15 minutes of inactivity. The first incoming request after sleep will take 30–60 seconds to wake up the backend.
+
+### 1. Step-by-Step Render Dashboard Deployment
+
+1. **Push your code to GitHub:**
+   Ensure all changes including `render.yaml`, `Dockerfile`, and `frontend/` are pushed to your GitHub repository.
+2. **Open Render Dashboard:**
+   Log in to [Render.com](https://dashboard.render.com/).
+3. **Create New Blueprint Instance:**
+   - In the top right, click **New +** and select **Blueprint**.
+   - Connect your GitHub repository (e.g. `your-username/habit_tracker`).
+   - Give the Blueprint instance a name (e.g. `habit-tracker`).
+   - Select the branch (e.g. `main`).
+   - Render parses `render.yaml` and lists three resources: `habit-tracker-db` (Postgres), `habit-tracker-backend` (Web Service), and `habit-tracker-frontend` (Static Site).
+4. **Initial Deploy & Blueprint Creation:**
+   - Click **Apply**.
+   - Render immediately creates the database and generates a secure random `SECRET_KEY`.
+   - The initial build of backend and frontend will start. Note that they require post-creation configuration of their respective URLs as explained below.
+
+---
+
+### 2. Environment Variables & Two-Step Linking Process
+
+Because Render assigns subdomains only *after* services are created, the frontend and backend URLs must be configured in two simple steps:
+
+```
+Step 1: Backend URL  ─────────────►  Set Frontend VITE_API_URL  ─────────────►  Redeploy Frontend
+                                                                                        │
+Step 2: Backend CORS / ALLOWED_HOSTS  ◄───────────────────────────  Frontend URL  ──────┘
+          │
+          ▼
+Redeploy Backend
+```
+
+#### Step A: Configure Frontend `VITE_API_URL`
+1. Go to the **habit-tracker-backend** service page in the Render dashboard.
+2. Copy its public URL from the top header (e.g. `https://habit-tracker-backend-xyz.onrender.com`).
+3. Navigate to the **habit-tracker-frontend** Static Site in Render.
+4. Go to **Environment** tab, edit `VITE_API_URL`, and set:
+   ```
+   https://habit-tracker-backend-xyz.onrender.com/api/v1
+   ```
+   *(Be sure to append `/api/v1` and ensure it uses `https://`).*
+5. Save changes. Go to **Deploys** and click **Manual Deploy > Clear build cache & deploy** so Vite bakes the production API URL into the built bundle.
+
+#### Step B: Configure Backend `ALLOWED_HOSTS` & `CORS_ALLOWED_ORIGINS`
+1. Copy the public URL of **habit-tracker-frontend** (e.g. `https://habit-tracker-frontend-abc.onrender.com`).
+2. Navigate to the **habit-tracker-backend** service in Render.
+3. Go to **Environment** tab, find:
+   - `ALLOWED_HOSTS`: set to your backend host name (comma-separated, without scheme):
+     ```
+     habit-tracker-backend-xyz.onrender.com
+     ```
+   - `CORS_ALLOWED_ORIGINS`: set to your frontend origin (comma-separated, with `https://`):
+     ```
+     https://habit-tracker-frontend-abc.onrender.com
+     ```
+4. Click **Save Changes**. Render will automatically trigger a rolling redeploy of the backend.
+
+---
+
+### 3. Creating a Django Superuser on Render
+
+To access the Django Admin (`/admin/`) in production:
+
+1. In the Render Dashboard, click on the **habit-tracker-backend** service.
+2. Open the **Shell** tab on the left navigation menu.
+3. Click **Start Shell** to connect an interactive terminal session inside the running container.
+4. Run:
+   ```bash
+   python manage.py createsuperuser
+   ```
+5. Follow the interactive prompts to enter an email and a strong password.
+6. Open `https://<your-backend-url>/admin/` in your browser and sign in.
+
+---
+
 ## 🧪 Running Tests & Linting
 
 ### Running Tests

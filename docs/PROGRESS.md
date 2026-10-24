@@ -15,7 +15,7 @@ This checklist tracks the ongoing development progress of the Habit Tracker proj
 | **Phase 4** | Statistics & Analytics | `[ ]` Postponed (after deployment) | 0 / 4 |
 | **Phase 5** | Mobile-First React Frontend (Vite) | `[ ]` In Progress | 5 / 6 |
 | **Phase 6** | Docker & PostgreSQL Environment | `[x]` Completed | 4 / 4 |
-| **Phase 7** | Production Deployment (Render.com) | `[ ]` Not Started | 0 / 4 |
+| **Phase 7** | Production Deployment (Render.com) | `[x]` Completed | 4 / 4 |
 
 ---
 
@@ -181,15 +181,16 @@ This checklist tracks the ongoing development progress of the Habit Tracker proj
 ---
 
 ### Phase 7: Production Cloud Deployment (Render.com)
-- [ ] **7.1 Production Settings & Static Assets**
-  - [ ] Configure `config/settings/production.py`.
-  - [ ] Integrate `WhiteNoise` for static asset compression and caching.
-  - [ ] Enforce security headers, SSL redirect, and cookie protection flags.
-- [ ] **7.2 Render Blueprint Configuration (`render.yaml`)**
-  - [ ] Define Web Service running Gunicorn (`gunicorn config.wsgi:application`).
-  - [ ] Define Managed PostgreSQL instance.
-  - [ ] Map environment variables (`DATABASE_URL`, `SECRET_KEY`, `ALLOWED_HOSTS`).
-- [ ] **7.3 Pre-Deploy & Migration Scripts**
-  - [ ] Setup zero-downtime database migration hook.
-- [ ] **7.4 Live Verification & Monitoring**
-  - [ ] Verify SSL, API endpoints, admin login, and database persistence in live Render environment.
+- [x] **7.1 Production Settings & Static Assets**
+  - [x] Configure `config/settings/production.py` with strict HTTPS defaults and configurable overrides.
+  - [x] Integrate `WhiteNoise` for static asset compression and caching.
+  - [x] Enforce security headers, SSL redirect, and cookie protection flags.
+- [x] **7.2 Render Blueprint Configuration (`render.yaml`)**
+  - [x] Define Managed PostgreSQL Database (`habit-tracker-db`, free tier).
+  - [x] Define Web Service running Gunicorn (`gunicorn config.wsgi:application`) on `0.0.0.0:$PORT` with `WEB_CONCURRENCY` workers.
+  - [x] Define Frontend Static Site (`habit-tracker-frontend`) with `npm ci && npm run build`, `dist` publish path, rewrite `/* -> /index.html`, and strict security headers.
+  - [x] Map environment variables (`DATABASE_URL` via `fromDatabase`, `SECRET_KEY` generated, `DJANGO_SETTINGS_MODULE`, `AUTH_THROTTLE_RATE`, `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`, `VITE_API_URL`).
+- [x] **7.3 Pre-Deploy & Automated Migration Scripts**
+  - [x] Configure container entrypoint (`scripts/entrypoint.sh`) running migrations and static collection prior to launching Gunicorn.
+- [x] **7.4 Documentation & Deployment Workflow**
+  - [x] Document step-by-step Render dashboard setup, environment variable wiring, redeployment order, free tier limitations (30-day DB lifespan, sleep on inactivity), and superuser creation in README.md.

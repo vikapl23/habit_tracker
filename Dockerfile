@@ -30,4 +30,4 @@ USER appuser
 EXPOSE 8000
 
 ENTRYPOINT ["/app/scripts/entrypoint.sh"]
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "3", "config.wsgi:application"]
+CMD ["sh", "-c", "exec gunicorn --bind 0.0.0.0:${PORT:-8000} --workers ${WEB_CONCURRENCY:-2} config.wsgi:application"]
