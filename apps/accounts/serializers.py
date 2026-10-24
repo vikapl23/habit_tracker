@@ -20,9 +20,15 @@ class RegisterSerializer(serializers.Serializer):
     timezone = serializers.CharField(required=False, default="Europe/Kyiv")
 
     def validate_timezone(self, value: str) -> str:
-        """Validate that the provided timezone is a recognized IANA time zone."""
-        if value not in zoneinfo.available_timezones():
-            raise serializers.ValidationError(f"'{value}' is not a valid IANA time zone.")
+        """Validate timezone, falling back to UTC if invalid during registration."""
+        if not value:
+            return "UTC"
+        try:
+            zoneinfo.ZoneInfo(value)
+        except (zoneinfo.ZoneInfoNotFoundError, ValueError):
+            return "UTC"
+        if value == "Europe/Kiev":
+            return "Europe/Kyiv"
         return value
 
     def to_internal_value(self, data: Any) -> dict[str, Any]:
@@ -61,6 +67,12 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     def validate_timezone(self, value: str) -> str:
         """Validate that the provided timezone is a recognized IANA time zone."""
-        if value not in zoneinfo.available_timezones():
-            raise serializers.ValidationError(f"'{value}' is not a valid IANA time zone.")
+        if not value:
+            raise serializers.ValidationError("Timezone cannot be empty.")
+        try:
+            zoneinfo.ZoneInfo(value)
+        except (zoneinfo.ZoneInfoNotFoundError, ValueError) as err:
+            raise serializers.ValidationError(f"'{value}' is not a valid IANA time zone.") from err
+        if value == "Europe/Kiev":
+            return "Europe/Kyiv"
         return value

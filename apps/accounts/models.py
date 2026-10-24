@@ -7,8 +7,12 @@ from django.utils import timezone
 
 
 def validate_iana_timezone(value):
-    if not value or value not in zoneinfo.available_timezones():
-        raise ValidationError(f"'{value}' is not a valid IANA time zone.")
+    if not value:
+        raise ValidationError("Timezone cannot be empty.")
+    try:
+        zoneinfo.ZoneInfo(value)
+    except (zoneinfo.ZoneInfoNotFoundError, ValueError) as err:
+        raise ValidationError(f"'{value}' is not a valid IANA time zone.") from err
 
 
 class UserManager(BaseUserManager):
@@ -80,12 +84,21 @@ class User(AbstractUser):
         super().clean()
         if self.email:
             self.email = self.email.lower()
-        if self.timezone and self.timezone not in zoneinfo.available_timezones():
-            raise ValidationError({"timezone": f"'{self.timezone}' is not a valid IANA time zone."})
+        if self.timezone == "Europe/Kiev":
+            self.timezone = "Europe/Kyiv"
+        if self.timezone:
+            try:
+                zoneinfo.ZoneInfo(self.timezone)
+            except (zoneinfo.ZoneInfoNotFoundError, ValueError) as err:
+                raise ValidationError(
+                    {"timezone": f"'{self.timezone}' is not a valid IANA time zone."}
+                ) from err
 
     def save(self, *args, **kwargs):
         if self.email:
             self.email = self.email.lower()
+        if self.timezone == "Europe/Kiev":
+            self.timezone = "Europe/Kyiv"
         super().save(*args, **kwargs)
 
     def __str__(self):

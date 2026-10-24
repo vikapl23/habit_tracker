@@ -46,7 +46,8 @@ const FALLBACK_TIMEZONES = [
 export const ProfilePage: React.FC = () => {
   const { user, logout, updateProfile } = useAuth();
   const [customTimezone, setCustomTimezone] = useState<string | null>(null);
-  const selectedTimezone = customTimezone ?? user?.timezone ?? 'UTC';
+  const normalizedUserTimezone = user?.timezone === 'Europe/Kiev' ? 'Europe/Kyiv' : user?.timezone;
+  const selectedTimezone = customTimezone ?? normalizedUserTimezone ?? 'UTC';
   const [isSaving, setIsSaving] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
@@ -62,11 +63,11 @@ export const ProfilePage: React.FC = () => {
       supported = [];
     }
     const combined = Array.from(new Set([...FALLBACK_TIMEZONES, ...supported]));
-    if (user?.timezone && !combined.includes(user.timezone)) {
-      combined.push(user.timezone);
+    if (normalizedUserTimezone && !combined.includes(normalizedUserTimezone)) {
+      combined.push(normalizedUserTimezone);
     }
     return combined.sort((a, b) => a.localeCompare(b));
-  }, [user?.timezone]);
+  }, [normalizedUserTimezone]);
 
   const handleSaveTimezone = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -103,7 +104,7 @@ export const ProfilePage: React.FC = () => {
     }
   };
 
-  const hasTzChanged = selectedTimezone !== (user?.timezone || '');
+  const hasTzChanged = selectedTimezone !== (normalizedUserTimezone || '');
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center">

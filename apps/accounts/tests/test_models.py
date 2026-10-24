@@ -82,3 +82,42 @@ class TestCustomUserModel:
         user = User(email="invalidtz@example.com", timezone="Invalid/Timezone")
         with pytest.raises(ValidationError):
             user.full_clean()
+
+    def test_user_kiev_normalized_to_kyiv_on_clean_and_save(self):
+        user = User.objects.create_user(
+            email="kievuser@example.com", password="password123", timezone="Europe/Kiev"
+        )
+        assert user.timezone == "Europe/Kyiv"
+
+        user.timezone = "Europe/Kiev"
+        user.clean()
+        assert user.timezone == "Europe/Kyiv"
+
+        user.timezone = "Europe/Kiev"
+        user.save()
+        assert user.timezone == "Europe/Kyiv"
+        user.refresh_from_db()
+        assert user.timezone == "Europe/Kyiv"
+
+    def test_timezone_validation_when_system_tzpath_is_missing(self, monkeypatch, tmp_path):
+        import zoneinfo
+
+        empty_dir = str(tmp_path / "empty_tzpath")
+        import os
+
+        os.makedirs(empty_dir, exist_ok=True)
+        orig_tzpath = zoneinfo.TZPATH
+        zoneinfo.reset_tzpath(to=(empty_dir,))
+        try:
+            # Should still validate successfully using python tzdata
+            user = User.objects.create_user(
+                email="tzpath@example.com", password="password123", timezone="Europe/Kiev"
+            )
+            assert user.timezone == "Europe/Kyiv"
+
+            # Should also accept standard IANA zone
+            user.timezone = "America/New_York"
+            user.clean()
+            assert user.timezone == "America/New_York"
+        finally:
+            zoneinfo.reset_tzpath(to=orig_tzpath)

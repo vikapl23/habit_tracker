@@ -355,15 +355,27 @@ class TestAuthEndpoints:
         user = User.objects.get(email="nyuser@example.com")
         assert user.timezone == "America/New_York"
 
-    def test_register_with_invalid_timezone_fails(self, api_client):
+    def test_register_with_kiev_normalizes_to_kyiv(self, api_client):
+        data = {
+            "email": "kievuser@example.com",
+            "password": "StrongPassword123!",
+            "timezone": "Europe/Kiev",
+        }
+        res = api_client.post(self.register_url, data)
+        assert res.status_code == status.HTTP_201_CREATED
+        user = User.objects.get(email="kievuser@example.com")
+        assert user.timezone == "Europe/Kyiv"
+
+    def test_register_with_invalid_timezone_falls_back_to_utc(self, api_client):
         data = {
             "email": "invalidtz@example.com",
             "password": "StrongPassword123!",
             "timezone": "Not/A_Real_Timezone",
         }
         res = api_client.post(self.register_url, data)
-        assert res.status_code == status.HTTP_400_BAD_REQUEST
-        assert "timezone" in res.data
+        assert res.status_code == status.HTTP_201_CREATED
+        user = User.objects.get(email="invalidtz@example.com")
+        assert user.timezone == "UTC"
 
     def test_profile_endpoint_requires_authentication(self, api_client):
         res = api_client.get(self.profile_url)
@@ -383,6 +395,14 @@ class TestAuthEndpoints:
         assert res.data["timezone"] == "Asia/Tokyo"
         existing_user.refresh_from_db()
         assert existing_user.timezone == "Asia/Tokyo"
+
+    def test_profile_endpoint_update_kiev_normalizes_to_kyiv(self, api_client, existing_user):
+        api_client.force_authenticate(user=existing_user)
+        res = api_client.patch(self.profile_url, {"timezone": "Europe/Kiev"})
+        assert res.status_code == status.HTTP_200_OK
+        assert res.data["timezone"] == "Europe/Kyiv"
+        existing_user.refresh_from_db()
+        assert existing_user.timezone == "Europe/Kyiv"
 
     def test_profile_endpoint_update_invalid_timezone_fails(self, api_client, existing_user):
         api_client.force_authenticate(user=existing_user)

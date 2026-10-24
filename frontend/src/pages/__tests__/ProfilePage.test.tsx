@@ -60,6 +60,22 @@ describe('ProfilePage (Step 5.5)', () => {
     expect(screen.getByRole('link', { name: /profile/i })).toBeInTheDocument();
   });
 
+  it('shows Europe/Kyiv for users who had Europe/Kiev timezone', async () => {
+    vi.spyOn(apiClient, 'getProfile').mockResolvedValue({
+      id: 2,
+      email: 'legacy@example.com',
+      timezone: 'Europe/Kiev',
+    });
+
+    renderProfile();
+
+    expect(await screen.findByDisplayValue('legacy@example.com')).toBeInTheDocument();
+    const tzSelect = screen.getByLabelText(/select timezone/i);
+    await waitFor(() => {
+      expect(tzSelect).toHaveValue('Europe/Kyiv');
+    });
+  });
+
   it('updates timezone by calling PATCH /auth/profile/ and shows success message', async () => {
     const user = userEvent.setup();
     const updateSpy = vi.spyOn(apiClient, 'updateProfile').mockResolvedValue({
