@@ -212,6 +212,29 @@ def test_update_target_recalculates_streaks(api_client, user):
 
 
 @pytest.mark.django_db
+def test_patch_measurable_to_boolean_succeeds(api_client, user):
+    api_client.force_authenticate(user=user)
+    habit = Habit.objects.create(
+        user=user,
+        name="Reading",
+        habit_type="measurable",
+        unit="pages",
+        target_value=Decimal("20.00"),
+    )
+    # PATCH with only habit_type="boolean" should succeed and clear unit/target_value
+    res = api_client.patch(
+        f"/api/v1/habits/{habit.id}/",
+        {"habit_type": "boolean"},
+        format="json",
+    )
+    assert res.status_code == status.HTTP_200_OK
+    data = res.json()
+    assert data["habit_type"] == "boolean"
+    assert data["target_value"] is None
+    assert data["unit"] == ""
+
+
+@pytest.mark.django_db
 def test_habits_list_no_n_plus_one_queries(api_client, user, django_assert_num_queries):
     from decimal import Decimal
 
@@ -238,3 +261,7 @@ def test_habits_list_no_n_plus_one_queries(api_client, user, django_assert_num_q
         assert res.status_code == status.HTTP_200_OK
         results = res.json()["results"] if "results" in res.json() else res.json()
         assert len(results) == 5
+        # Verify both boolean and measurable habits have correct is_checked_today and progress
+        for item in results:
+            assert item["is_checked_today"] is True
+            assert item["today_progress"] == 100.0

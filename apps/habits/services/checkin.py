@@ -4,7 +4,7 @@ from datetime import date
 from decimal import Decimal
 from typing import TYPE_CHECKING, NamedTuple
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 from rest_framework.exceptions import NotFound, ValidationError
 
@@ -96,6 +96,11 @@ def check_in_habit(
 
     with suppress_streak_signals():
         with transaction.atomic():
+            # Lock the habit row to prevent concurrent race conditions
+            locked_habit = Habit.objects.select_for_update().filter(id=habit.id).first()
+            if locked_habit:
+                habit = locked_habit
+
             checkin = (
                 HabitCheckIn.objects.select_for_update()
                 .filter(habit=habit, date=target_date)
@@ -104,10 +109,16 @@ def check_in_habit(
 
             if habit.habit_type == "boolean":
                 if not checkin:
-                    checkin = HabitCheckIn.objects.create(
-                        habit=habit, date=target_date, value=Decimal("1.00")
-                    )
-                    created = True
+                    try:
+                        with transaction.atomic():
+                            checkin = HabitCheckIn.objects.create(
+                                habit=habit, date=target_date, value=Decimal("1.00")
+                            )
+                            created = True
+                    except IntegrityError:
+                        checkin = HabitCheckIn.objects.select_for_update().get(
+                            habit=habit, date=target_date
+                        )
                 new_value = Decimal("1.00")
             else:
                 # Measurable habit
@@ -122,10 +133,18 @@ def check_in_habit(
                             checkin.value = dec_value
                             checkin.save(update_fields=["value"])
                         else:
-                            checkin = HabitCheckIn.objects.create(
-                                habit=habit, date=target_date, value=dec_value
-                            )
-                            created = True
+                            try:
+                                with transaction.atomic():
+                                    checkin = HabitCheckIn.objects.create(
+                                        habit=habit, date=target_date, value=dec_value
+                                    )
+                                    created = True
+                            except IntegrityError:
+                                checkin = HabitCheckIn.objects.select_for_update().get(
+                                    habit=habit, date=target_date
+                                )
+                                checkin.value = dec_value
+                                checkin.save(update_fields=["value"])
                         new_value = dec_value
                 else:
                     # mode == 'add'
@@ -139,16 +158,27 @@ def check_in_habit(
                         new_value = dec_value
                         if new_value > Decimal("100000.00"):
                             raise ValidationError({"value": "Daily total cannot exceed 100,000."})
-                        checkin = HabitCheckIn.objects.create(
-                            habit=habit, date=target_date, value=new_value
-                        )
-                        created = True
+                        try:
+                            with transaction.atomic():
+                                checkin = HabitCheckIn.objects.create(
+                                    habit=habit, date=target_date, value=new_value
+                                )
+                                created = True
+                        except IntegrityError:
+                            checkin = HabitCheckIn.objects.select_for_update().get(
+                                habit=habit, date=target_date
+                            )
+                            new_value = checkin.value + dec_value
+                            if new_value > Decimal("100000.00"):
+                                raise ValidationError({"value": "Daily total cannot exceed 100,000."})
+                            checkin.value = new_value
+                            checkin.save(update_fields=["value"])
 
-    # Evict prefetched check_ins cache on the instance if present
-    if hasattr(habit, "_prefetched_objects_cache"):
-        habit._prefetched_objects_cache.pop("check_ins", None)
+            # Evict prefetched check_ins cache on the instance if present
+            if hasattr(habit, "_prefetched_objects_cache"):
+                habit._prefetched_objects_cache.pop("check_ins", None)
 
-    recalculate_habit_streaks(habit, reference_date=today)
+            recalculate_habit_streaks(habit, reference_date=today)
 
     # Calculate completion and progress
     target = habit.target_value or Decimal("1.00")
@@ -190,6 +220,11 @@ def uncheck_habit(
 
     with suppress_streak_signals():
         with transaction.atomic():
+            # Lock the habit row to prevent concurrent race conditions
+            locked_habit = Habit.objects.select_for_update().filter(id=habit.id).first()
+            if locked_habit:
+                habit = locked_habit
+
             checkin = (
                 HabitCheckIn.objects.select_for_update()
                 .filter(habit=habit, date=target_date)
@@ -217,11 +252,11 @@ def uncheck_habit(
                 final_val = Decimal("0.00")
                 status_str = "unchecked"
 
-    # Evict prefetched check_ins cache on the instance if present
-    if hasattr(habit, "_prefetched_objects_cache"):
-        habit._prefetched_objects_cache.pop("check_ins", None)
+            # Evict prefetched check_ins cache on the instance if present
+            if hasattr(habit, "_prefetched_objects_cache"):
+                habit._prefetched_objects_cache.pop("check_ins", None)
 
-    recalculate_habit_streaks(habit, reference_date=today)
+            recalculate_habit_streaks(habit, reference_date=today)
 
     target = habit.target_value or Decimal("1.00")
     is_completed = is_day_completed(habit, final_val) if status_str == "checked" else False

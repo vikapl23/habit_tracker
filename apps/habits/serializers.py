@@ -124,6 +124,14 @@ class HabitSerializer(serializers.ModelSerializer):
             "habit_type",
             self.instance.habit_type if self.instance else HabitType.BOOLEAN,
         )
+
+        # If switching to boolean on update, automatically clear unit and target_value
+        if habit_type == HabitType.BOOLEAN:
+            if "unit" not in attrs and self.instance and self.instance.unit:
+                attrs["unit"] = ""
+            if "target_value" not in attrs and self.instance and self.instance.target_value is not None:
+                attrs["target_value"] = None
+
         target_value = attrs.get(
             "target_value",
             self.instance.target_value if self.instance else None,
@@ -266,34 +274,33 @@ class HabitSerializer(serializers.ModelSerializer):
 
     def get_today_value(self, obj: Habit) -> float:
         target_date = self._get_target_date(obj)
-        if "checkins_map" in self.context:
-            checkin = self.context["checkins_map"].get(obj.id)
-            return float(checkin.value) if checkin else 0.0
-
         user_today = self._get_user_today(obj)
         if obj.habit_type == HabitType.BOOLEAN and target_date == user_today:
             if obj.last_check_in_date == user_today:
                 return float(obj.last_check_in_value)
             return 0.0
 
+        if "checkins_map" in self.context:
+            checkin = self.context["checkins_map"].get(obj.id)
+            return float(checkin.value) if checkin else 0.0
+
         checkin = self._get_target_checkin(obj)
         return float(checkin.value) if checkin else 0.0
 
     def get_today_progress(self, obj: Habit) -> float:
         target_date = self._get_target_date(obj)
-        if "checkins_map" in self.context:
+        user_today = self._get_user_today(obj)
+        if obj.habit_type == HabitType.BOOLEAN and target_date == user_today:
+            if obj.last_check_in_date == user_today:
+                val = float(obj.last_check_in_value)
+            else:
+                val = 0.0
+        elif "checkins_map" in self.context:
             checkin = self.context["checkins_map"].get(obj.id)
             val = float(checkin.value) if checkin else 0.0
         else:
-            user_today = self._get_user_today(obj)
-            if obj.habit_type == HabitType.BOOLEAN and target_date == user_today:
-                if obj.last_check_in_date == user_today:
-                    val = float(obj.last_check_in_value)
-                else:
-                    val = 0.0
-            else:
-                checkin = self._get_target_checkin(obj)
-                val = float(checkin.value) if checkin else 0.0
+            checkin = self._get_target_checkin(obj)
+            val = float(checkin.value) if checkin else 0.0
 
         if val <= 0:
             return 0.0
@@ -307,17 +314,18 @@ class HabitSerializer(serializers.ModelSerializer):
     def get_is_checked_today(self, obj: Habit) -> bool:
         """Check whether the habit is completed for today (or requested date)."""
         target_date = self._get_target_date(obj)
+        user_today = self._get_user_today(obj)
+
+        if obj.habit_type == HabitType.BOOLEAN and target_date == user_today:
+            if obj.last_check_in_date == user_today:
+                return is_day_completed(obj, obj.last_check_in_value)
+            return False
+
         if "checkins_map" in self.context:
             checkin = self.context["checkins_map"].get(obj.id)
             if not checkin:
                 return False
             return is_day_completed(obj, checkin)
-
-        user_today = self._get_user_today(obj)
-        if target_date == user_today:
-            if obj.last_check_in_date == user_today:
-                return is_day_completed(obj, obj.last_check_in_value)
-            return False
 
         if obj.last_check_in_date is None:
             return False

@@ -108,31 +108,31 @@ export const HabitCard: React.FC<HabitCardProps> = ({
       }}
     >
       {/* Left side: Emoji & Habit Information (Tap to view habit details) */}
-      <div
-        role="button"
-        tabIndex={0}
-        onClick={handleInfoClick}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            handleInfoClick(e);
-          }
-        }}
-        aria-label={`View details for ${habit.name}`}
-        className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg p-1 -m-1"
-      >
+      <div className="flex items-center gap-3 min-w-0 flex-1">
         <div
-          className="w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0 transition-transform"
-          style={{
-            backgroundColor: `${accentColor}18`,
+          role="button"
+          tabIndex={0}
+          onClick={handleInfoClick}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              handleInfoClick(e);
+            }
           }}
-          aria-hidden="true"
+          aria-label={`View details for ${habit.name}`}
+          className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg p-1 -m-1"
         >
-          {habit.emoji || '🎯'}
-        </div>
+          <div
+            className="w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0 transition-transform"
+            style={{
+              backgroundColor: `${accentColor}18`,
+            }}
+            aria-hidden="true"
+          >
+            {habit.emoji || '🎯'}
+          </div>
 
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
+          <div className="min-w-0 flex-1">
             <h3
               className={`text-sm font-semibold truncate transition-colors ${
                 isChecked ? 'line-through text-slate-500' : 'text-slate-900'
@@ -141,73 +141,73 @@ export const HabitCard: React.FC<HabitCardProps> = ({
               {habit.name}
             </h3>
           </div>
+        </div>
 
-          {/* Measurable Progress display & Streaks */}
-          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-            {isMeasurable ? (
-              isEditingExact ? (
-                <form
-                  onSubmit={handleExactSubmit}
-                  onClick={(e) => e.stopPropagation()}
-                  className="flex items-center gap-1.5"
-                >
-                  <input
-                    ref={exactInputRef}
-                    autoFocus
-                    type="number"
-                    step="any"
-                    min="0"
-                    max="100000"
-                    inputMode="decimal"
-                    aria-label={`Enter exact amount for ${habit.name}`}
-                    value={exactInput}
-                    onChange={(e) => setExactInput(e.target.value)}
-                    onFocus={(e) => e.target.select()}
-                    onKeyDown={(e) => {
-                      e.stopPropagation();
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        saveExact();
-                      } else if (e.key === 'Escape') {
-                        e.preventDefault();
-                        setIsEditingExact(false);
-                      }
-                    }}
-                    onBlur={() => saveExact()}
-                    className="w-20 h-6 px-1.5 text-xs font-bold rounded border border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white select-text"
-                  />
-                  <span className="text-[11px] text-slate-500">/ {target} {habit.unit}</span>
-                </form>
-              ) : (
-                <button
-                  type="button"
-                  onClick={(e) => {
+        {/* Measurable Progress display & Streaks (Adjacent sibling to details button) */}
+        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+          {isMeasurable ? (
+            isEditingExact ? (
+              <form
+                onSubmit={handleExactSubmit}
+                onClick={(e) => e.stopPropagation()}
+                className="flex items-center gap-1.5"
+              >
+                <input
+                  ref={exactInputRef}
+                  autoFocus
+                  type="number"
+                  step="any"
+                  min="0"
+                  max="100000"
+                  inputMode="decimal"
+                  aria-label={`Enter exact amount for ${habit.name}`}
+                  value={exactInput}
+                  onChange={(e) => setExactInput(e.target.value)}
+                  onFocus={(e) => e.target.select()}
+                  onKeyDown={(e) => {
                     e.stopPropagation();
-                    setIsEditingExact(true);
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      saveExact();
+                    } else if (e.key === 'Escape') {
+                      e.preventDefault();
+                      setIsEditingExact(false);
+                    }
                   }}
-                  aria-label={`Current amount ${todayValue} of ${target} ${habit.unit}. Tap to enter exact amount`}
-                  className="text-xs font-bold text-blue-600 hover:text-blue-800 transition py-0.5 px-1 -mx-1 rounded hover:bg-blue-50"
-                >
-                  {todayValue} / {target} {habit.unit}
-                </button>
-              )
-            ) : null}
+                  onBlur={() => saveExact()}
+                  className="w-20 h-6 px-1.5 text-xs font-bold rounded border border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white select-text"
+                />
+                <span className="text-[11px] text-slate-500">/ {target} {habit.unit}</span>
+              </form>
+            ) : (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsEditingExact(true);
+                }}
+                aria-label={`Current amount ${todayValue} of ${target} ${habit.unit}. Tap to enter exact amount`}
+                className="text-xs font-bold text-blue-600 hover:text-blue-800 transition py-0.5 px-1 -mx-1 rounded hover:bg-blue-50 min-h-[28px] inline-flex items-center"
+              >
+                {todayValue} / {target} {habit.unit}
+              </button>
+            )
+          ) : null}
 
-            {/* Streaks Badges */}
-            <div className="flex items-center gap-1.5">
-              <span
-                className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200/60"
-                aria-label={`Current streak ${habit.current_streak} days`}
-              >
-                🔥 {habit.current_streak}
-              </span>
-              <span
-                className="text-[11px] font-medium text-slate-500"
-                aria-label={`Longest streak ${habit.longest_streak} days`}
-              >
-                best {habit.longest_streak}d
-              </span>
-            </div>
+          {/* Streaks Badges */}
+          <div className="flex items-center gap-1.5">
+            <span
+              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200/60"
+              aria-label={`Current streak ${habit.current_streak} days`}
+            >
+              🔥 {habit.current_streak}
+            </span>
+            <span
+              className="text-[11px] font-medium text-slate-500"
+              aria-label={`Longest streak ${habit.longest_streak} days`}
+            >
+              best {habit.longest_streak}d
+            </span>
           </div>
         </div>
       </div>
@@ -227,9 +227,11 @@ export const HabitCard: React.FC<HabitCardProps> = ({
               }}
               aria-label={`Decrease ${habit.name}`}
               disabled={disabled || todayValue <= 0}
-              className="w-7 h-7 rounded-full flex items-center justify-center text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 active:scale-95 transition disabled:opacity-40 disabled:cursor-not-allowed"
+              className="min-w-[44px] min-h-[44px] flex items-center justify-center -m-1.5 disabled:opacity-40 disabled:cursor-not-allowed group focus:outline-none"
             >
-              <Minus className="w-3.5 h-3.5" />
+              <div className="w-7 h-7 rounded-full flex items-center justify-center text-slate-600 group-hover:text-slate-900 bg-slate-100 group-hover:bg-slate-200 active:scale-95 transition pointer-events-none">
+                <Minus className="w-3.5 h-3.5" />
+              </div>
             </button>
 
             {/* Progress Ring with (+) button or tap to check */}
@@ -267,13 +269,15 @@ export const HabitCard: React.FC<HabitCardProps> = ({
                 }}
                 disabled={disabled}
                 aria-label={`Add 1 ${habit.unit || ''} to ${habit.name}`}
-                className="absolute inset-0 m-auto w-6 h-6 rounded-full flex items-center justify-center text-slate-700 hover:text-blue-600 active:scale-95 transition"
+                className="absolute inset-0 m-auto min-w-[44px] min-h-[44px] -m-2 flex items-center justify-center group focus:outline-none"
               >
-                {isChecked ? (
-                  <Check className="w-3.5 h-3.5 text-emerald-600 stroke-[3]" />
-                ) : (
-                  <Plus className="w-3.5 h-3.5" />
-                )}
+                <div className="w-6 h-6 rounded-full flex items-center justify-center text-slate-700 group-hover:text-blue-600 active:scale-95 transition pointer-events-none">
+                  {isChecked ? (
+                    <Check className="w-3.5 h-3.5 text-emerald-600 stroke-[3]" />
+                  ) : (
+                    <Plus className="w-3.5 h-3.5" />
+                  )}
+                </div>
               </button>
             </div>
           </div>

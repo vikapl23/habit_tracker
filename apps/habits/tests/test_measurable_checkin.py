@@ -3,7 +3,7 @@ from decimal import Decimal
 import pytest
 from rest_framework.exceptions import ValidationError
 
-from apps.habits.models import Habit
+from apps.habits.models import Habit, HabitCheckIn
 from apps.habits.services import check_in_habit, uncheck_habit
 
 
@@ -137,3 +137,49 @@ def test_atomic_concurrent_checkin_increments(user):
 
     checkin = habit.check_ins.get(date=today)
     assert checkin.value == Decimal("15.00")
+
+
+@pytest.mark.django_db
+def test_check_in_concurrent_initial_creation_integrity_error_handled(user):
+    """
+    Test race condition on initial check-in creation where two requests both find checkin=None
+    and attempt HabitCheckIn.objects.create(), one raising IntegrityError.
+    The service must handle IntegrityError and accumulate/set value correctly.
+    """
+    from unittest.mock import patch
+    from django.db import IntegrityError
+
+    today = user.get_today()
+    habit = Habit.objects.create(
+        user=user,
+        name="Water",
+        habit_type="measurable",
+        unit="glasses",
+        target_value=Decimal("8.00"),
+    )
+
+    # Pre-create the check-in in the database simulating a concurrent request that committed first
+    HabitCheckIn.objects.create(habit=habit, date=today, value=Decimal("3.00"))
+
+    # When the current request queries first(), simulate that it saw None (race condition),
+    # then calls create() which triggers IntegrityError because the row was already inserted.
+    orig_filter = HabitCheckIn.objects.filter
+    filter_calls = 0
+
+    def mock_filter(*args, **kwargs):
+        nonlocal filter_calls
+        filter_calls += 1
+        qs = orig_filter(*args, **kwargs)
+        if filter_calls == 1:
+            return qs.none()
+        return qs
+
+    def mock_create(*args, **kwargs):
+        raise IntegrityError("unique constraint failed: unique_habit_checkin_per_date")
+
+    with patch.object(HabitCheckIn.objects, "filter", side_effect=mock_filter):
+        with patch("apps.habits.services.checkin.HabitCheckIn.objects.create", side_effect=mock_create):
+            # Checking in 3 glasses in 'add' mode should fallback to updating existing 3 -> total 6 glasses
+            res = check_in_habit(habit=habit, target_date=today, value=Decimal("3.00"), mode="add", user=user)
+            assert res.today_value == Decimal("6.00")
+            assert res.status == "checked"

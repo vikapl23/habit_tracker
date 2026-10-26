@@ -1,5 +1,6 @@
 import importlib
 from datetime import date, timedelta
+from decimal import Decimal
 
 import pytest
 from django.apps import apps
@@ -324,3 +325,28 @@ def test_data_migration_populates_existing_habits(user):
     habit.refresh_from_db()
     assert habit.frequency_type == "daily"
     assert habit.frequency_days == []
+
+
+@pytest.mark.django_db
+def test_data_migration_backfills_last_check_in_value(user):
+    """Item 3: Migration backfills last_check_in_value = 1.00 for habits with last_check_in_date."""
+    migration_0007 = importlib.import_module("apps.habits.migrations.0007_backfill_last_check_in_value")
+    backfill_func = migration_0007.backfill_last_check_in_value
+
+    habit_checked = Habit.objects.create(
+        user=user, name="Checked Habit", last_check_in_date=user.get_today()
+    )
+    Habit.objects.filter(id=habit_checked.id).update(last_check_in_value=Decimal("0.00"))
+
+    habit_unchecked = Habit.objects.create(
+        user=user, name="Unchecked Habit", last_check_in_date=None
+    )
+    Habit.objects.filter(id=habit_unchecked.id).update(last_check_in_value=Decimal("0.00"))
+
+    backfill_func(apps, None)
+
+    habit_checked.refresh_from_db()
+    assert habit_checked.last_check_in_value == Decimal("1.00")
+
+    habit_unchecked.refresh_from_db()
+    assert habit_unchecked.last_check_in_value == Decimal("0.00")

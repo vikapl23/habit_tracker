@@ -41,12 +41,30 @@ describe('HabitCard', () => {
     const handleToggle = vi.fn();
     const user = userEvent.setup();
 
-    render(<HabitCard habit={measurableHabit} onToggle={handleToggle} />);
+    const { container } = render(<HabitCard habit={measurableHabit} onToggle={handleToggle} />);
+
+    // Verify interactive controls (button/input) are not nested inside role="button"
+    const roleButtons = screen.getAllByRole('button');
+    for (const btn of roleButtons) {
+      expect(btn.closest('[role="button"]') === btn || btn.parentElement?.closest('[role="button"]') === null).toBe(true);
+    }
 
     // Click current amount button to enter exact edit mode
     const editButton = screen.getByRole('button', {
       name: /Current amount 5 of 20 pages\. Tap to enter exact amount/i,
     });
+    // The editButton should NOT be nested inside any other role="button"
+    expect(editButton.parentElement?.closest('[role="button"]')).toBeNull();
+
+    // Verify touch targets for quick decrement and quick increment buttons
+    const decButton = screen.getByRole('button', { name: /Decrease Read Pages/i });
+    expect(decButton.className).toMatch(/min-w-\[44px\]/);
+    expect(decButton.className).toMatch(/min-h-\[44px\]/);
+
+    const incButton = screen.getByRole('button', { name: /Add 1 pages to Read Pages/i });
+    expect(incButton.className).toMatch(/min-w-\[44px\]/);
+    expect(incButton.className).toMatch(/min-h-\[44px\]/);
+
     await user.click(editButton);
 
     // Verify input is rendered
