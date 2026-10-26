@@ -1,9 +1,15 @@
 import React, { useState, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { User, Globe, LogOut, Check } from 'lucide-react';
+import { User, Globe, LogOut, Check, Search } from 'lucide-react';
 import { BottomNavigation } from '../components/BottomNavigation';
 import { Toast, ToastMessage } from '../components/Toast';
 import { getErrorMessage } from '../utils/errorUtils';
+import {
+  formatTimezoneDisplay,
+  getBrowserTimezone,
+  getTimezoneOffsetString,
+  normalizeTimezone,
+} from '../utils/timezoneUtils';
 
 const FALLBACK_TIMEZONES = [
   'UTC',
@@ -45,15 +51,24 @@ const FALLBACK_TIMEZONES = [
 
 export const ProfilePage: React.FC = () => {
   const { user, logout, updateProfile } = useAuth();
-  const [customTimezone, setCustomTimezone] = useState<string | null>(null);
-  const normalizedUserTimezone = user?.timezone === 'Europe/Kiev' ? 'Europe/Kyiv' : user?.timezone;
-  const selectedTimezone = customTimezone ?? normalizedUserTimezone ?? 'UTC';
+  const detectedTimezone = useMemo(() => getBrowserTimezone(), []);
+  const normalizedUserTimezone = normalizeTimezone(user?.timezone);
+
+  // Auto toggle state
+  const isAutoDefault = user?.timezone_auto ?? true;
+  const [isAuto, setIsAuto] = useState<boolean>(isAutoDefault);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [selectedTimezone, setSelectedTimezone] = useState<string>(
+    normalizedUserTimezone || detectedTimezone || 'UTC'
+  );
+
   const [isSaving, setIsSaving] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
-  const timezoneOptions = useMemo(() => {
+  // All known timezones with detected placed first
+  const allTimezones = useMemo(() => {
     let supported: string[] = [];
     try {
       if (typeof Intl !== 'undefined' && 'supportedValuesOf' in Intl) {
@@ -62,27 +77,64 @@ export const ProfilePage: React.FC = () => {
     } catch {
       supported = [];
     }
-    const combined = Array.from(new Set([...FALLBACK_TIMEZONES, ...supported]));
-    if (normalizedUserTimezone && !combined.includes(normalizedUserTimezone)) {
-      combined.push(normalizedUserTimezone);
+    const set = new Set([...FALLBACK_TIMEZONES, ...supported]);
+    if (normalizedUserTimezone) set.add(normalizedUserTimezone);
+    if (detectedTimezone) set.add(detectedTimezone);
+
+    const sorted = Array.from(set).sort((a, b) => a.localeCompare(b));
+    // Ensure detected timezone is placed first
+    const withoutDetected = sorted.filter((tz) => tz !== detectedTimezone);
+    return detectedTimezone ? [detectedTimezone, ...withoutDetected] : sorted;
+  }, [detectedTimezone, normalizedUserTimezone]);
+
+  // Filtered by query
+  const filteredTimezones = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return allTimezones;
+    return allTimezones.filter((tz) => {
+      const display = tz.toLowerCase();
+      const readable = tz.replace(/_/g, ' ').toLowerCase();
+      return display.includes(q) || readable.includes(q);
+    });
+  }, [allTimezones, searchQuery]);
+
+  const autoDisplayString = useMemo(() => {
+    return formatTimezoneDisplay(detectedTimezone || normalizedUserTimezone || 'UTC');
+  }, [detectedTimezone, normalizedUserTimezone]);
+
+  const hasChanged = useMemo(() => {
+    if (isAuto !== isAutoDefault) return true;
+    if (!isAuto && selectedTimezone !== normalizedUserTimezone) return true;
+    return false;
+  }, [isAuto, isAutoDefault, selectedTimezone, normalizedUserTimezone]);
+
+  const handleToggleAuto = () => {
+    const nextAuto = !isAuto;
+    setIsAuto(nextAuto);
+    setSaveSuccess(false);
+    if (nextAuto) {
+      // Revert selection to detected when turning on auto
+      setSelectedTimezone(detectedTimezone);
     }
-    return combined.sort((a, b) => a.localeCompare(b));
-  }, [normalizedUserTimezone]);
+  };
 
   const handleSaveTimezone = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (isSaving || !selectedTimezone) return;
+    if (isSaving || !hasChanged) return;
 
     setIsSaving(true);
     setSaveSuccess(false);
     try {
-      await updateProfile({ timezone: selectedTimezone });
-      setCustomTimezone(null);
+      const targetTimezone = isAuto ? detectedTimezone : selectedTimezone;
+      await updateProfile({
+        timezone: targetTimezone,
+        timezone_auto: isAuto,
+      });
       setSaveSuccess(true);
       setToast({
         id: String(Date.now()),
         type: 'success',
-        message: 'Timezone updated successfully.',
+        message: `Timezone updated to ${targetTimezone}.`,
       });
     } catch (err: unknown) {
       setToast({
@@ -103,8 +155,6 @@ export const ProfilePage: React.FC = () => {
       setIsLoggingOut(false);
     }
   };
-
-  const hasTzChanged = selectedTimezone !== (normalizedUserTimezone || '');
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center">
@@ -164,26 +214,102 @@ export const ProfilePage: React.FC = () => {
             </p>
 
             <form onSubmit={handleSaveTimezone} className="space-y-4">
-              <div className="space-y-1.5">
-                <label htmlFor="timezone-select" className="block text-xs font-semibold text-slate-700">
-                  Select Timezone
-                </label>
-                <select
-                  id="timezone-select"
-                  value={selectedTimezone}
-                  onChange={(e) => {
-                    setCustomTimezone(e.target.value);
-                    setSaveSuccess(false);
-                  }}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 text-base sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+              {/* Automatic Timezone Toggle */}
+              <div className="flex items-center justify-between p-3.5 rounded-xl border border-slate-200 bg-slate-50/60">
+                <div className="min-w-0 flex-1 pr-3">
+                  <span id="auto-tz-label" className="block text-xs font-semibold text-slate-800">
+                    Set timezone automatically
+                  </span>
+                  <span className="block text-xs text-slate-500 truncate">
+                    {autoDisplayString}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={isAuto}
+                  aria-labelledby="auto-tz-label"
+                  onClick={handleToggleAuto}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                    isAuto ? 'bg-blue-600' : 'bg-slate-300'
+                  }`}
                 >
-                  {timezoneOptions.map((tz) => (
-                    <option key={tz} value={tz}>
-                      {tz}
-                    </option>
-                  ))}
-                </select>
+                  <span
+                    aria-hidden="true"
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                      isAuto ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
               </div>
+
+              {/* Searchable Picker when Toggle is OFF */}
+              {!isAuto && (
+                <div className="space-y-2 pt-1 animate-in fade-in slide-in-from-top-1">
+                  <label htmlFor="timezone-search" className="block text-xs font-semibold text-slate-700">
+                    Select Timezone
+                  </label>
+                  <div className="relative">
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      id="timezone-search"
+                      type="text"
+                      placeholder="Search timezone (e.g. kyiv, new york)"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full pl-9 pr-3.5 py-2 rounded-xl border border-slate-200 bg-white text-slate-800 text-xs font-medium placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                    />
+                  </div>
+
+                  {/* Options list */}
+                  <div
+                    role="listbox"
+                    aria-label="Timezone list"
+                    className="max-h-52 overflow-y-auto rounded-xl border border-slate-200 bg-white divide-y divide-slate-100 shadow-inner"
+                  >
+                    {filteredTimezones.length === 0 ? (
+                      <div className="p-3 text-center text-xs text-slate-400">
+                        No timezones match "{searchQuery}"
+                      </div>
+                    ) : (
+                      filteredTimezones.map((tz) => {
+                        const isSelected = selectedTimezone === tz;
+                        const isDetected = tz === detectedTimezone;
+                        const offset = getTimezoneOffsetString(tz);
+                        return (
+                          <div
+                            key={tz}
+                            role="option"
+                            aria-selected={isSelected}
+                            onClick={() => {
+                              setSelectedTimezone(tz);
+                              setSaveSuccess(false);
+                            }}
+                            className={`min-h-[44px] px-3.5 py-2.5 flex items-center justify-between cursor-pointer text-xs font-medium transition ${
+                              isSelected
+                                ? 'bg-blue-50 text-blue-700 font-semibold'
+                                : 'text-slate-700 hover:bg-slate-50'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 truncate">
+                              <span className="truncate">{tz}</span>
+                              <span className="text-[11px] text-slate-400 shrink-0">
+                                ({offset})
+                              </span>
+                              {isDetected && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-100 text-blue-700 shrink-0">
+                                  Detected
+                                </span>
+                              )}
+                            </div>
+                            {isSelected && <Check className="w-4 h-4 text-blue-600 shrink-0" />}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
 
               {saveSuccess && (
                 <div className="flex items-center gap-1.5 text-xs font-medium text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-lg p-2.5">
@@ -194,7 +320,7 @@ export const ProfilePage: React.FC = () => {
 
               <button
                 type="submit"
-                disabled={isSaving || !hasTzChanged}
+                disabled={isSaving || !hasChanged}
                 className="w-full min-h-[44px] flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 disabled:pointer-events-none text-white text-xs font-semibold shadow-sm transition"
               >
                 {isSaving ? (

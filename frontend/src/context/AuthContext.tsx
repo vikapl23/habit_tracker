@@ -7,6 +7,7 @@ import {
   UserProfile,
   ApiError,
 } from '../api/client';
+import { getBrowserTimezone, normalizeTimezone } from '../utils/timezoneUtils';
 
 export interface AuthContextType {
   user: UserProfile | null;
@@ -26,16 +27,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [initError, setInitError] = useState<string | null>(null);
 
+  const syncBrowserTimezone = useCallback(async (profile: UserProfile): Promise<UserProfile> => {
+    // Check if timezone_auto is explicitly True (or default True when undefined)
+    const isAuto = profile.timezone_auto ?? true;
+    if (!isAuto) {
+      return profile;
+    }
+    const detected = getBrowserTimezone();
+    const currentNormalized = normalizeTimezone(profile.timezone);
+    if (detected && detected !== currentNormalized) {
+      try {
+        const updated = await apiClient.updateProfile({ timezone: detected });
+        return updated;
+      } catch {
+        // Silent failure - do not break auth/app flow
+      }
+    }
+    return profile;
+  }, []);
+
   const fetchProfile = useCallback(async (): Promise<boolean> => {
     try {
-      const profile = await apiClient.getProfile();
+      let profile = await apiClient.getProfile();
+      profile = await syncBrowserTimezone(profile);
       setUser(profile);
       return true;
     } catch (err) {
       setUser(null);
       throw err;
     }
-  }, []);
+  }, [syncBrowserTimezone]);
 
   const initAuth = useCallback(async () => {
     setIsLoading(true);
@@ -105,12 +126,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (email: string, password: string) => {
     await apiClient.login(email, password);
-    await fetchProfile();
+    let profile = await apiClient.getProfile();
+    profile = await syncBrowserTimezone(profile);
+    setUser(profile);
   };
 
   const register = async (email: string, password: string, timezone?: string) => {
     await apiClient.register(email, password, timezone);
-    await fetchProfile();
+    let profile = await apiClient.getProfile();
+    profile = await syncBrowserTimezone(profile);
+    setUser(profile);
   };
 
   const logout = async () => {

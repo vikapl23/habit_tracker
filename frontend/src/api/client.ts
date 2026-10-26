@@ -29,6 +29,7 @@ export interface UserProfile {
   id: number;
   email: string;
   timezone: string;
+  timezone_auto?: boolean;
 }
 
 // In-memory access token storage (C1: never persisted in localStorage)

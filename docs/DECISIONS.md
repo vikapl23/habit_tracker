@@ -156,3 +156,31 @@ Review of the initial Phase 6 Docker Compose setup revealed four issues:
 - **Trade-offs**:
   - Relaxing HTTPS flags in `docker-compose.yml` requires environment variables; in staging or production, these variables must remain unset or set to `True`.
 
+## ADR 006: Client-Side Browser Timezone Detection over IP Geolocation
+
+### Date
+2026-10-26
+
+### Context & Problem
+Accurate timezone resolution is critical for the habit tracker: daily check-in resets, future date validation, scheduling, and streak calculations depend directly on the user's local calendar day. Users travel across time zones, change systems, or switch devices. Two primary architectural options were evaluated for automatic timezone synchronization:
+1. **Server-Side IP Geolocation**: Querying MaxMind GeoIP database or external IP geolocation web APIs (e.g. ipinfo.io, ipapi.co) based on client IP headers (`X-Forwarded-For`).
+2. **Client-Side Browser Timezone Detection (`Intl.DateTimeFormat`)**: Querying the client environment via ECMAScript's native `Intl.DateTimeFormat().resolvedOptions().timeZone` on application mount and login, then silently updating the user's profile (`PATCH /api/v1/auth/profile/`) when `timezone_auto` is enabled.
+
+### Decision
+Adopt **Client-Side Browser Timezone Detection (`Intl.DateTimeFormat`)**:
+1. When `timezone_auto` is enabled (default `True`), the frontend resolves the client IANA timezone via `Intl.DateTimeFormat().resolvedOptions().timeZone` on application boot and post-login.
+2. If the resolved timezone differs from the persisted timezone, normalize legacy names (e.g. `Europe/Kiev` to `Europe/Kyiv`) and issue a silent `PATCH /api/v1/auth/profile/` with the new timezone. If identical, no network request is sent.
+3. If `timezone_auto` is `False` (manual mode), the frontend never overwrites the chosen timezone.
+
+### Rationale & Trade-offs
+- **Accuracy with VPN and Mobile Networks**:
+  - IP geolocation frequently pinpoints users to data centers, corporate VPN exit nodes, or mobile carrier proxy hubs hundreds or thousands of miles away from their actual physical clock time. Browser timezone detection reflects the user's actual device clock and local wall time regardless of VPN or proxy tunnels.
+- **No Third-Party Database or External Service Dependency**:
+  - Eliminates external API call latency, third-party network failure points, and monthly subscription limits.
+  - Avoids bundling or routinely downloading/maintaining heavy local MaxMind GeoIP binary databases on ephemeral containers.
+- **Privacy First**:
+  - No IP address or location metadata is logged, queried, or leaked to third-party tracking services.
+- **Works Seamlessly Behind Cloud Reverse Proxies (Render.com)**:
+  - Behind Render's multi-tier load balancers and reverse proxies, extracting accurate client IPs requires trusting specific proxy headers (`X-Forwarded-For`), which can be spoofed or masked. Native browser detection operates end-to-end within the user agent.
+
+

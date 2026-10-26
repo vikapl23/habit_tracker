@@ -10,6 +10,7 @@ const mockProfile = {
   id: 1,
   email: 'tester@example.com',
   timezone: 'Europe/Kyiv',
+  timezone_auto: true,
 };
 
 const renderProfile = () => {
@@ -39,19 +40,27 @@ describe('ProfilePage (Step 5.5)', () => {
     vi.restoreAllMocks();
     vi.spyOn(apiClient, 'refreshTokens').mockResolvedValue('mock-access-token');
     vi.spyOn(apiClient, 'getProfile').mockResolvedValue(mockProfile);
+
+    // Mock Intl DateTimeFormat
+    vi.spyOn(Intl, 'DateTimeFormat').mockImplementation(() => {
+      return {
+        resolvedOptions: () => ({ timeZone: 'Europe/Kyiv' }),
+        formatToParts: () => [{ type: 'timeZoneName', value: 'GMT+02:00' }],
+        format: () => '2026-10-26',
+      } as unknown as Intl.DateTimeFormat;
+    });
   });
 
-  it('renders read-only email and timezone selector preselected with current timezone', async () => {
+  it('renders read-only email and timezone auto toggle preselected with current timezone', async () => {
     renderProfile();
 
     expect(await screen.findByDisplayValue('tester@example.com')).toBeInTheDocument();
     const emailInput = screen.getByLabelText(/email address/i);
     expect(emailInput).toHaveAttribute('readOnly');
 
-    const tzSelect = screen.getByLabelText(/select timezone/i);
-    await waitFor(() => {
-      expect(tzSelect).toHaveValue('Europe/Kyiv');
-    });
+    const toggle = screen.getByRole('switch', { name: /set timezone automatically/i });
+    expect(toggle).toBeChecked();
+    expect(screen.getByText(/Europe\/Kyiv \(UTC\+02:00\)/i)).toBeInTheDocument();
 
     // Bottom Navigation present
     expect(screen.getByRole('navigation', { name: /bottom navigation/i })).toBeInTheDocument();
@@ -65,31 +74,34 @@ describe('ProfilePage (Step 5.5)', () => {
       id: 2,
       email: 'legacy@example.com',
       timezone: 'Europe/Kiev',
+      timezone_auto: true,
     });
 
     renderProfile();
 
     expect(await screen.findByDisplayValue('legacy@example.com')).toBeInTheDocument();
-    const tzSelect = screen.getByLabelText(/select timezone/i);
-    await waitFor(() => {
-      expect(tzSelect).toHaveValue('Europe/Kyiv');
-    });
+    expect(await screen.findByText(/Europe\/Kyiv \(UTC\+02:00\)/i)).toBeInTheDocument();
   });
 
-  it('updates timezone by calling PATCH /auth/profile/ and shows success message', async () => {
+  it('updates timezone by switching off auto and selecting timezone and shows success message', async () => {
     const user = userEvent.setup();
     const updateSpy = vi.spyOn(apiClient, 'updateProfile').mockResolvedValue({
       id: 1,
       email: 'tester@example.com',
       timezone: 'Europe/Warsaw',
+      timezone_auto: false,
     });
 
     renderProfile();
 
-    const tzSelect = await screen.findByLabelText(/select timezone/i);
+    const toggle = await screen.findByRole('switch', { name: /set timezone automatically/i });
+    await user.click(toggle);
 
-    // Change timezone
-    await user.selectOptions(tzSelect, 'Europe/Warsaw');
+    const searchInput = screen.getByPlaceholderText(/search timezone/i);
+    await user.type(searchInput, 'warsaw');
+
+    const warsawOption = screen.getByRole('option', { name: /Europe\/Warsaw/i });
+    await user.click(warsawOption);
 
     // Save button should now be enabled
     const saveBtn = screen.getByRole('button', { name: /save timezone/i });
@@ -98,10 +110,13 @@ describe('ProfilePage (Step 5.5)', () => {
     await user.click(saveBtn);
 
     await waitFor(() => {
-      expect(updateSpy).toHaveBeenCalledWith({ timezone: 'Europe/Warsaw' });
+      expect(updateSpy).toHaveBeenCalledWith({
+        timezone: 'Europe/Warsaw',
+        timezone_auto: false,
+      });
     });
 
-    expect(await screen.findByText(/timezone updated successfully/i)).toBeInTheDocument();
+    expect(await screen.findByText(/timezone updated to Europe\/Warsaw/i)).toBeInTheDocument();
   });
 
   it('logs out user and navigates away when Log Out button is clicked', async () => {
