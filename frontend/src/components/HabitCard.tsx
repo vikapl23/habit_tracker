@@ -66,14 +66,18 @@ export const HabitCard: React.FC<HabitCardProps> = ({
     }
   }, [isEditingExact, todayValue]);
 
-  const handleExactSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const saveExact = () => {
     const parsed = parseFloat(exactInput);
     if (!isNaN(parsed) && parsed >= 0) {
       onToggle(habit, { value: parsed, mode: 'set' });
     }
     setIsEditingExact(false);
+  };
+
+  const handleExactSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    saveExact();
   };
 
   const handleInfoClick = (e: React.MouseEvent | React.KeyboardEvent) => {
@@ -154,11 +158,22 @@ export const HabitCard: React.FC<HabitCardProps> = ({
                     step="any"
                     min="0"
                     max="100000"
+                    inputMode="decimal"
                     aria-label={`Enter exact amount for ${habit.name}`}
                     value={exactInput}
                     onChange={(e) => setExactInput(e.target.value)}
-                    onBlur={() => setIsEditingExact(false)}
-                    className="w-16 h-6 px-1.5 text-xs font-bold rounded border border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
+                    onKeyDown={(e) => {
+                      e.stopPropagation();
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        saveExact();
+                      } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        setIsEditingExact(false);
+                      }
+                    }}
+                    onBlur={() => saveExact()}
+                    className="w-20 h-6 px-1.5 text-xs font-bold rounded border border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white select-text"
                   />
                   <span className="text-[11px] text-slate-500">/ {target} {habit.unit}</span>
                 </form>
