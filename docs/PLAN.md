@@ -510,6 +510,152 @@ Each step is independent, test-driven, verifiable, and yields a working, deploya
 
 ---
 
+### Step 8: Measurable Habits with Units
+- **Scope**:
+  - Distinguish between **boolean** habits (completed / not completed) and **measurable** habits (target quantity + unit).
+  - Habit model configuration: `habit_type` (`boolean` vs `measurable`), `unit` (e.g. `ml`, `pages`, `minutes`, `steps`), and `target_value` (e.g. `2000`, `30`).
+  - Incremental check-ins: users can check in multiple times per day with incremental amounts; daily check-in values are summed.
+  - Day completion criteria: a measurable habit is satisfied on a given date if and only if `sum(values) >= target_value`.
+  - Streak engine & statistics integration: streaks and completion rates adapt seamlessly using the `is_day_completed` abstraction.
+  - Frontend UI: progress bars for measurable cards (e.g. `1200 / 2000 ml`), quick-add increment buttons (+250ml, custom input), and visual state transitions upon reaching target.
+- **Data Model Changes**:
+  - `Habit`:
+    - `habit_type`: `CharField(max_length=20, choices=[('boolean', 'Boolean'), ('measurable', 'Measurable')], default='boolean')`
+    - `target_value`: `DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)`
+    - `unit`: `CharField(max_length=30, blank=True, default='')`
+    - Model validation: `target_value > 0` and non-empty `unit` required if `habit_type == 'measurable'`.
+  - `HabitCheckIn`:
+    - `value`: `DecimalField(max_digits=10, decimal_places=2, default=1.0)`
+    - Relax unique constraint from `(habit, date)` to allow multiple check-in logs per day, OR maintain a daily aggregated check-in with check-in log records. (Preferred: Keep `HabitCheckIn` per date with `value` representing the daily accumulated total, or add `HabitCheckInLog` for multi-log entries summed into `HabitCheckIn.value`).
+- **Endpoints**:
+  - `POST /api/v1/habits/`: Accept `habit_type`, `target_value`, `unit`.
+  - `POST /api/v1/habits/{id}/check/`: Accept optional `value` payload (e.g. `{"date": "2026-10-26", "value": 500}`). For measurable habits, increments the day's accumulated value. Returns current accumulated value, target, and completion status.
+  - `POST /api/v1/habits/{id}/uncheck/`: Reset or decrement today's check-in value.
+  - `GET /api/v1/habits/` & `GET /api/v1/habits/{id}/`: Expose `habit_type`, `target_value`, `unit`, `today_value`, and `is_checked_today` (`today_value >= target_value`).
+- **Testing Strategy**:
+  - Unit tests for validation: negative or zero target values rejected; measurable habit requires unit and target.
+  - Streak service unit tests: partial completion does not count towards streak; reaching/exceeding target counts as satisfied day; decrementing below target lapses streak if today/yesterday.
+  - Integration tests for `check` action: verifying sequential check-ins sum properly (e.g. 500 + 700 = 1200 / 1000 => completed).
+  - Statistics tests: verify weekly/monthly rates compute based on threshold satisfaction.
+- **Risks & Mitigations**:
+  - *Risk*: Migration of existing boolean check-ins breaking streak calculations.
+    *Mitigation*: Default existing check-in `value` to `1.0` and default existing habits to `habit_type='boolean'` with `target_value=1.0`.
+  - *Risk*: Floating point rounding issues with fractional units (e.g. kilometers, liters).
+    *Mitigation*: Use `DecimalField` instead of `FloatField` for exact decimal arithmetic.
+  - *Risk*: Race conditions during simultaneous concurrent check-ins summing amounts.
+    *Mitigation*: Use Django ORM `F()` expressions or database-level row locking (`select_for_update()`).
+
+---
+
+### Step 9: Email Notifications via Mailgun
+- **Scope**:
+  - Transactional and reminder email dispatch using the Mailgun API.
+  - User-configurable daily reminders delivered at user's chosen local time (e.g. 20:00).
+  - Weekly summary email (completion percentages, streaks preserved, habits needing attention) delivered every Monday.
+  - Per-user notification preferences and one-click direct unsubscribe links with signed tokens.
+  - Scheduled dispatch engine driven by a custom Django management command (`python manage.py send_habit_reminders`) invoked periodically by a cron scheduler (e.g. Render Cron Job / Celery Beat).
+  - Strict security: Mailgun API keys, domain, and webhooks secrets stored exclusively in environment variables (`.env`).
+- **Data Model Changes**:
+  - `accounts.User` (or dedicated `UserNotificationSettings` one-to-one model):
+    - `email_notifications_enabled`: `BooleanField(default=True)`
+    - `daily_reminder_enabled`: `BooleanField(default=True)`
+    - `daily_reminder_time`: `TimeField(default='20:00:00')` (in user's local timezone)
+    - `weekly_summary_enabled`: `BooleanField(default=True)`
+    - `unsubscribe_token`: `UUIDField(default=uuid.uuid4, unique=True)`
+  - Optional `EmailLog` model to track sent emails and prevent duplicate deliveries within the same dispatch window.
+- **Endpoints**:
+  - `GET /api/v1/notifications/settings/`: Retrieve user notification preferences.
+  - `PATCH /api/v1/notifications/settings/`: Update notification preferences (toggle daily reminder, change reminder time, toggle weekly summary).
+  - `GET /api/v1/notifications/unsubscribe/{token}/`: Public one-click unsubscribe endpoint disabling email notifications for the corresponding user.
+- **Testing Strategy**:
+  - Mock Mailgun HTTP client / `Anymail` backend during testing; verify outgoing payload, headers, and recipient.
+  - Timezone dispatch unit tests: freeze time across multiple UTC hours and assert that only users whose local clock matches `daily_reminder_time` receive emails.
+  - Unsubscribe integration test: token lookup updates user preferences and disables future sends.
+  - Edge cases: user with 0 active habits, user with all habits already completed today (skip daily reminder or send congratulations).
+- **Risks & Mitigations**:
+  - *Risk*: Spamming users due to scheduler retries or overlapping cron executions.
+    *Mitigation*: Implement idempotency locks (cache or `EmailLog` records tagged by date and user) to guarantee at most one reminder per user per day.
+  - *Risk*: Timezone shift / daylight saving misalignments.
+    *Mitigation*: Always evaluate current time in the user's saved `timezone` attribute (e.g. `zoneinfo.ZoneInfo(user.timezone)`).
+  - *Risk*: Leaking Mailgun API keys.
+    *Mitigation*: Strictly validate `.env` configuration; enforce rejection of hardcoded secrets via pre-commit and settings validation.
+
+---
+
+### Step 10: AI Habit Coach Chatbot via Google Gemini
+- **Scope**:
+  - Dedicated "Coach" / "AI Assistant" chat interface in the frontend app.
+  - Backend proxy endpoint orchestrating conversations with the Google Gemini API (Gemini Flash).
+  - Backend-only API key security (client never has access to the Gemini secret key).
+  - Enriched context injection: prompt includes the user's active habits, current/longest streaks, frequency, and recent 7-day completion rates.
+  - Read-only coaching advice: the AI provides motivation, streak repair strategies, habit-stacking advice, and reflection prompts; it cannot directly alter user data.
+  - Daily rate limits: strictly enforced daily message quota per user (e.g. 10 messages/day) to prevent API credit exhaustion.
+  - Conversation history: persistent chat message history stored in DB.
+  - Security & prompt injection defenses: sanitize user inputs, system prompt system instructions enforcing boundary constraints, and refusal to process non-habit instructions.
+- **Data Model Changes**:
+  - `CoachConversation`:
+    - `id`: `BigAutoField`, PK
+    - `user`: `ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='coach_conversations')`
+    - `created_at`: `DateTimeField(auto_now_add=True)`
+  - `CoachMessage`:
+    - `id`: `BigAutoField`, PK
+    - `conversation`: `ForeignKey(CoachConversation, on_delete=models.CASCADE, related_name='messages')`
+    - `sender`: `CharField(max_length=10, choices=[('user', 'User'), ('assistant', 'Assistant')])`
+    - `content`: `TextField()`
+    - `created_at`: `DateTimeField(auto_now_add=True)`
+  - User daily quota tracker: track message counts per date via Redis or relational `CoachMessage` count for `created_at__date=today`.
+- **Endpoints**:
+  - `GET /api/v1/coach/messages/`: Retrieve user's recent chat history.
+  - `POST /api/v1/coach/chat/`: Send a message to the AI coach. Payload: `{"message": "How can I improve my reading habit?"}`. Returns assistant reply and remaining daily message quota.
+  - `DELETE /api/v1/coach/history/`: Clear conversation history.
+- **Testing Strategy**:
+  - Mock Gemini API client/responses in backend test suite to test response handling without network calls.
+  - Test daily message rate limiting: 11th message returns `429 Too Many Requests`.
+  - Context assembly unit tests: verify prompt serializer correctly aggregates habits, streaks, and completion percentages.
+  - Prompt injection safeguard tests: verify that prompt formatting keeps user input distinct from system instructions.
+- **Risks & Mitigations**:
+  - *Risk*: Excessive API billing or abuse.
+    *Mitigation*: Hard limits on daily message count per user, strict max token output limit, and backend timeout configuration.
+  - *Risk*: AI hallucinating nonexistent user habits or check-in stats.
+    *Mitigation*: Feed clean, structured JSON summaries of current habits and stats directly into the system prompt context.
+  - *Risk*: Prompt injection jailbreaks attempting to bypass habit coach persona.
+    *Mitigation*: Use Gemini system instructions and role separation; strip control characters; enforce clear persona boundaries in the system prompt.
+
+---
+
+### Step 11: Webhooks (Pending Mentor Clarification)
+- **Scope**:
+  - Architectural hooks for handling asynchronous event notifications and integrations.
+  - *Candidate Integration A*: **Stripe Payments** (e.g. webhook handling for subscription lifecycle: `checkout.session.completed`, `customer.subscription.deleted`, updating user premium tier).
+  - *Candidate Integration B*: **Mailgun Event Tracking** (e.g. delivery receipts, bounces, spam complaints, unsubscribe events: `opened`, `clicked`, `failed`).
+  - *Candidate Integration C*: **Outgoing User Webhooks** (e.g. dispatching webhook payloads to user endpoints on habit completed, streak milestone reached, or streak lost).
+  - *Status*: **Pending mentor clarification** to finalize requirements and direction.
+- **Data Model Changes**:
+  - `WebhookEvent` (incoming log):
+    - `id`: `BigAutoField`, PK
+    - `provider`: `CharField(max_length=50)` (e.g. `mailgun`, `stripe`)
+    - `event_id`: `CharField(max_length=255, unique=True)`
+    - `event_type`: `CharField(max_length=100)`
+    - `payload`: `JSONField()`
+    - `status`: `CharField(choices=[('pending', 'Pending'), ('processed', 'Processed'), ('failed', 'Failed')])`
+    - `received_at`: `DateTimeField(auto_now_add=True)`
+  - *If Outgoing*: `WebhookSubscription` (user, target_url, secret, events list, is_active).
+- **Endpoints**:
+  - `POST /api/v1/webhooks/mailgun/`: Mailgun event receiver with cryptographic signature verification.
+  - `POST /api/v1/webhooks/stripe/`: Stripe webhook receiver with signature header verification.
+  - *If Outgoing*: CRUD on `/api/v1/webhooks/subscriptions/`.
+- **Testing Strategy**:
+  - Signature verification test cases (valid secret vs forged signatures returning 400/403).
+  - Idempotency test: duplicate `event_id` deliveries do not re-execute business logic and return `200 OK`.
+  - Malformed payload rejection tests.
+- **Risks & Mitigations**:
+  - *Risk*: Replay attacks and unauthorized calls to webhook endpoints.
+    *Mitigation*: Strict signature verification using provider HMAC secret keys; reject requests older than timestamp tolerance (e.g. 5 minutes).
+  - *Risk*: Webhook handler blocking HTTP worker during heavy processing.
+    *Mitigation*: Return `200 OK` immediately after recording event to DB and delegate business execution to an asynchronous background worker.
+
+---
+
 ## 7. Testing Strategy & Strict TDD Workflow
 
 We adhere to **Strict Test-Driven Development (TDD)** across all features:

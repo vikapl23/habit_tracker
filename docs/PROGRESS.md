@@ -16,6 +16,10 @@ This checklist tracks the ongoing development progress of the Habit Tracker proj
 | **Phase 5** | Mobile-First React Frontend (Vite) | `[ ]` In Progress | 5 / 6 |
 | **Phase 6** | Docker & PostgreSQL Environment | `[x]` Completed | 4 / 4 |
 | **Phase 7** | Production Deployment (Render.com) | `[x]` Completed | 4 / 4 |
+| **Phase 8** | Measurable Habits with Units | `[ ]` Not Started | 0 / 5 |
+| **Phase 9** | Email Notifications via Mailgun | `[ ]` Not Started | 0 / 5 |
+| **Phase 10** | AI Habit Coach Chatbot via Google Gemini | `[ ]` Not Started | 0 / 5 |
+| **Phase 11** | Webhooks (Pending Mentor Clarification) | `[ ]` Pending | 0 / 4 |
 
 ---
 
@@ -200,3 +204,75 @@ This checklist tracks the ongoing development progress of the Habit Tracker proj
   - [x] Configure container entrypoint (`scripts/entrypoint.sh`) running migrations and static collection prior to launching Gunicorn.
 - [x] **7.4 Documentation & Deployment Workflow**
   - [x] Document step-by-step Render dashboard setup, environment variable wiring, redeployment order, free tier limitations (30-day DB lifespan, sleep on inactivity), and superuser creation in README.md.
+
+---
+
+### Phase 8: Measurable Habits with Units
+- [ ] **8.1 Data Model Extensions & Migrations (TDD)**
+  - [ ] Add `habit_type` (`boolean`, `measurable`), `target_value` (`DecimalField`), and `unit` (`CharField`) to `Habit`.
+  - [ ] Update `HabitCheckIn` to record check-in `value` (`DecimalField`) with default 1.0.
+  - [ ] Apply migration with backward compatibility for existing boolean habits.
+- [ ] **8.2 Check-In Accumulation & Threshold Completion (TDD)**
+  - [ ] Support incremental check-in values per day (summing total progress towards target).
+  - [ ] Update completion condition: day is completed when `sum(values) >= target_value`.
+  - [ ] Update undo/decrement action to reduce or clear day's value.
+- [ ] **8.3 Streak Engine & Analytics Adaptation (TDD)**
+  - [ ] Adapt streak calculation engine to check threshold satisfaction via `is_day_completed`.
+  - [ ] Adapt weekly and monthly completion rate calculations for measurable habits.
+- [ ] **8.4 API Serialization & Validation (TDD)**
+  - [ ] Validate `target_value > 0` and non-empty `unit` when `habit_type == 'measurable'`.
+  - [ ] Expose `today_value`, `target_value`, `unit`, and `habit_type` in habit serializers.
+- [ ] **8.5 Frontend Measurable Habit UI**
+  - [ ] Add unit and target fields to Habit Create/Edit drawer.
+  - [ ] Measurable card UI: progress bar (`value / target unit`), quick increment button, completion indicator.
+
+---
+
+### Phase 9: Email Notifications via Mailgun
+- [ ] **9.1 User Notification Preferences & Tokens (TDD)**
+  - [ ] Add notification settings to user model (`daily_reminder_enabled`, `daily_reminder_time`, `weekly_summary_enabled`, `unsubscribe_token`).
+  - [ ] Endpoints for retrieving/updating preferences and public one-click unsubscribe via signed token.
+- [ ] **9.2 Mailgun Integration Client & Templates**
+  - [ ] Mailgun client wrapper reading API credentials strictly from environment variables (`MAILGUN_API_KEY`, `MAILGUN_DOMAIN`).
+  - [ ] Clean HTML/text email templates for daily reminders and weekly summaries.
+- [ ] **9.3 Daily Reminder Management Command (TDD)**
+  - [ ] `send_habit_reminders` management command querying users whose local time matches current dispatch window.
+  - [ ] Filter out users with 0 active habits or whose habits are already completed today.
+  - [ ] Idempotency protection to prevent duplicate sends on the same date.
+- [ ] **9.4 Weekly Summary Management Command (TDD)**
+  - [ ] `send_weekly_summaries` command computing week completion rate and top streaks for each opted-in user.
+- [ ] **9.5 Scheduler Wiring & Verification**
+  - [ ] Configure hourly cron runner in Render / deployment environment.
+
+---
+
+### Phase 10: AI Habit Coach Chatbot via Google Gemini
+- [ ] **10.1 Chat Conversation & Message Models (TDD)**
+  - [ ] Create `CoachConversation` and `CoachMessage` models with cascade deletion.
+  - [ ] Migration and admin registration.
+- [ ] **10.2 Gemini Client Service & Prompt Builder (TDD)**
+  - [ ] Secure backend-only Gemini API integration (client never receives secret key).
+  - [ ] Context aggregation service: format user's habits, frequencies, streaks, and 7-day completion stats.
+  - [ ] Strict prompt-injection safeguards, system instructions, and read-only coaching persona.
+- [ ] **10.3 Chat API Endpoints & Quota Rate Limiting (TDD)**
+  - [ ] `POST /api/v1/coach/chat/` endpoint with daily message quota enforcement (e.g. 10/day).
+  - [ ] `GET /api/v1/coach/messages/` to load recent chat history and `DELETE /api/v1/coach/history/` to clear history.
+- [ ] **10.4 Frontend Coach Tab & Chat UI**
+  - [ ] Dedicated "Coach" view in frontend navigation.
+  - [ ] Chat conversation interface: message bubbles, quick prompt suggestions, remaining message counter.
+- [ ] **10.5 Testing & Fallback Handling**
+  - [ ] Mocked Gemini API unit tests, rate limit tests (429), and gracefully handled network timeouts.
+
+---
+
+### Phase 11: Webhooks (Pending Mentor Clarification)
+- [ ] **11.1 Requirement Clarification [PENDING]**
+  - [ ] Confirm scope with mentor: Stripe payments vs Mailgun event callbacks vs outgoing user webhooks.
+- [ ] **11.2 Webhook Ingestion & Event Model (TDD)**
+  - [ ] `WebhookEvent` model for logging raw incoming payloads, status, and event IDs.
+  - [ ] Cryptographic signature verification middleware/service.
+- [ ] **11.3 Idempotent Event Processor (TDD)**
+  - [ ] Deduplicate delivery by provider `event_id` to prevent double processing.
+  - [ ] Background dispatch of domain side-effects.
+- [ ] **11.4 Integration Tests & Error Handling**
+  - [ ] Test forged signature rejection, duplicate payload handling, and provider health checks.
