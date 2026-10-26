@@ -42,7 +42,11 @@ export const HabitDetailPage: React.FC = () => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
-  const [checkInDates, setCheckInDates] = useState<Set<string>>(new Set());
+  const [checkInsMap, setCheckInsMap] = useState<Map<string, number>>(new Map());
+  const [modalDate, setModalDate] = useState<string | null>(null);
+  const [modalAmount, setModalAmount] = useState<string>('');
+  const [isSubmittingModal, setIsSubmittingModal] = useState(false);
+  const modalInputRef = useRef<HTMLInputElement>(null);
   const [isLoadingCheckIns, setIsLoadingCheckIns] = useState(false);
   const [togglingDate, setTogglingDate] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastMessage | null>(null);
@@ -138,11 +142,13 @@ export const HabitDetailPage: React.FC = () => {
       const records = await habitsApi.getHabitCheckIns(habitId, from, to);
       // Ignore stale responses if a newer request was dispatched
       if (reqId !== checkInsRequestSeq.current) return;
-      const set = new Set<string>();
+      const map = new Map<string, number>();
       records.forEach((r) => {
-        if (r.date) set.add(r.date);
+        if (r.date) {
+          map.set(r.date, r.value !== undefined ? Number(r.value) : 1);
+        }
       });
-      setCheckInDates(set);
+      setCheckInsMap(map);
     } catch {
       if (reqId === checkInsRequestSeq.current) {
         // I12: Show inline error for check-ins with retry
@@ -167,19 +173,104 @@ export const HabitDetailPage: React.FC = () => {
     setCurrentMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
   };
 
+  const isMeasurable = habit?.habit_type === 'measurable';
+  const targetVal = habit?.target_value ?? 1;
+
+  const handleDayClick = (dateStr: string) => {
+    if (!habit || togglingDate || dateStr > todayStr) return;
+
+    if (isMeasurable) {
+      // Open modal to enter/update amount
+      const currentVal = checkInsMap.get(dateStr) ?? 0;
+      setModalDate(dateStr);
+      setModalAmount(currentVal > 0 ? String(currentVal) : '');
+      setTimeout(() => modalInputRef.current?.focus(), 50);
+      return;
+    }
+
+    // Boolean habit: toggle directly
+    handleToggleDay(dateStr);
+  };
+
+  const handleModalSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!habit || !modalDate || isSubmittingModal) return;
+
+    const parsed = parseFloat(modalAmount);
+    const dateStr = modalDate;
+    const prevMap = new Map(checkInsMap);
+    const currentVal = parsed > 0 ? parsed : 0;
+
+    setIsSubmittingModal(true);
+    setTogglingDate(dateStr);
+
+    // Optimistically update map
+    setCheckInsMap((prev) => {
+      const next = new Map(prev);
+      if (currentVal > 0) {
+        next.set(dateStr, currentVal);
+      } else {
+        next.delete(dateStr);
+      }
+      return next;
+    });
+
+    try {
+      let res;
+      if (currentVal <= 0) {
+        res = await habitsApi.uncheckHabit(habit.id, dateStr);
+      } else {
+        res = await habitsApi.checkHabit(habit.id, {
+          date: dateStr,
+          value: currentVal,
+          mode: 'set',
+        });
+      }
+
+      const isCompleted = res.is_completed !== undefined
+        ? res.is_completed
+        : (currentVal >= targetVal);
+
+      setHabit((prev) =>
+        prev
+          ? {
+              ...prev,
+              current_streak: res.current_streak,
+              longest_streak: res.longest_streak,
+              today_value: dateStr === todayStr ? (res.today_value ?? currentVal) : prev.today_value,
+              today_progress: dateStr === todayStr ? (res.today_progress ?? (isCompleted ? 100 : Math.round((currentVal / targetVal) * 100))) : prev.today_progress,
+              is_checked_today: dateStr === todayStr ? isCompleted : prev.is_checked_today,
+            }
+          : null
+      );
+      setModalDate(null);
+      loadStatistics();
+    } catch (err: unknown) {
+      setCheckInsMap(prevMap);
+      setToast({
+        id: String(Date.now()),
+        type: 'error',
+        message: getErrorMessage(err, 'Failed to update check-in amount.'),
+      });
+    } finally {
+      setIsSubmittingModal(false);
+      setTogglingDate(null);
+    }
+  };
+
   const handleToggleDay = async (dateStr: string) => {
     if (!habit || togglingDate || dateStr > todayStr) return;
 
-    const isCurrentlyChecked = checkInDates.has(dateStr);
+    const isCurrentlyChecked = checkInsMap.has(dateStr);
     setTogglingDate(dateStr);
 
     // Optimistically update calendar
-    setCheckInDates((prev) => {
-      const next = new Set(prev);
+    setCheckInsMap((prev) => {
+      const next = new Map(prev);
       if (isCurrentlyChecked) {
         next.delete(dateStr);
       } else {
-        next.add(dateStr);
+        next.set(dateStr, 1);
       }
       return next;
     });
@@ -207,10 +298,10 @@ export const HabitDetailPage: React.FC = () => {
       loadStatistics();
     } catch (err: unknown) {
       // Revert optimistic update
-      setCheckInDates((prev) => {
-        const next = new Set(prev);
+      setCheckInsMap((prev) => {
+        const next = new Map(prev);
         if (isCurrentlyChecked) {
-          next.add(dateStr);
+          next.set(dateStr, 1);
         } else {
           next.delete(dateStr);
         }
@@ -490,17 +581,33 @@ export const HabitDetailPage: React.FC = () => {
                       habit.frequency_type === 'daily' ||
                       (Array.isArray(habit.frequency_days) &&
                         habit.frequency_days.includes(dayWeekday));
-                    const isChecked = checkInDates.has(dateStr);
+
+                    const dayVal = checkInsMap.get(dateStr);
+                    const hasEntry = dayVal !== undefined && dayVal > 0;
+                    const isCompleted = isMeasurable
+                      ? (dayVal !== undefined && dayVal >= targetVal)
+                      : hasEntry;
+                    const isPartial = isMeasurable && hasEntry && !isCompleted;
+
                     const isFuture = dateStr > todayStr;
                     const isToday = dateStr === todayStr;
                     const isToggling = togglingDate === dateStr;
 
                     let cellStyle: React.CSSProperties = {};
                     const contrastText = getContrastTextColor(habitColor);
-                    if (isChecked) {
+
+                    if (isCompleted) {
                       cellStyle = {
                         backgroundColor: habitColor,
                         color: contrastText,
+                      };
+                    } else if (isPartial) {
+                      cellStyle = {
+                        backgroundColor: `${habitColor}28`, // lighter tint
+                        color: '#0f172a',
+                        borderWidth: '2px',
+                        borderStyle: 'dashed',
+                        borderColor: habitColor,
                       };
                     }
 
@@ -508,19 +615,25 @@ export const HabitDetailPage: React.FC = () => {
                       <button
                         key={dateStr}
                         type="button"
-                        onClick={() => handleToggleDay(dateStr)}
+                        onClick={() => handleDayClick(dateStr)}
                         disabled={isFuture || isToggling}
                         aria-label={`${dateStr}, ${
-                          isChecked ? 'completed' : 'incomplete'
+                          isCompleted
+                            ? 'completed'
+                            : isPartial
+                            ? `partially completed (${dayVal} ${habit.unit || ''})`
+                            : 'incomplete'
                         }${!isScheduled ? ', not scheduled' : ''}${
                           isFuture ? ', disabled' : ''
                         }`}
-                        aria-pressed={isChecked}
+                        aria-pressed={isCompleted}
                         style={cellStyle}
                         className={`aspect-square min-h-[44px] flex flex-col items-center justify-center rounded-xl text-xs font-semibold transition-all select-none relative focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                           isFuture
                             ? 'cursor-not-allowed opacity-30 text-slate-300 bg-slate-50/50'
-                            : isChecked
+                            : isCompleted
+                            ? 'shadow-sm active:scale-95'
+                            : isPartial
                             ? 'shadow-sm active:scale-95'
                             : !isScheduled
                             ? 'opacity-40 text-slate-600 bg-slate-50/50 border border-dashed border-slate-300 hover:opacity-100 active:scale-95'
@@ -528,11 +641,16 @@ export const HabitDetailPage: React.FC = () => {
                         } ${isToday ? 'ring-2 ring-blue-500 ring-offset-1' : ''}`}
                       >
                         <span className="leading-none">{day}</span>
-                        {isChecked && (
+                        {isCompleted && (
                           <Check
                             className="w-3 h-3 stroke-[3] mt-0.5 shrink-0"
                             style={{ color: contrastText }}
                           />
+                        )}
+                        {isPartial && (
+                          <span className="text-[9px] font-bold mt-0.5 leading-none text-slate-700">
+                            {dayVal}
+                          </span>
                         )}
                       </button>
                     );
@@ -548,8 +666,19 @@ export const HabitDetailPage: React.FC = () => {
                     />
                     <span>Completed</span>
                   </div>
+                  {isMeasurable && (
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className="w-3 h-3 rounded-full inline-block border-2 border-dashed"
+                        style={{ backgroundColor: `${habitColor}28`, borderColor: habitColor }}
+                      />
+                      <span>Partial</span>
+                    </div>
+                  )}
                   <div className="flex items-center gap-1.5">
-                    <span className="w-3 h-3 rounded-full inline-block border border-dashed border-slate-400 bg-slate-50/50 opacity-70" />
+                    <span
+                      className="w-3 h-3 rounded-full inline-block border border-dashed border-slate-400 bg-slate-50/50 opacity-70"
+                    />
                     <span>Non-scheduled</span>
                   </div>
                   <div className="flex items-center gap-1.5">
@@ -561,6 +690,69 @@ export const HabitDetailPage: React.FC = () => {
             </>
           ) : null}
         </main>
+
+        {/* Modal for entering amount for measurable habit */}
+        {modalDate && (
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="amount-modal-title"
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-150"
+            onClick={() => setModalDate(null)}
+          >
+            <div
+              className="w-full max-w-xs bg-white rounded-2xl shadow-xl p-5 space-y-4 animate-in zoom-in-95 duration-150"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div>
+                <h3 id="amount-modal-title" className="text-sm font-bold text-slate-900">
+                  Log amount for {modalDate}
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Target: {targetVal} {habit?.unit}
+                </p>
+              </div>
+
+              <form onSubmit={handleModalSave} className="space-y-4">
+                <div className="space-y-1">
+                  <label htmlFor="modal-amount-input" className="text-xs font-semibold text-slate-700">
+                    Amount ({habit?.unit}):
+                  </label>
+                  <input
+                    ref={modalInputRef}
+                    id="modal-amount-input"
+                    type="number"
+                    step="any"
+                    min="0"
+                    max="100000"
+                    value={modalAmount}
+                    onChange={(e) => setModalAmount(e.target.value)}
+                    placeholder="Enter amount (0 to clear)"
+                    className="w-full h-11 px-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setModalDate(null)}
+                    disabled={isSubmittingModal}
+                    className="flex-1 min-h-[40px] rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmittingModal}
+                    className="flex-1 min-h-[40px] rounded-xl bg-blue-600 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {isSubmittingModal ? 'Saving...' : 'Save'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
 
         {/* Bottom Navigation */}
         <BottomNavigation />

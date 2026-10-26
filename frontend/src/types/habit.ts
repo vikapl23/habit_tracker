@@ -1,4 +1,5 @@
 export type FrequencyType = 'daily' | 'custom';
+export type HabitType = 'boolean' | 'measurable';
 
 export interface Habit {
   id: number;
@@ -9,6 +10,11 @@ export interface Habit {
   is_archived: boolean;
   frequency_type: FrequencyType;
   frequency_days: number[];
+  habit_type: HabitType;
+  unit?: string;
+  target_value?: number | null;
+  today_value: number;
+  today_progress: number;
   current_streak: number;
   longest_streak: number;
   is_checked_today: boolean;
@@ -24,12 +30,29 @@ export interface HabitFormData {
   emoji: string;
   frequency_type: FrequencyType;
   frequency_days: number[];
+  habit_type?: HabitType;
+  unit?: string;
+  target_value?: number | null;
+}
+
+export interface CheckInOptions {
+  date?: string;
+  value?: number;
+  mode?: 'add' | 'set';
+}
+
+export interface UncheckOptions {
+  date?: string;
+  value?: number;
 }
 
 export interface CheckInResponse {
   status: string;
   habit_id: number;
   date: string;
+  today_value?: number;
+  today_progress?: number;
+  is_completed?: boolean;
   current_streak: number;
   longest_streak: number;
 }
@@ -42,6 +65,7 @@ export interface ArchiveResponse {
 export interface CheckInRecord {
   id: number;
   date: string;
+  value?: number;
   created_at: string;
 }
 

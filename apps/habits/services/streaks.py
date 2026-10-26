@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from datetime import date, datetime, timedelta
+from decimal import Decimal
 from typing import TYPE_CHECKING, Any, NamedTuple
 
 from django.utils import timezone
@@ -164,7 +165,8 @@ def calculate_habit_streaks(
     """
     Calculate streaks directly for a Habit model instance.
 
-    Uses prefetched check_ins if available, otherwise queries values_list('date', flat=True).
+    Uses prefetched check_ins if available, otherwise queries check_ins.
+    Filters completed dates via the shared is_day_completed helper.
     """
     if reference_date is None:
         user = getattr(habit, "user", None)
@@ -173,16 +175,20 @@ def calculate_habit_streaks(
         else:
             reference_date = timezone.localdate()
 
+    from apps.habits.services.completion import is_day_completed
+
     if (
         hasattr(habit, "_prefetched_objects_cache")
         and "check_ins" in habit._prefetched_objects_cache
     ):
-        dates: list[date] = [ci.date for ci in habit.check_ins.all()]
+        checkins = habit.check_ins.all()
     else:
-        dates = list(habit.check_ins.values_list("date", flat=True))
+        checkins = habit.check_ins.all()
+
+    completed_dates: list[date] = [ci.date for ci in checkins if is_day_completed(habit, ci)]
 
     return calculate_streaks(
-        dates,
+        completed_dates,
         reference_date=reference_date,
         frequency_type=habit.frequency_type,
         frequency_days=habit.frequency_days,
@@ -204,19 +210,36 @@ def recalculate_habit_streaks(
         else:
             reference_date = timezone.localdate()
 
-    dates = list(habit.check_ins.values_list("date", flat=True))
+    from apps.habits.services.completion import is_day_completed
+
+    checkins = list(habit.check_ins.all())
+    completed_dates = [ci.date for ci in checkins if is_day_completed(habit, ci)]
+
     streaks = calculate_streaks(
-        dates,
+        completed_dates,
         reference_date=reference_date,
         frequency_type=habit.frequency_type,
         frequency_days=habit.frequency_days,
     )
-    last_date = max(dates) if dates else None
+    last_date = max(completed_dates) if completed_dates else None
+    last_val = Decimal("0.00")
+    if last_date:
+        for ci in checkins:
+            if ci.date == last_date:
+                last_val = ci.value
+                break
 
     habit.current_streak = streaks.current_streak
     habit.longest_streak = streaks.longest_streak
     habit.last_check_in_date = last_date
+    habit.last_check_in_value = last_val
     habit.save(
-        update_fields=["current_streak", "longest_streak", "last_check_in_date", "updated_at"]
+        update_fields=[
+            "current_streak",
+            "longest_streak",
+            "last_check_in_date",
+            "last_check_in_value",
+            "updated_at",
+        ]
     )
     return habit

@@ -183,4 +183,55 @@ Adopt **Client-Side Browser Timezone Detection (`Intl.DateTimeFormat`)**:
 - **Works Seamlessly Behind Cloud Reverse Proxies (Render.com)**:
   - Behind Render's multi-tier load balancers and reverse proxies, extracting accurate client IPs requires trusting specific proxy headers (`X-Forwarded-For`), which can be spoofed or masked. Native browser detection operates end-to-end within the user agent.
 
+## ADR 007: Architecture for Measurable Habits (Type, Unit, Target, Atomic Increment & Service Streaks)
+
+### Date
+2026-10-26
+
+### Context & Problem
+Until Phase 8, habits in Habit Tracker were binary (done or not done). Users need to track quantitative habits (e.g. "Drink 2.5 L water", "Read 20 pages", "Walk 5 km").
+Specific requirements dictate:
+1. Habit type is either `"boolean"` (default) or `"measurable"`. Measurable habits require a `unit` (free text with suggestions) and `target_value` (positive number, decimals allowed, max 100,000, 2 decimal places).
+2. Multiple check-ins on the same day must add up (+2 glasses, then +3 glasses = 5). Users can decrease or reset the day's total. Rapid "+" taps must be protected against race conditions and lost updates.
+3. Fast exact amount input: setting exact amount (or 0 to reset) via `mode: "set"`.
+4. Consistent field naming across model and API: `habit_type`, `unit`, `target_value`, `today_value`, `today_progress`.
+5. Return numeric quantities as JSON numbers (not DRF string decimals).
+6. A day is completed only when the day's total >= target_value.
+7. ONE shared helper for completion must be used everywhere (streaks, is_checked_today, today_progress, statistics completion rates, calendar).
+8. Existing habits become boolean via safe data migration. Changing habit type or target must recalculate stored streaks. Streaks recalculation must be orchestrated from the service layer (`services/`), NOT inside `Habit.save()`.
+9. Changing the target will recalculate existing streaks under the new threshold; user must see a warning in the edit form.
+10. "uncheck" for measurable habits: "-" button always sends a decrement value; uncheck without value removes the whole day only on explicit "Reset day".
+11. Limits: value and target max 100,000, 2 decimal places. Check without value for measurable habit adds 1.
+
+### Decision
+1. **Model Architecture**:
+   - `Habit`: Add `habit_type` (`CharField` with choices `boolean`, `measurable`, default `boolean`). Add `target_value` (`DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)`), and `unit` (`CharField(max_length=30, blank=True, default='')`).
+   - `HabitCheckIn`: Add `value` (`DecimalField(max_digits=8, decimal_places=2, default=1.0)`). Maintain the existing unique constraint `(habit, date)` where each record represents the daily accumulated total for that date.
+2. **Atomic Concurrency Protection & Check-In Modes**:
+   - For measurable habits, `POST /habits/{id}/check/` accepts `mode` (`"add"` by default, or `"set"`) and `value` (positive decimal, max 100,000, 2 decimal places):
+     - `mode="add"`: if no `value` is provided, default `value=1.00`. Uses `select_for_update()` inside a database transaction on `HabitCheckIn` (or creates a new record) and adds `value` atomically.
+     - `mode="set"`: sets exact value for that day. If `value <= 0`, removes the check-in record.
+   - For boolean habits, `value` or `mode="set"` is disallowed (`400 Bad Request`).
+3. **Decrement & Explicit Reset**:
+   - `POST /habits/{id}/uncheck/`:
+     - If `value` is provided (e.g. from "-" button): decrements the day's total atomically. If new total <= 0, the check-in is removed.
+     - If `value` is omitted (explicit reset): removes the check-in entirely.
+     - For boolean habits: removes the check-in.
+4. **Single Shared Completion Helper**:
+   - Centralize completion logic in `apps/habits/services/completion.py`: `is_day_completed(habit, value_or_checkin) -> bool`.
+   - Used uniformly across:
+     - `Habit.get_current_streak` and `apps/habits/services/streaks.py` (`calculate_streaks`, `calculate_habit_streaks`).
+     - `HabitSerializer.get_is_checked_today` and `HabitSerializer.get_today_progress`.
+     - `apps/habits/services/statistics.py` (`calculate_habit_statistics`, `calculate_user_summary_statistics`).
+     - Frontend calendar and cards.
+5. **Streak Recalculation in Services Layer (Not in Habit.save)**:
+   - In accordance with thin models / rich services architecture, streak recalculations are NOT triggered inside `Habit.save()`.
+   - When a habit is updated via `update_habit(...)` service (or `HabitViewSet.perform_update`), if `habit_type` or `target_value` has changed, the service invokes `recalculate_habit_streaks(habit)` so streaks reflect the new threshold immediately.
+   - A clear warning banner is displayed in the frontend habit edit form: *"Changing the target will recalculate your streak"*.
+6. **JSON Number Serialization**:
+   - Return `target_value`, `today_value`, `today_progress`, and check-in `value` as JSON numbers (float/int) rather than strings by configuring `coerce_to_string = False` or float conversion in DRF serializers.
+7. **Zero N+1 Query Guarantee**:
+   - Use annotations and single query aggregations on list views and statistics, tested with `django_assert_num_queries`.
+
+
 

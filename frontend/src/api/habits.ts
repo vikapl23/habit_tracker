@@ -8,6 +8,8 @@ import {
   PaginatedResponse,
   HabitStatistics,
   StatisticsSummary,
+  CheckInOptions,
+  UncheckOptions,
 } from '../types/habit';
 
 export const getAllHabits = async (includeArchived = false): Promise<Habit[]> => {
@@ -59,12 +61,33 @@ export const unarchiveHabit = async (id: number): Promise<ArchiveResponse> => {
   return apiClient.post<ArchiveResponse>(`/habits/${id}/unarchive/`, {});
 };
 
-export const checkHabit = async (id: number, date?: string): Promise<CheckInResponse> => {
-  return apiClient.post<CheckInResponse>(`/habits/${id}/check/`, date ? { date } : {});
+export const checkHabit = async (
+  id: number,
+  params?: string | CheckInOptions
+): Promise<CheckInResponse> => {
+  let body: Record<string, unknown> = {};
+  if (typeof params === 'string') {
+    body = { date: params };
+  } else if (params && typeof params === 'object') {
+    if (params.date) body.date = params.date;
+    if (params.value !== undefined) body.value = params.value;
+    if (params.mode) body.mode = params.mode;
+  }
+  return apiClient.post<CheckInResponse>(`/habits/${id}/check/`, body);
 };
 
-export const uncheckHabit = async (id: number, date?: string): Promise<CheckInResponse> => {
-  return apiClient.post<CheckInResponse>(`/habits/${id}/uncheck/`, date ? { date } : {});
+export const uncheckHabit = async (
+  id: number,
+  params?: string | UncheckOptions
+): Promise<CheckInResponse> => {
+  let body: Record<string, unknown> = {};
+  if (typeof params === 'string') {
+    body = { date: params };
+  } else if (params && typeof params === 'object') {
+    if (params.date) body.date = params.date;
+    if (params.value !== undefined) body.value = params.value;
+  }
+  return apiClient.post<CheckInResponse>(`/habits/${id}/uncheck/`, body);
 };
 
 export const getHabit = async (id: number): Promise<Habit> => {

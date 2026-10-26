@@ -16,6 +16,9 @@ const mockDetailHabit: Habit = {
   is_archived: false,
   frequency_type: 'custom',
   frequency_days: [0, 1, 2, 3, 4], // Mon to Fri scheduled, Sat/Sun muted
+  habit_type: 'boolean',
+  today_value: 0,
+  today_progress: 0,
   current_streak: 5,
   longest_streak: 12,
   is_checked_today: false,
@@ -219,5 +222,70 @@ describe('HabitDetailPage (Step 5.5)', () => {
     await user.click(backBtn);
 
     expect(await screen.findByText('Dashboard Home')).toBeInTheDocument();
+  });
+
+  it('renders measurable calendar with completed and partial days, and allows setting amount via modal', async () => {
+    const user = userEvent.setup();
+    const measurableHabit: Habit = {
+      ...mockDetailHabit,
+      id: 5,
+      name: 'Running',
+      habit_type: 'measurable',
+      unit: 'km',
+      target_value: 5,
+      today_value: 2.5,
+      today_progress: 50,
+    };
+    vi.spyOn(habitsApi, 'getHabit').mockResolvedValue(measurableHabit);
+    vi.spyOn(habitsApi, 'getHabitCheckIns').mockResolvedValue([
+      { id: 1, date: '2026-10-21', value: 5, created_at: '2026-10-21T00:00:00Z' }, // completed
+      { id: 2, date: '2026-10-22', value: 2.5, created_at: '2026-10-22T00:00:00Z' }, // partial
+    ]);
+    const checkSpy = vi.spyOn(habitsApi, 'checkHabit').mockResolvedValue({
+      status: 'updated',
+      habit_id: 5,
+      date: '2026-10-22',
+      today_value: 6,
+      today_progress: 100,
+      is_completed: true,
+      current_streak: 2,
+      longest_streak: 5,
+    });
+
+    renderHabitDetail(5);
+
+    await screen.findByRole('heading', { level: 1, name: 'Running' });
+
+    // Verify completed day (2026-10-21) has completed label
+    expect(screen.getByRole('button', { name: /2026-10-21, completed/i })).toBeInTheDocument();
+
+    // Verify partial day (2026-10-22) has partial label
+    const partialBtn = screen.getByRole('button', {
+      name: /2026-10-22, partially completed \(2\.5 km\)/i,
+    });
+    expect(partialBtn).toBeInTheDocument();
+
+    // Tap on partial day to open modal
+    await user.click(partialBtn);
+
+    // Modal opens with prefilled amount 2.5
+    const modalInput = screen.getByLabelText(/amount \(km\):/i);
+    expect(modalInput).toHaveValue(2.5);
+
+    // Enter new amount: 6
+    await user.clear(modalInput);
+    await user.type(modalInput, '6');
+
+    // Click Save
+    const saveBtn = screen.getByRole('button', { name: /save/i });
+    await user.click(saveBtn);
+
+    await waitFor(() => {
+      expect(checkSpy).toHaveBeenCalledWith(5, {
+        date: '2026-10-22',
+        value: 6,
+        mode: 'set',
+      });
+    });
   });
 });

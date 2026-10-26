@@ -7,23 +7,10 @@ from typing import TYPE_CHECKING, Any
 from django.utils import timezone
 
 from apps.habits.models import Habit, HabitCheckIn
+from apps.habits.services.completion import is_day_completed
 
 if TYPE_CHECKING:
     from apps.accounts.models import User
-
-
-def is_day_completed(
-    target_date: date,
-    checkin_dates: set[date],
-    # Placeholder for future measurable habits with units/targets
-    target_value: Any = None,
-    actual_value: Any = None,
-) -> bool:
-    """
-    Determine if a habit is considered completed on a given target_date.
-    Centralized helper so measurable habits with units/targets can be integrated cleanly later.
-    """
-    return target_date in checkin_dates
 
 
 def _get_user_today(user: User | None = None) -> date:
@@ -51,7 +38,7 @@ def _calculate_range_completion(
     habit: Habit,
     start_date: date,
     end_date: date,
-    checkin_dates: set[date],
+    checkin_dates: set[date] | dict[date, Any],
     habit_created_date: date,
 ) -> tuple[int, int, float]:
     """
@@ -69,7 +56,12 @@ def _calculate_range_completion(
     while curr <= end_date:
         if habit.is_scheduled_on(curr):
             scheduled_days += 1
-            if is_day_completed(curr, checkin_dates):
+            val = None
+            if isinstance(checkin_dates, dict):
+                val = checkin_dates.get(curr)
+            elif curr in checkin_dates:
+                val = True
+            if val is not None and is_day_completed(habit, val):
                 completed_days += 1
         curr += timedelta(days=1)
 
@@ -81,7 +73,7 @@ def calculate_habit_statistics(
     habit: Habit,
     user: User | None = None,
     reference_date: date | None = None,
-    checkins_cache: set[date] | None = None,
+    checkins_cache: dict[date, Any] | set[date] | None = None,
     total_checkins_cache: int | None = None,
 ) -> dict[str, Any]:
     """
@@ -104,21 +96,21 @@ def calculate_habit_statistics(
     window_30d_start = reference_date - timedelta(days=29)
 
     if checkins_cache is not None:
-        checkin_dates = checkins_cache
+        checkin_data = checkins_cache
         total_check_ins = (
-            total_checkins_cache if total_checkins_cache is not None else len(checkin_dates)
+            total_checkins_cache if total_checkins_cache is not None else len(checkin_data)
         )
     else:
-        # Load check-in dates for this habit
-        all_checkin_dates = set(habit.check_ins.values_list("date", flat=True))
-        checkin_dates = all_checkin_dates
-        total_check_ins = len(all_checkin_dates)
+        # Load check-ins with value for this habit
+        checkin_qs = habit.check_ins.values_list("date", "value")
+        checkin_data = dict(checkin_qs)
+        total_check_ins = len(checkin_data)
 
     _, _, rate_7d = _calculate_range_completion(
-        habit, window_7d_start, reference_date, checkin_dates, habit_created_date
+        habit, window_7d_start, reference_date, checkin_data, habit_created_date
     )
     _, _, rate_30d = _calculate_range_completion(
-        habit, window_30d_start, reference_date, checkin_dates, habit_created_date
+        habit, window_30d_start, reference_date, checkin_data, habit_created_date
     )
 
     current_streak = habit.get_current_streak(reference_date)
@@ -179,10 +171,10 @@ def calculate_user_summary_statistics(
         habit_id__in=active_habit_ids,
         date__gte=earliest_date,
         date__lte=reference_date,
-    ).values_list("habit_id", "date")
-    checkins_by_habit: dict[int, set[date]] = {hid: set() for hid in active_habit_ids}
-    for hid, d in relevant_checkins:
-        checkins_by_habit[hid].add(d)
+    ).values_list("habit_id", "date", "value")
+    checkins_by_habit: dict[int, dict[date, Any]] = {hid: {} for hid in active_habit_ids}
+    for hid, d, val in relevant_checkins:
+        checkins_by_habit[hid][d] = val
 
     total_week_scheduled = 0
     total_week_completed = 0
@@ -196,7 +188,7 @@ def calculate_user_summary_statistics(
     window_30d_start = reference_date - timedelta(days=29)
 
     for habit in active_habits:
-        c_dates = checkins_by_habit.get(habit.id, set())
+        c_dates = checkins_by_habit.get(habit.id, {})
         created_date = _get_habit_creation_date(habit, user)
 
         # Week

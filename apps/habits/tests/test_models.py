@@ -100,6 +100,85 @@ def test_delete_user_cascades_to_habits(user):
     assert Habit.objects.filter(user_id=user_id).count() == 0
 
 
+@pytest.mark.django_db
+def test_measurable_habit_fields_and_validation(user):
+    from decimal import Decimal
+
+    # Valid measurable habit
+    habit = Habit(
+        user=user,
+        name="Drink Water",
+        habit_type="measurable",
+        unit="glasses",
+        target_value=Decimal("8.00"),
+    )
+    habit.full_clean()
+    habit.save()
+    assert habit.habit_type == "measurable"
+    assert habit.unit == "glasses"
+    assert habit.target_value == Decimal("8.00")
+
+    # Measurable habit requires unit
+    invalid_no_unit = Habit(
+        user=user,
+        name="Invalid",
+        habit_type="measurable",
+        unit="",
+        target_value=Decimal("5.00"),
+    )
+    with pytest.raises(ValidationError) as exc:
+        invalid_no_unit.full_clean()
+    assert "unit" in exc.value.message_dict
+
+    # Measurable habit requires target_value > 0
+    invalid_zero_target = Habit(
+        user=user,
+        name="Invalid",
+        habit_type="measurable",
+        unit="km",
+        target_value=Decimal("0.00"),
+    )
+    with pytest.raises(ValidationError) as exc:
+        invalid_zero_target.full_clean()
+    assert "target_value" in exc.value.message_dict
+
+    # Measurable habit target_value max 100,000
+    invalid_max_target = Habit(
+        user=user,
+        name="Invalid",
+        habit_type="measurable",
+        unit="km",
+        target_value=Decimal("100000.01"),
+    )
+    with pytest.raises(ValidationError) as exc:
+        invalid_max_target.full_clean()
+    assert "target_value" in exc.value.message_dict
+
+    # Boolean habit clears unit and target_value or errors if provided
+    bool_habit = Habit(
+        user=user,
+        name="Read book",
+        habit_type="boolean",
+        unit="pages",
+        target_value=Decimal("10.00"),
+    )
+    with pytest.raises(ValidationError) as exc:
+        bool_habit.full_clean()
+    assert "unit" in exc.value.message_dict or "target_value" in exc.value.message_dict
+
+
+@pytest.mark.django_db
+def test_habit_checkin_value_field(habit):
+    from decimal import Decimal
+
+    checkin = HabitCheckIn.objects.create(
+        habit=habit,
+        date=habit.user.get_today(),
+        value=Decimal("2.50"),
+    )
+    assert checkin.value == Decimal("2.50")
+
+
 def test_admin_registration():
     assert Habit in admin.site._registry
     assert HabitCheckIn in admin.site._registry
@@ -188,6 +267,8 @@ def test_habit_validation_rejects_invalid_frequency_type(user):
 
 @pytest.mark.django_db
 def test_habit_recalculates_streaks_on_frequency_change(user, monkeypatch):
+    from apps.habits.services.habits import update_habit
+
     habit = Habit.objects.create(user=user, name="Gym")
     recalculate_called = False
 
@@ -196,10 +277,8 @@ def test_habit_recalculates_streaks_on_frequency_change(user, monkeypatch):
         recalculate_called = True
         return h
 
-    monkeypatch.setattr("apps.habits.services.streaks.recalculate_habit_streaks", mock_recalculate)
-    habit.frequency_type = "custom"
-    habit.frequency_days = [0, 2, 4]
-    habit.save()
+    monkeypatch.setattr("apps.habits.services.habits.recalculate_habit_streaks", mock_recalculate)
+    update_habit(habit, frequency_type="custom", frequency_days=[0, 2, 4])
     assert recalculate_called is True
 
 

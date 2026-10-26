@@ -826,9 +826,9 @@ def test_habit_changing_frequency_mid_streak(user):
 
         # Change frequency mid-streak to Tue, Thu only (1, 3)
         # On Friday, Thursday was checked, but Wednesday and Friday were off-schedule
-        habit.frequency_type = "custom"
-        habit.frequency_days = [1, 3]
-        habit.save()
+        from apps.habits.services.habits import update_habit
+
+        update_habit(habit, frequency_type="custom", frequency_days=[1, 3])
         habit.refresh_from_db()
 
         # Streak should now only count Thursday (1)

@@ -5,16 +5,19 @@ from datetime import date
 from django.utils import timezone
 from rest_framework import serializers
 
-from .models import FrequencyType, Habit, HabitCheckIn
+from .models import FrequencyType, Habit, HabitCheckIn, HabitType
+from .services.completion import is_day_completed
 
 
 class HabitCheckInSerializer(serializers.ModelSerializer):
     """Serializer for habit check-in records."""
 
+    value = serializers.FloatField(read_only=True)
+
     class Meta:
         model = HabitCheckIn
-        fields = ["id", "date", "created_at"]
-        read_only_fields = ["id", "created_at"]
+        fields = ["id", "date", "value", "created_at"]
+        read_only_fields = ["id", "value", "created_at"]
 
 
 class CheckInFilterSerializer(serializers.Serializer):
@@ -30,6 +33,9 @@ class HabitSerializer(serializers.ModelSerializer):
     current_streak = serializers.SerializerMethodField()
     is_checked_today = serializers.SerializerMethodField()
     is_scheduled_today = serializers.SerializerMethodField()
+    today_value = serializers.SerializerMethodField()
+    today_progress = serializers.SerializerMethodField()
+    target_value = serializers.FloatField(required=False, allow_null=True)
     frequency = serializers.JSONField(required=False, write_only=True)
 
     class Meta:
@@ -41,6 +47,11 @@ class HabitSerializer(serializers.ModelSerializer):
             "color",
             "emoji",
             "is_archived",
+            "habit_type",
+            "unit",
+            "target_value",
+            "today_value",
+            "today_progress",
             "frequency_type",
             "frequency_days",
             "frequency",
@@ -58,6 +69,8 @@ class HabitSerializer(serializers.ModelSerializer):
             "longest_streak",
             "is_checked_today",
             "is_scheduled_today",
+            "today_value",
+            "today_progress",
             "created_at",
             "updated_at",
         ]
@@ -93,6 +106,46 @@ class HabitSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
+        habit_type = attrs.get(
+            "habit_type",
+            self.instance.habit_type if self.instance else HabitType.BOOLEAN,
+        )
+        target_value = attrs.get(
+            "target_value",
+            self.instance.target_value if self.instance else None,
+        )
+        unit = attrs.get(
+            "unit",
+            self.instance.unit if self.instance else "",
+        )
+
+        if habit_type == HabitType.MEASURABLE:
+            if not unit or not unit.strip():
+                raise serializers.ValidationError(
+                    {"unit": "Unit is required for measurable habits."}
+                )
+            if target_value is None:
+                raise serializers.ValidationError(
+                    {"target_value": "Target value is required for measurable habits."}
+                )
+            if target_value <= 0:
+                raise serializers.ValidationError(
+                    {"target_value": "Target value must be greater than zero."}
+                )
+            if target_value > 100000:
+                raise serializers.ValidationError(
+                    {"target_value": "Target value cannot exceed 100,000."}
+                )
+        elif habit_type == HabitType.BOOLEAN:
+            if unit:
+                raise serializers.ValidationError(
+                    {"unit": "Unit cannot be set for boolean habits."}
+                )
+            if target_value is not None:
+                raise serializers.ValidationError(
+                    {"target_value": "Target value cannot be set for boolean habits."}
+                )
+
         freq_type = attrs.get(
             "frequency_type",
             self.instance.frequency_type if self.instance else FrequencyType.DAILY,
@@ -175,21 +228,105 @@ class HabitSerializer(serializers.ModelSerializer):
                 pass
         return self._get_user_today(obj)
 
-    def get_is_checked_today(self, obj: Habit) -> bool:
-        """Check whether the habit has a check-in recorded for today."""
+    def _get_target_checkin(self, obj: Habit) -> HabitCheckIn | None:
+        if "checkins_map" in self.context:
+            return self.context["checkins_map"].get(obj.id)
         target_date = self._get_target_date(obj)
-        if obj.last_check_in_date is None:
-            return False
-        if obj.last_check_in_date == target_date:
-            return True
-        if target_date > obj.last_check_in_date:
-            return False
         if (
             hasattr(obj, "_prefetched_objects_cache")
             and "check_ins" in obj._prefetched_objects_cache
         ):
-            return any(ci.date == target_date for ci in obj.check_ins.all())
-        return obj.check_ins.filter(date=target_date).exists()
+            for ci in obj.check_ins.all():
+                if ci.date == target_date:
+                    return ci
+            return None
+        return obj.check_ins.filter(date=target_date).first()
+
+    def get_today_value(self, obj: Habit) -> float:
+        target_date = self._get_target_date(obj)
+        if "checkins_map" in self.context:
+            checkin = self.context["checkins_map"].get(obj.id)
+            return float(checkin.value) if checkin else 0.0
+
+        user_today = self._get_user_today(obj)
+        if target_date == user_today:
+            if obj.last_check_in_date == user_today:
+                return float(obj.last_check_in_value)
+            return 0.0
+
+        if obj.last_check_in_date is not None and obj.last_check_in_date != target_date:
+            if (
+                not hasattr(obj, "_prefetched_objects_cache")
+                or "check_ins" not in obj._prefetched_objects_cache
+            ):
+                return 0.0
+        checkin = self._get_target_checkin(obj)
+        return float(checkin.value) if checkin else 0.0
+
+    def get_today_progress(self, obj: Habit) -> float:
+        target_date = self._get_target_date(obj)
+        if "checkins_map" in self.context:
+            checkin = self.context["checkins_map"].get(obj.id)
+            val = float(checkin.value) if checkin else 0.0
+        else:
+            user_today = self._get_user_today(obj)
+            if target_date == user_today:
+                if obj.last_check_in_date == user_today:
+                    val = float(obj.last_check_in_value)
+                else:
+                    val = 0.0
+            elif obj.last_check_in_date is not None and obj.last_check_in_date != target_date:
+                if (
+                    not hasattr(obj, "_prefetched_objects_cache")
+                    or "check_ins" not in obj._prefetched_objects_cache
+                ):
+                    val = 0.0
+                else:
+                    checkin = self._get_target_checkin(obj)
+                    val = float(checkin.value) if checkin else 0.0
+            else:
+                checkin = self._get_target_checkin(obj)
+                val = float(checkin.value) if checkin else 0.0
+
+        if val <= 0:
+            return 0.0
+        if obj.habit_type == HabitType.BOOLEAN:
+            return 100.0
+        target = float(obj.target_value) if obj.target_value else 0.0
+        if target <= 0:
+            return 0.0
+        return min(100.0, round((val / target) * 100, 1))
+
+    def get_is_checked_today(self, obj: Habit) -> bool:
+        """Check whether the habit is completed for today (or requested date)."""
+        target_date = self._get_target_date(obj)
+        if "checkins_map" in self.context:
+            checkin = self.context["checkins_map"].get(obj.id)
+            if not checkin:
+                return False
+            return is_day_completed(obj, checkin)
+
+        user_today = self._get_user_today(obj)
+        if target_date == user_today:
+            if obj.last_check_in_date == user_today:
+                return is_day_completed(obj, obj.last_check_in_value)
+            return False
+
+        if obj.last_check_in_date is None:
+            return False
+        if obj.last_check_in_date != target_date:
+            if target_date > obj.last_check_in_date:
+                return False
+            if (
+                not hasattr(obj, "_prefetched_objects_cache")
+                or "check_ins" not in obj._prefetched_objects_cache
+            ):
+                return False
+
+        checkin = self._get_target_checkin(obj)
+        if not checkin:
+            return False
+        return is_day_completed(obj, checkin)
 
     def get_current_streak(self, obj: Habit) -> int:
         """Calculate the habit's current streak as of user's today."""
@@ -206,6 +343,15 @@ class CheckInActionSerializer(serializers.Serializer):
     """Serializer for check-in action payloads."""
 
     date = serializers.DateField(required=False, default=None)
+    value = serializers.FloatField(required=False, default=None, min_value=0, max_value=100000)
+    mode = serializers.ChoiceField(choices=["add", "set"], required=False, default="add")
+
+
+class UncheckActionSerializer(serializers.Serializer):
+    """Serializer for uncheck action payloads."""
+
+    date = serializers.DateField(required=False, default=None)
+    value = serializers.FloatField(required=False, default=None, min_value=0, max_value=100000)
 
 
 class ArchiveResponseSerializer(serializers.Serializer):
@@ -223,6 +369,9 @@ class CheckInResponseSerializer(serializers.Serializer):
     date = serializers.DateField()
     current_streak = serializers.IntegerField()
     longest_streak = serializers.IntegerField()
+    today_value = serializers.FloatField()
+    today_progress = serializers.FloatField()
+    is_completed = serializers.BooleanField()
 
 
 class HabitStatisticsSerializer(serializers.Serializer):

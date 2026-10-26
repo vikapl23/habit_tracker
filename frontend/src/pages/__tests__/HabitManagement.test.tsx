@@ -18,6 +18,9 @@ const mockHabit: Habit = {
   is_archived: false,
   frequency_type: 'daily',
   frequency_days: [],
+  habit_type: 'boolean',
+  today_value: 0,
+  today_progress: 0,
   current_streak: 4,
   longest_streak: 10,
   is_checked_today: false,
@@ -35,6 +38,9 @@ const mockArchivedHabit: Habit = {
   is_archived: true,
   frequency_type: 'daily',
   frequency_days: [],
+  habit_type: 'boolean',
+  today_value: 0,
+  today_progress: 0,
   current_streak: 2,
   longest_streak: 5,
   is_checked_today: false,
@@ -91,6 +97,9 @@ describe('Habit Management (Step 5.4)', () => {
       is_archived: false,
       frequency_type: 'daily',
       frequency_days: [],
+      habit_type: 'boolean',
+      today_value: 0,
+      today_progress: 0,
       current_streak: 0,
       longest_streak: 0,
       is_checked_today: false,
@@ -128,14 +137,16 @@ describe('Habit Management (Step 5.4)', () => {
     await user.click(submitBtn);
 
     await waitFor(() => {
-      expect(createSpy).toHaveBeenCalledWith({
-        name: 'Drink 2L Water',
-        description: 'Stay hydrated',
-        color: '#10B981',
-        emoji: '💧',
-        frequency_type: 'daily',
-        frequency_days: [],
-      });
+      expect(createSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'Drink 2L Water',
+          description: 'Stay hydrated',
+          color: '#10B981',
+          emoji: '💧',
+          frequency_type: 'daily',
+          frequency_days: [],
+        })
+      );
       expect(screen.queryByRole('dialog', { name: /new habit/i })).not.toBeInTheDocument();
     });
 
@@ -155,6 +166,9 @@ describe('Habit Management (Step 5.4)', () => {
       is_archived: false,
       frequency_type: 'custom',
       frequency_days: [0, 2, 4],
+      habit_type: 'boolean',
+      today_value: 0,
+      today_progress: 0,
       current_streak: 0,
       longest_streak: 0,
       is_checked_today: false,
@@ -459,5 +473,86 @@ describe('Habit Management (Step 5.4)', () => {
     fireEvent.touchEnd(dragHandle!, { changedTouches: [{ clientY: 250 }] });
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('creates a measurable habit with unit suggestions and daily target', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(habitsApi, 'getAllHabits').mockResolvedValue([]);
+    const createSpy = vi.spyOn(habitsApi, 'createHabit').mockResolvedValue({
+      ...mockHabit,
+      id: 11,
+      name: 'Drink Water',
+      habit_type: 'measurable',
+      unit: 'glasses',
+      target_value: 8,
+      today_value: 0,
+      today_progress: 0,
+    });
+
+    renderDashboard();
+
+    const fabButton = await screen.findByRole('button', { name: /new habit/i });
+    await user.click(fabButton);
+
+    const nameInput = screen.getByPlaceholderText(/e\.g\. Read 20 pages/i);
+    await user.type(nameInput, 'Drink Water');
+
+    // Select "Amount" type
+    const amountTypeBtn = screen.getByRole('button', { name: /amount/i });
+    await user.click(amountTypeBtn);
+
+    // Click suggested unit "glasses"
+    const glassesBtn = screen.getByRole('button', { name: /^glasses$/i });
+    await user.click(glassesBtn);
+
+    // Target value input
+    const targetInput = screen.getByLabelText(/daily target/i);
+    await user.clear(targetInput);
+    await user.type(targetInput, '8');
+
+    // Submit form
+    const submitBtn = screen.getByRole('button', { name: /create habit/i });
+    await user.click(submitBtn);
+
+    await waitFor(() => {
+      expect(createSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'Drink Water',
+          habit_type: 'measurable',
+          unit: 'glasses',
+          target_value: 8,
+        })
+      );
+    });
+  });
+
+  it('shows streak recalculation warning when editing measurable habit target', async () => {
+    const user = userEvent.setup();
+    const measurableHabit: Habit = {
+      ...mockHabit,
+      id: 12,
+      name: 'Running',
+      habit_type: 'measurable',
+      unit: 'km',
+      target_value: 5,
+      today_value: 2.5,
+      today_progress: 50,
+    };
+    vi.spyOn(habitsApi, 'getAllHabits').mockResolvedValue([measurableHabit]);
+
+    renderDashboard();
+
+    expect(await screen.findByText('Running')).toBeInTheDocument();
+
+    const menuBtn = screen.getByRole('button', { name: /more options for running/i });
+    await user.click(menuBtn);
+
+    const editBtn = screen.getByRole('menuitem', { name: /edit/i });
+    await user.click(editBtn);
+
+    // When editing measurable habit, warning should appear
+    expect(
+      screen.getByText(/changing the target will recalculate your streak/i)
+    ).toBeInTheDocument();
   });
 });

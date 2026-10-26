@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import timedelta
 
 import pytest
 from freezegun import freeze_time
@@ -137,7 +137,8 @@ class TestUserSummaryStatisticsService:
         assert summary["best_habit"]["name"] == "Water"
 
 
-def test_is_day_completed_helper():
-    checkin_dates = {date(2026, 10, 26), date(2026, 10, 25)}
-    assert is_day_completed(date(2026, 10, 26), checkin_dates) is True
-    assert is_day_completed(date(2026, 10, 24), checkin_dates) is False
+@pytest.mark.django_db
+def test_is_day_completed_helper(user):
+    habit = Habit.objects.create(user=user, name="Meditation")
+    assert is_day_completed(habit, True) is True
+    assert is_day_completed(habit, None) is False

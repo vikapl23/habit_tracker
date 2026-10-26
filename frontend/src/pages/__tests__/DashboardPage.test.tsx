@@ -17,6 +17,9 @@ const mockScheduledHabit: Habit = {
   is_archived: false,
   frequency_type: 'daily',
   frequency_days: [],
+  habit_type: 'boolean',
+  today_value: 0,
+  today_progress: 0,
   current_streak: 5,
   longest_streak: 12,
   is_checked_today: false,
@@ -34,6 +37,9 @@ const mockCheckedScheduledHabit: Habit = {
   is_archived: false,
   frequency_type: 'daily',
   frequency_days: [],
+  habit_type: 'boolean',
+  today_value: 0,
+  today_progress: 0,
   current_streak: 8,
   longest_streak: 15,
   is_checked_today: true,
@@ -51,6 +57,9 @@ const mockNotScheduledHabit: Habit = {
   is_archived: false,
   frequency_type: 'custom',
   frequency_days: [1, 3, 5],
+  habit_type: 'boolean',
+  today_value: 0,
+  today_progress: 0,
   current_streak: 3,
   longest_streak: 6,
   is_checked_today: false,
@@ -327,5 +336,44 @@ describe('DashboardPage Mobile View', () => {
 
     // checkHabit should NOT have been called
     expect(checkSpy).not.toHaveBeenCalled();
+  });
+
+  it('counts measurable habits in "X of Y done today" only when target is reached', async () => {
+    const measurableIncomplete: Habit = {
+      ...mockScheduledHabit,
+      id: 101,
+      name: 'Drink Water 8 glasses',
+      habit_type: 'measurable',
+      unit: 'glasses',
+      target_value: 8,
+      today_value: 5,
+      today_progress: 62.5,
+      is_checked_today: false,
+    };
+    const measurableCompleted: Habit = {
+      ...mockScheduledHabit,
+      id: 102,
+      name: 'Run 5km',
+      habit_type: 'measurable',
+      unit: 'km',
+      target_value: 5,
+      today_value: 5.5,
+      today_progress: 100,
+      is_checked_today: true,
+    };
+    vi.spyOn(habitsApi, 'getAllHabits').mockResolvedValue([
+      measurableIncomplete,
+      measurableCompleted,
+    ]);
+
+    renderDashboard();
+
+    expect(await screen.findByText('Drink Water 8 glasses')).toBeInTheDocument();
+    expect(screen.getByText('Run 5km')).toBeInTheDocument();
+
+    // 1 of 2 done today
+    expect(screen.getByText(/1 of 2 done today/i)).toBeInTheDocument();
+    // 50%
+    expect(screen.getByText('50%')).toBeInTheDocument();
   });
 });

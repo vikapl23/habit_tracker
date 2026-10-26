@@ -50,6 +50,10 @@
     {
       "key": "yesterday",
       "value": ""
+    },
+    {
+      "key": "measurable_habit_id",
+      "value": ""
     }
   ],
   "item": [
@@ -1489,6 +1493,247 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"Status 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3b. Measurable Habits",
+      "description": "Measurable habits with units, target values, accumulation, and set mode.",
+      "item": [
+        {
+          "name": "Create measurable habit (glasses)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/habits/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "habits",
+                ""
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Drink Water Measurable\",\n  \"habit_type\": \"measurable\",\n  \"unit\": \"glasses\",\n  \"target_value\": 8.0,\n  \"color\": \"#3B82F6\",\n  \"emoji\": \"\\ud83d\\udca7\",\n  \"frequency_type\": \"daily\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"Habit type measurable\", () => pm.expect(body.habit_type).to.eql(\"measurable\"));",
+                  "pm.test(\"Target value is 8\", () => pm.expect(body.target_value).to.eql(8));",
+                  "pm.collectionVariables.set(\"measurable_habit_id\", body.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Check in +3 glasses (accumulate)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/habits/{{measurable_habit_id}}/check/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "habits",
+                "{{measurable_habit_id}}",
+                "check",
+                ""
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"value\": 3,\n  \"mode\": \"add\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201 or 200\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"today_value is 3\", () => pm.expect(body.today_value).to.eql(3));",
+                  "pm.test(\"is_completed is false\", () => pm.expect(body.is_completed).to.eql(false));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Check in +5 glasses (reaches target 8)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/habits/{{measurable_habit_id}}/check/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "habits",
+                "{{measurable_habit_id}}",
+                "check",
+                ""
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"value\": 5,\n  \"mode\": \"add\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"today_value is 8\", () => pm.expect(body.today_value).to.eql(8));",
+                  "pm.test(\"is_completed is true\", () => pm.expect(body.is_completed).to.eql(true));",
+                  "pm.test(\"current_streak is 1\", () => pm.expect(body.current_streak).to.eql(1));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Decrement -1 glass",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/habits/{{measurable_habit_id}}/uncheck/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "habits",
+                "{{measurable_habit_id}}",
+                "uncheck",
+                ""
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"value\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"today_value is 7\", () => pm.expect(body.today_value).to.eql(7));",
+                  "pm.test(\"is_completed is false\", () => pm.expect(body.is_completed).to.eql(false));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Set exact value (10 glasses)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/habits/{{measurable_habit_id}}/check/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "habits",
+                "{{measurable_habit_id}}",
+                "check",
+                ""
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"value\": 10,\n  \"mode\": \"set\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"today_value is 10\", () => pm.expect(body.today_value).to.eql(10));",
+                  "pm.test(\"is_completed is true\", () => pm.expect(body.is_completed).to.eql(true));"
                 ]
               }
             }

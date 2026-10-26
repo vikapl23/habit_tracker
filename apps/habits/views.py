@@ -13,7 +13,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Habit
+from .models import Habit, HabitCheckIn
 from .serializers import (
     ArchiveResponseSerializer,
     CheckInActionSerializer,
@@ -22,6 +22,7 @@ from .serializers import (
     HabitCheckInSerializer,
     HabitSerializer,
     HabitStatisticsSerializer,
+    UncheckActionSerializer,
     UserSummaryStatisticsSerializer,
 )
 from .services import CheckInResult, check_in_habit, uncheck_habit
@@ -56,6 +57,14 @@ class HabitViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer: serializers.BaseSerializer) -> None:
         """Persist new habit associated with the authenticated user."""
         serializer.save(user=self.request.user)
+
+    def perform_update(self, serializer: serializers.BaseSerializer) -> None:
+        """Persist habit updates and recalculate streaks if type or target changed."""
+        from .services.habits import update_habit
+
+        instance = serializer.instance
+        updated = update_habit(instance, **serializer.validated_data)
+        serializer.instance = updated
 
     def _format_checkin_response(self, result: CheckInResult) -> dict[str, Any]:
         """Format a CheckInResult into a serialized dictionary."""
@@ -97,7 +106,33 @@ class HabitViewSet(viewsets.ModelViewSet):
     )
     def list(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         """List active habits for the user with streak and schedule metadata."""
-        return super().list(request, *args, **kwargs)
+        target_date = self._get_target_date()
+        user_today = (
+            self.request.user.get_today()
+            if hasattr(self.request.user, "get_today")
+            else timezone.localdate()
+        )
+
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+        habits_list = page if page is not None else queryset
+
+        context = self.get_serializer_context()
+        context["target_date"] = target_date
+
+        # If evaluating for a past/future date, batch load target_date check-ins
+        if target_date != user_today:
+            habit_ids = [h.id for h in habits_list]
+            checkins_map = {
+                ci.habit_id: ci
+                for ci in HabitCheckIn.objects.filter(habit_id__in=habit_ids, date=target_date)
+            }
+            context["checkins_map"] = checkins_map
+
+        serializer = self.get_serializer(habits_list, many=True, context=context)
+        if page is not None:
+            return self.get_paginated_response(serializer.data)
+        return Response(serializer.data)
 
     def get_queryset(self) -> QuerySet[Habit]:
         """Return queryset filtered to the authenticated user's active or all habits."""
@@ -108,9 +143,6 @@ class HabitViewSet(viewsets.ModelViewSet):
         qs = Habit.objects.filter(user=user).select_related("user")
         if getattr(self, "detail", False) or self.action != "list":
             return qs
-
-        if "date" in self.request.query_params:
-            qs = qs.prefetch_related("check_ins")
 
         include_archived = self.request.query_params.get("include_archived", "false").lower() in [
             "true",
@@ -167,26 +199,31 @@ class HabitViewSet(viewsets.ModelViewSet):
         serializer = CheckInActionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         target_date = serializer.validated_data.get("date")
+        value = serializer.validated_data.get("value")
+        mode = serializer.validated_data.get("mode", "add")
 
-        result = check_in_habit(habit=habit, target_date=target_date, user=request.user)
+        result = check_in_habit(
+            habit=habit, target_date=target_date, value=value, mode=mode, user=request.user
+        )
         return Response(
             self._format_checkin_response(result),
             status=status.HTTP_201_CREATED if result.created else status.HTTP_200_OK,
         )
 
     @extend_schema(
-        request=CheckInActionSerializer,
+        request=UncheckActionSerializer,
         responses={200: CheckInResponseSerializer},
     )
     @action(detail=True, methods=["post"])
     def uncheck(self, request: Request, pk: str | None = None) -> Response:
-        """Remove a recorded check-in for today or a specified target date."""
+        """Remove or decrement a recorded check-in for today or a specified target date."""
         habit = self.get_object()
-        serializer = CheckInActionSerializer(data=request.data)
+        serializer = UncheckActionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         target_date = serializer.validated_data.get("date")
+        value = serializer.validated_data.get("value")
 
-        result = uncheck_habit(habit=habit, target_date=target_date, user=request.user)
+        result = uncheck_habit(habit=habit, target_date=target_date, value=value, user=request.user)
         return Response(
             self._format_checkin_response(result),
             status=status.HTTP_200_OK,

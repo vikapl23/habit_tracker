@@ -59,14 +59,38 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onCreateHabit }) =
     loadHabits();
   }, [loadHabits]);
 
-  const handleToggleHabit = async (habit: Habit) => {
+  const handleToggleHabit = async (
+    habit: Habit,
+    options?: { value?: number; mode?: 'add' | 'set'; action?: 'check' | 'uncheck' }
+  ) => {
     if (pendingHabitIds.has(habit.id)) return;
 
     const originalHabit = habit;
-    const isNowChecked = !habit.is_checked_today;
-    const newCurrentStreak = isNowChecked
-      ? habit.current_streak + 1
-      : Math.max(0, habit.current_streak - 1);
+    const isMeasurable = habit.habit_type === 'measurable';
+    const target = habit.target_value ?? 1;
+
+    let optimisticValue = habit.today_value ?? 0;
+    if (options?.mode === 'set') {
+      optimisticValue = options.value ?? 0;
+    } else if (options?.action === 'uncheck') {
+      optimisticValue = Math.max(0, optimisticValue - (options?.value ?? 1));
+    } else if (options?.action === 'check') {
+      optimisticValue = optimisticValue + (options?.value ?? 1);
+    } else {
+      // boolean toggle
+      optimisticValue = habit.is_checked_today ? 0 : 1;
+    }
+
+    const optimisticChecked = isMeasurable
+      ? optimisticValue >= target
+      : optimisticValue > 0;
+    const optimisticProgress = isMeasurable
+      ? Math.min(100, Math.round((optimisticValue / target) * 100))
+      : optimisticChecked ? 100 : 0;
+
+    const newCurrentStreak = optimisticChecked
+      ? (habit.is_checked_today ? habit.current_streak : habit.current_streak + 1)
+      : (habit.is_checked_today ? Math.max(0, habit.current_streak - 1) : habit.current_streak);
     const newLongestStreak = Math.max(habit.longest_streak, newCurrentStreak);
 
     // Optimistic update
@@ -75,7 +99,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onCreateHabit }) =
         h.id === habit.id
           ? {
               ...h,
-              is_checked_today: isNowChecked,
+              today_value: optimisticValue,
+              today_progress: optimisticProgress,
+              is_checked_today: optimisticChecked,
               current_streak: newCurrentStreak,
               longest_streak: newLongestStreak,
             }
@@ -86,16 +112,45 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onCreateHabit }) =
     setPendingHabitIds((prev) => new Set(prev).add(habit.id));
 
     try {
-      const res = isNowChecked
-        ? await habitsApi.checkHabit(habit.id)
-        : await habitsApi.uncheckHabit(habit.id);
+      let res;
+      if (options?.action === 'uncheck') {
+        res = await habitsApi.uncheckHabit(habit.id, { value: options.value });
+      } else if (options?.mode === 'set') {
+        res = await habitsApi.checkHabit(habit.id, {
+          value: options.value,
+          mode: 'set',
+        });
+      } else if (options?.action === 'check') {
+        res = await habitsApi.checkHabit(habit.id, {
+          value: options.value,
+          mode: 'add',
+        });
+      } else {
+        // default toggle
+        res = !habit.is_checked_today
+          ? await habitsApi.checkHabit(habit.id)
+          : await habitsApi.uncheckHabit(habit.id);
+      }
 
       // Confirm with exact server values
+      const isCompleted = res.is_completed !== undefined
+        ? res.is_completed
+        : res.status === 'checked' || res.status === 'created';
+      const todayVal = res.today_value !== undefined
+        ? res.today_value
+        : (isCompleted ? (habit.target_value ?? 1) : 0);
+      const todayProg = res.today_progress !== undefined
+        ? res.today_progress
+        : (isCompleted ? 100 : 0);
+
       setHabits((prev) =>
         prev.map((h) =>
           h.id === habit.id
             ? {
                 ...h,
+                today_value: todayVal,
+                today_progress: todayProg,
+                is_checked_today: isCompleted,
                 current_streak: res.current_streak,
                 longest_streak: res.longest_streak,
               }
@@ -103,7 +158,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onCreateHabit }) =
         )
       );
     } catch (err: unknown) {
-      // I5: Roll back ONLY the affected habit, not the entire list
+      // Roll back ONLY the affected habit
       setHabits((prev) => prev.map((h) => (h.id === habit.id ? originalHabit : h)));
       const errorMsg = getErrorMessage(err, 'Failed to update habit. Please try again.');
       setToast({

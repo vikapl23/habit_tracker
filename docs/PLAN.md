@@ -512,38 +512,58 @@ Each step is independent, test-driven, verifiable, and yields a working, deploya
 
 ### Step 8: Measurable Habits with Units
 - **Scope**:
-  - Distinguish between **boolean** habits (completed / not completed) and **measurable** habits (target quantity + unit).
-  - Habit model configuration: `habit_type` (`boolean` vs `measurable`), `unit` (e.g. `ml`, `pages`, `minutes`, `steps`), and `target_value` (e.g. `2000`, `30`).
-  - Incremental check-ins: users can check in multiple times per day with incremental amounts; daily check-in values are summed.
-  - Day completion criteria: a measurable habit is satisfied on a given date if and only if `sum(values) >= target_value`.
-  - Streak engine & statistics integration: streaks and completion rates adapt seamlessly using the `is_day_completed` abstraction.
-  - Frontend UI: progress bars for measurable cards (e.g. `1200 / 2000 ml`), quick-add increment buttons (+250ml, custom input), and visual state transitions upon reaching target.
-- **Data Model Changes**:
-  - `Habit`:
+  - Distinguish between **boolean** habits (`habit_type: "boolean"`, completed / not completed, default) and **measurable** habits (`habit_type: "measurable"`, requires `unit` and `target_value` > 0, e.g. glasses, km, minutes, pages).
+  - Consistent naming across model and API: `habit_type`, `unit`, `target_value`, `today_value`, `today_progress`.
+  - Numeric limits & types: `target_value` and check-in `value` max 100,000, max 2 decimal places. Returned as JSON numbers (floats/ints), not strings (`coerce_to_string = False` or float serializer fields).
+  - Habit model configuration:
     - `habit_type`: `CharField(max_length=20, choices=[('boolean', 'Boolean'), ('measurable', 'Measurable')], default='boolean')`
-    - `target_value`: `DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)`
+    - `target_value`: `DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)` (max 100,000)
     - `unit`: `CharField(max_length=30, blank=True, default='')`
-    - Model validation: `target_value > 0` and non-empty `unit` required if `habit_type == 'measurable'`.
-  - `HabitCheckIn`:
-    - `value`: `DecimalField(max_digits=10, decimal_places=2, default=1.0)`
-    - Relax unique constraint from `(habit, date)` to allow multiple check-in logs per day, OR maintain a daily aggregated check-in with check-in log records. (Preferred: Keep `HabitCheckIn` per date with `value` representing the daily accumulated total, or add `HabitCheckInLog` for multi-log entries summed into `HabitCheckIn.value`).
-- **Endpoints**:
-  - `POST /api/v1/habits/`: Accept `habit_type`, `target_value`, `unit`.
-  - `POST /api/v1/habits/{id}/check/`: Accept optional `value` payload (e.g. `{"date": "2026-10-26", "value": 500}`). For measurable habits, increments the day's accumulated value. Returns current accumulated value, target, and completion status.
-  - `POST /api/v1/habits/{id}/uncheck/`: Reset or decrement today's check-in value.
-  - `GET /api/v1/habits/` & `GET /api/v1/habits/{id}/`: Expose `habit_type`, `target_value`, `unit`, `today_value`, and `is_checked_today` (`today_value >= target_value`).
-- **Testing Strategy**:
-  - Unit tests for validation: negative or zero target values rejected; measurable habit requires unit and target.
-  - Streak service unit tests: partial completion does not count towards streak; reaching/exceeding target counts as satisfied day; decrementing below target lapses streak if today/yesterday.
-  - Integration tests for `check` action: verifying sequential check-ins sum properly (e.g. 500 + 700 = 1200 / 1000 => completed).
-  - Statistics tests: verify weekly/monthly rates compute based on threshold satisfaction.
-- **Risks & Mitigations**:
-  - *Risk*: Migration of existing boolean check-ins breaking streak calculations.
-    *Mitigation*: Default existing check-in `value` to `1.0` and default existing habits to `habit_type='boolean'` with `target_value=1.0`.
-  - *Risk*: Floating point rounding issues with fractional units (e.g. kilometers, liters).
-    *Mitigation*: Use `DecimalField` instead of `FloatField` for exact decimal arithmetic.
-  - *Risk*: Race conditions during simultaneous concurrent check-ins summing amounts.
-    *Mitigation*: Use Django ORM `F()` expressions or database-level row locking (`select_for_update()`).
+  - Atomic Check-In Accumulation & Setting:
+    - `HabitCheckIn`: `value` (`DecimalField(max_digits=8, decimal_places=2, default=1.00)`), unique per `(habit, date)`.
+    - Check-in modes on `POST /api/v1/habits/{id}/check/`:
+      - `mode: "add"` (default): adds `value` (default 1.0 for measurable if omitted). Uses `select_for_update()` inside an atomic transaction (or atomic `F('value') + value` with reload) to prevent race conditions during rapid "+" taps.
+      - `mode: "set"`: sets exact value for that day. Setting 0 (or <= 0) removes the check-in record.
+      - For boolean habits, `value` or `mode="set"` is disallowed (`400 Bad Request`).
+  - Decrement & Reset on `POST /api/v1/habits/{id}/uncheck/`:
+    - For measurable habits:
+      - If `value` is provided (e.g. from "-" button): decrements the day's total atomically. If new total <= 0, the check-in is removed.
+      - If `value` is omitted (or explicit reset): removes the check-in record entirely (full day reset).
+    - For boolean habits: removes the check-in as usual.
+  - Single Shared Completion Helper:
+    - Single shared helper `is_day_completed(habit, value_or_checkin, ...)` used across all layers: streaks (`calculate_streaks`, `calculate_habit_streaks`), `is_checked_today`, `today_progress`, statistics completion rates (7d, 30d, user summary), and calendar day rendering.
+    - Rule: For boolean habits: completed if checked. For measurable habits: completed if and only if day's total `value >= target_value`.
+  - Streak Recalculation Architecture:
+    - Streaks are NOT recalculated inside `Habit.save()`. Business logic stays strictly in `services/`.
+    - Dedicated service function `update_habit(...)` in `apps/habits/services/habits.py` (or viewset orchestration) triggers `recalculate_habit_streaks(habit)` whenever `habit_type` or `target_value` changes.
+    - Changing habit type or target recalculates streaks according to the new threshold. Edit UI displays a warning banner: *"Changing the target will recalculate your streak"*.
+  - Frequency & Timezone Respect:
+    - Respect scheduled days (`frequency_type`, `frequency_days`) and user's timezone (`user.get_today()`) exactly as currently implemented.
+  - REST API & Validation:
+    - Model & Serializer validation:
+      - `habit_type` must be `'boolean'` or `'measurable'`.
+      - For `measurable`: `unit` is required (non-empty string) and `target_value` is required (`0 < target_value <= 100000`).
+      - For `boolean`: `unit` and `target_value` must not be set (or set to empty/null).
+      - Check-in `value`: max 100,000, 2 decimal places, > 0.
+    - Expose fields in API: `habit_type`, `unit`, `target_value` (number), `today_value` (number), and `today_progress` (number 0–100%).
+    - Zero N+1 queries on list and statistics endpoints validated with `django_assert_num_queries`.
+    - Deterministic testing: No tests depend on the real current date (using `freezegun` and Vitest fake timers). Concurrency/race condition test verifying atomic increments.
+  - Data Migration:
+    - Existing habits migrated as `habit_type='boolean'`, `target_value=None`, `unit=''`.
+    - Existing check-ins migrated with `value=1.00`.
+  - Frontend UI:
+    - Habit Form (create & edit): Type toggle switch (Yes/No vs Amount). Unit input with common unit suggestions pills (`glasses`, `km`, `minutes`, `pages`, `steps`, `hours`). Daily target decimal input (max 100,000). Warning banner when editing target: *"Changing the target will recalculate your streak"*.
+    - Dashboard Card:
+      - Measurable card display: `"5 / 8 glasses"`, circular progress ring indicating `today_progress`.
+      - Quick actions: `+` quick add button (default step = 1), `−` decrement button, and tap on the number/progress to open an exact amount modal/input (`mode: "set"`).
+      - Daily header progress `"X of Y done today"` counts measurable habits only when target is reached (`today_value >= target_value`).
+    - Detail Page & Calendar:
+      - Completed days fully filled in habit color. Partial days shown differently (lighter/tinted color with progress outline).
+      - Tapping past day opens an amount input/modal to log or adjust that day's value (`mode: "set"` or custom add).
+    - Statistics:
+      - Cards work seamlessly for both boolean and measurable habits.
+  - Postman Collection:
+    - Update `habit_tracker.postman_collection.json` with measurable habit example (create, check with add/set, uncheck decrement, check-ins list).
 
 ---
 

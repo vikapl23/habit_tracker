@@ -1,5 +1,6 @@
 import threading
 from datetime import date, timedelta
+from decimal import Decimal
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -9,6 +10,11 @@ from django.dispatch import receiver
 from django.utils import timezone
 
 from .validators import hex_color_validator, validate_emoji
+
+
+class HabitType(models.TextChoices):
+    BOOLEAN = "boolean", "Boolean"
+    MEASURABLE = "measurable", "Measurable"
 
 
 class FrequencyType(models.TextChoices):
@@ -27,6 +33,22 @@ class Habit(models.Model):
     color = models.CharField(max_length=7, default="#3B82F6", validators=[hex_color_validator])
     emoji = models.CharField(max_length=16, default="🎯", validators=[validate_emoji])
     is_archived = models.BooleanField(default=False)
+    habit_type = models.CharField(
+        max_length=20,
+        choices=HabitType.choices,
+        default=HabitType.BOOLEAN,
+    )
+    target_value = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    unit = models.CharField(
+        max_length=30,
+        blank=True,
+        default="",
+    )
     frequency_type = models.CharField(
         max_length=10,
         choices=FrequencyType.choices,
@@ -39,6 +61,11 @@ class Habit(models.Model):
     current_streak = models.PositiveIntegerField(default=0)
     longest_streak = models.PositiveIntegerField(default=0)
     last_check_in_date = models.DateField(null=True, blank=True)
+    last_check_in_value = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        default=Decimal("0.00"),
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -53,6 +80,30 @@ class Habit(models.Model):
 
     def clean(self):
         super().clean()
+        if self.habit_type not in HabitType.values:
+            raise ValidationError(
+                {"habit_type": f"Invalid habit type. Choose from: {', '.join(HabitType.values)}."}
+            )
+
+        if self.habit_type == HabitType.MEASURABLE:
+            if not self.unit or not self.unit.strip():
+                raise ValidationError({"unit": "Unit is required for measurable habits."})
+            if self.target_value is None:
+                raise ValidationError(
+                    {"target_value": "Target value is required for measurable habits."}
+                )
+            if self.target_value <= Decimal("0"):
+                raise ValidationError({"target_value": "Target value must be greater than zero."})
+            if self.target_value > Decimal("100000.00"):
+                raise ValidationError({"target_value": "Target value cannot exceed 100,000."})
+        elif self.habit_type == HabitType.BOOLEAN:
+            if self.unit:
+                raise ValidationError({"unit": "Unit cannot be set for boolean habits."})
+            if self.target_value is not None:
+                raise ValidationError(
+                    {"target_value": "Target value cannot be set for boolean habits."}
+                )
+
         if self.frequency_type not in FrequencyType.values:
             raise ValidationError(
                 {
@@ -116,32 +167,6 @@ class Habit(models.Model):
         elif self.frequency_type == FrequencyType.DAILY:
             self.frequency_days = []
 
-        update_fields = kwargs.get("update_fields")
-        frequency_changed = False
-        if self.pk:
-            if (
-                update_fields is None
-                or "frequency_type" in update_fields
-                or "frequency_days" in update_fields
-            ):
-                if hasattr(self, "_loaded_frequency_type"):
-                    if (
-                        self._loaded_frequency_type != self.frequency_type
-                        or self._loaded_frequency_days != self.frequency_days
-                    ):
-                        frequency_changed = True
-                else:
-                    orig = (
-                        Habit.objects.filter(pk=self.pk)
-                        .values("frequency_type", "frequency_days")
-                        .first()
-                    )
-                    if orig and (
-                        orig["frequency_type"] != self.frequency_type
-                        or orig["frequency_days"] != self.frequency_days
-                    ):
-                        frequency_changed = True
-
         super().save(*args, **kwargs)
 
         self._loaded_frequency_type = self.frequency_type
@@ -150,11 +175,6 @@ class Habit(models.Model):
             if isinstance(self.frequency_days, list)
             else self.frequency_days
         )
-
-        if frequency_changed:
-            from apps.habits.services.streaks import recalculate_habit_streaks
-
-            recalculate_habit_streaks(self)
 
     def get_current_streak(self, reference_date=None) -> int:
         """
@@ -192,6 +212,11 @@ class Habit(models.Model):
 class HabitCheckIn(models.Model):
     habit = models.ForeignKey(Habit, on_delete=models.CASCADE, related_name="check_ins")
     date = models.DateField()
+    value = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        default=Decimal("1.00"),
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

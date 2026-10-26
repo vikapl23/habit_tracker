@@ -1,11 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Habit } from '../types/habit';
-import { Check, MoreHorizontal, Edit, Archive, Trash2 } from 'lucide-react';
+import { Check, MoreHorizontal, Edit, Archive, Trash2, Plus, Minus } from 'lucide-react';
 
 interface HabitCardProps {
   habit: Habit;
-  onToggle: (habit: Habit) => void;
+  onToggle: (habit: Habit, options?: { value?: number; mode?: 'add' | 'set'; action?: 'check' | 'uncheck' }) => void;
   onSelect?: (habit: Habit) => void;
   onEdit?: (habit: Habit) => void;
   onArchive?: (habit: Habit) => void;
@@ -49,6 +49,32 @@ export const HabitCard: React.FC<HabitCardProps> = ({
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [isMenuOpen]);
+
+  const isMeasurable = habit.habit_type === 'measurable';
+  const target = habit.target_value ?? 1;
+  const todayValue = habit.today_value ?? 0;
+  const progressPct = Math.min(100, Math.max(0, habit.today_progress ?? (isChecked ? 100 : 0)));
+
+  const [isEditingExact, setIsEditingExact] = useState(false);
+  const [exactInput, setExactInput] = useState('');
+  const exactInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isEditingExact) {
+      setExactInput(String(todayValue));
+      setTimeout(() => exactInputRef.current?.select(), 50);
+    }
+  }, [isEditingExact, todayValue]);
+
+  const handleExactSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const parsed = parseFloat(exactInput);
+    if (!isNaN(parsed) && parsed >= 0) {
+      onToggle(habit, { value: parsed, mode: 'set' });
+    }
+    setIsEditingExact(false);
+  };
 
   const handleInfoClick = (e: React.MouseEvent | React.KeyboardEvent) => {
     e.stopPropagation();
@@ -113,51 +139,155 @@ export const HabitCard: React.FC<HabitCardProps> = ({
             </h3>
           </div>
 
-          {/* Streaks Badges */}
-          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-            <span
-              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200/60"
-              aria-label={`Current streak ${habit.current_streak} days`}
-            >
-              🔥 {habit.current_streak}
-            </span>
-            <span
-              className="text-[11px] font-medium text-slate-500"
-              aria-label={`Longest streak ${habit.longest_streak} days`}
-            >
-              best {habit.longest_streak}d
-            </span>
+          {/* Measurable Progress display & Streaks */}
+          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+            {isMeasurable ? (
+              isEditingExact ? (
+                <form
+                  onSubmit={handleExactSubmit}
+                  onClick={(e) => e.stopPropagation()}
+                  className="flex items-center gap-1.5"
+                >
+                  <input
+                    ref={exactInputRef}
+                    type="number"
+                    step="any"
+                    min="0"
+                    max="100000"
+                    aria-label={`Enter exact amount for ${habit.name}`}
+                    value={exactInput}
+                    onChange={(e) => setExactInput(e.target.value)}
+                    onBlur={() => setIsEditingExact(false)}
+                    className="w-16 h-6 px-1.5 text-xs font-bold rounded border border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
+                  />
+                  <span className="text-[11px] text-slate-500">/ {target} {habit.unit}</span>
+                </form>
+              ) : (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsEditingExact(true);
+                  }}
+                  aria-label={`Current amount ${todayValue} of ${target} ${habit.unit}. Tap to enter exact amount`}
+                  className="text-xs font-bold text-blue-600 hover:text-blue-800 transition py-0.5 px-1 -mx-1 rounded hover:bg-blue-50"
+                >
+                  {todayValue} / {target} {habit.unit}
+                </button>
+              )
+            ) : null}
+
+            {/* Streaks Badges */}
+            <div className="flex items-center gap-1.5">
+              <span
+                className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200/60"
+                aria-label={`Current streak ${habit.current_streak} days`}
+              >
+                🔥 {habit.current_streak}
+              </span>
+              <span
+                className="text-[11px] font-medium text-slate-500"
+                aria-label={`Longest streak ${habit.longest_streak} days`}
+              >
+                best {habit.longest_streak}d
+              </span>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Right side: Checkbox Circle Indicator & Menu Button */}
-      <div className="shrink-0 flex items-center gap-2 pl-1">
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            if (!disabled) {
-              onToggle(habit);
-            }
-          }}
-          aria-disabled={disabled}
-          aria-label={`Toggle ${habit.name}, currently ${isChecked ? 'completed' : 'incomplete'}`}
-          aria-pressed={isChecked}
-          className={`min-w-[44px] min-h-[44px] -m-2 flex items-center justify-center rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
-            disabled ? 'opacity-60 cursor-not-allowed' : ''
-          }`}
-        >
-          <div
-            className={`w-7 h-7 rounded-full flex items-center justify-center transition-all duration-200 pointer-events-none ${
-              isChecked
-                ? 'bg-emerald-500 text-white shadow-sm ring-2 ring-emerald-500/20'
-                : 'border-2 border-slate-300 hover:border-slate-400 bg-white'
+      {/* Right side: Action buttons & Menu */}
+      <div className="shrink-0 flex items-center gap-1.5 pl-1">
+        {isMeasurable ? (
+          <div className="flex items-center gap-1">
+            {/* Quick Decrement (-) */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!disabled) {
+                  onToggle(habit, { value: 1, action: 'uncheck' });
+                }
+              }}
+              aria-label={`Decrease ${habit.name}`}
+              disabled={disabled || todayValue <= 0}
+              className="w-7 h-7 rounded-full flex items-center justify-center text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 active:scale-95 transition disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Minus className="w-3.5 h-3.5" />
+            </button>
+
+            {/* Progress Ring with (+) button or tap to check */}
+            <div className="relative w-8 h-8 flex items-center justify-center">
+              <svg className="w-8 h-8 -rotate-90 pointer-events-none" viewBox="0 0 36 36">
+                <circle
+                  cx="18"
+                  cy="18"
+                  r="14"
+                  fill="none"
+                  stroke="#E2E8F0"
+                  strokeWidth="3.5"
+                />
+                <circle
+                  cx="18"
+                  cy="18"
+                  r="14"
+                  fill="none"
+                  stroke={isChecked ? '#10B981' : accentColor}
+                  strokeWidth="3.5"
+                  strokeDasharray="88"
+                  strokeDashoffset={88 - (88 * progressPct) / 100}
+                  strokeLinecap="round"
+                  className="transition-all duration-300 ease-out"
+                />
+              </svg>
+
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!disabled) {
+                    onToggle(habit, { value: 1, action: 'check' });
+                  }
+                }}
+                disabled={disabled}
+                aria-label={`Add 1 ${habit.unit || ''} to ${habit.name}`}
+                className="absolute inset-0 m-auto w-6 h-6 rounded-full flex items-center justify-center text-slate-700 hover:text-blue-600 active:scale-95 transition"
+              >
+                {isChecked ? (
+                  <Check className="w-3.5 h-3.5 text-emerald-600 stroke-[3]" />
+                ) : (
+                  <Plus className="w-3.5 h-3.5" />
+                )}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!disabled) {
+                onToggle(habit);
+              }
+            }}
+            aria-disabled={disabled}
+            aria-label={`Toggle ${habit.name}, currently ${isChecked ? 'completed' : 'incomplete'}`}
+            aria-pressed={isChecked}
+            className={`min-w-[44px] min-h-[44px] -m-2 flex items-center justify-center rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
+              disabled ? 'opacity-60 cursor-not-allowed' : ''
             }`}
           >
-            {isChecked && <Check className="w-4 h-4 stroke-[2.5]" />}
-          </div>
-        </button>
+            <div
+              className={`w-7 h-7 rounded-full flex items-center justify-center transition-all duration-200 pointer-events-none ${
+                isChecked
+                  ? 'bg-emerald-500 text-white shadow-sm ring-2 ring-emerald-500/20'
+                  : 'border-2 border-slate-300 hover:border-slate-400 bg-white'
+              }`}
+            >
+              {isChecked && <Check className="w-4 h-4 stroke-[2.5]" />}
+            </div>
+          </button>
+        )}
 
         {(onEdit || onArchive || onDelete) && (
           <div className="relative" ref={menuRef}>

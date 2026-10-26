@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X } from 'lucide-react';
-import { Habit, HabitFormData, FrequencyType } from '../types/habit';
+import { X, AlertTriangle } from 'lucide-react';
+import { Habit, HabitFormData, FrequencyType, HabitType } from '../types/habit';
 import { ApiError } from '../api/client';
 import { getErrorMessage } from '../utils/errorUtils';
 
@@ -10,6 +10,8 @@ interface HabitFormBottomSheetProps {
   onClose: () => void;
   onSubmit: (data: HabitFormData) => Promise<void>;
 }
+
+const COMMON_UNITS = ['glasses', 'km', 'minutes', 'pages', 'steps', 'hours'];
 
 const PRESET_COLORS: Array<{ hex: string; name: string }> = [
   { hex: '#3B82F6', name: 'Blue' },
@@ -52,6 +54,9 @@ export const HabitFormBottomSheet: React.FC<HabitFormBottomSheetProps> = ({
   const [emoji, setEmoji] = useState(PRESET_EMOJIS[0]);
   const [frequencyType, setFrequencyType] = useState<FrequencyType>('daily');
   const [frequencyDays, setFrequencyDays] = useState<number[]>([]);
+  const [habitType, setHabitType] = useState<HabitType>('boolean');
+  const [unit, setUnit] = useState('');
+  const [targetValue, setTargetValue] = useState('');
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [generalError, setGeneralError] = useState<string | null>(null);
@@ -71,6 +76,9 @@ export const HabitFormBottomSheet: React.FC<HabitFormBottomSheetProps> = ({
         setEmoji(habit.emoji || PRESET_EMOJIS[0]);
         setFrequencyType(habit.frequency_type || 'daily');
         setFrequencyDays(habit.frequency_days || []);
+        setHabitType(habit.habit_type || 'boolean');
+        setUnit(habit.unit || '');
+        setTargetValue(habit.target_value !== undefined && habit.target_value !== null ? String(habit.target_value) : '');
       } else {
         setName('');
         setDescription('');
@@ -78,6 +86,9 @@ export const HabitFormBottomSheet: React.FC<HabitFormBottomSheetProps> = ({
         setEmoji(PRESET_EMOJIS[0]);
         setFrequencyType('daily');
         setFrequencyDays([]);
+        setHabitType('boolean');
+        setUnit('');
+        setTargetValue('');
       }
       setFieldErrors({});
       setGeneralError(null);
@@ -165,6 +176,17 @@ export const HabitFormBottomSheet: React.FC<HabitFormBottomSheetProps> = ({
     if (frequencyType === 'custom' && frequencyDays.length === 0) {
       errors.frequency_days = 'Custom frequency requires at least one weekday.';
     }
+    if (habitType === 'measurable') {
+      if (!unit.trim()) {
+        errors.unit = 'Unit is required for measurable habits.';
+      }
+      const parsedTarget = parseFloat(targetValue);
+      if (isNaN(parsedTarget) || parsedTarget <= 0) {
+        errors.target_value = 'Daily target must be greater than 0.';
+      } else if (parsedTarget > 100000) {
+        errors.target_value = 'Daily target cannot exceed 100,000.';
+      }
+    }
 
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
@@ -174,20 +196,41 @@ export const HabitFormBottomSheet: React.FC<HabitFormBottomSheetProps> = ({
 
     setIsSubmitting(true);
     try {
-      await onSubmit({
+      const payload: HabitFormData = {
         name: name.trim(),
         description: description.trim(),
         color,
         emoji: emoji.trim() || '🎯',
         frequency_type: frequencyType,
         frequency_days: frequencyType === 'daily' ? [] : frequencyDays,
-      });
+        habit_type: habitType,
+        ...(habitType === 'measurable'
+          ? {
+              unit: unit.trim(),
+              target_value: parseFloat(targetValue),
+            }
+          : {
+              unit: '',
+              target_value: null,
+            }),
+      };
+      await onSubmit(payload);
       onClose();
     } catch (err: unknown) {
       if (err instanceof ApiError && err.data && typeof err.data === 'object') {
         const nextFieldErrors: Record<string, string> = {};
         const unhandledErrors: string[] = [];
-        const knownFields = new Set(['name', 'description', 'color', 'emoji', 'frequency_type', 'frequency_days']);
+        const knownFields = new Set([
+          'name',
+          'description',
+          'color',
+          'emoji',
+          'frequency_type',
+          'frequency_days',
+          'habit_type',
+          'unit',
+          'target_value',
+        ]);
 
         for (const [key, val] of Object.entries(err.data)) {
           const valStr = Array.isArray(val) ? val.join(' ') : String(val);
@@ -308,6 +351,158 @@ export const HabitFormBottomSheet: React.FC<HabitFormBottomSheetProps> = ({
               className="p-3 rounded-xl bg-red-50 text-red-700 text-xs font-medium border border-red-200"
             >
               {generalError}
+            </div>
+          )}
+
+          {/* Habit Type Switch (Yes/No vs Amount) */}
+          <fieldset className="space-y-2 border-0 p-0 m-0">
+            <legend className="block text-xs font-bold text-slate-700">
+              Habit Type
+            </legend>
+            <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-xl">
+              <button
+                type="button"
+                onClick={() => {
+                  setHabitType('boolean');
+                  setFieldErrors((prev) => {
+                    const next = { ...prev };
+                    delete next.unit;
+                    delete next.target_value;
+                    return next;
+                  });
+                }}
+                aria-pressed={habitType === 'boolean'}
+                className={`min-h-[40px] text-xs font-semibold rounded-lg transition-all ${
+                  habitType === 'boolean'
+                    ? 'bg-white text-slate-900 shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Yes/No (Done)
+              </button>
+              <button
+                type="button"
+                onClick={() => setHabitType('measurable')}
+                aria-pressed={habitType === 'measurable'}
+                className={`min-h-[40px] text-xs font-semibold rounded-lg transition-all ${
+                  habitType === 'measurable'
+                    ? 'bg-white text-slate-900 shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Amount (Measurable)
+              </button>
+            </div>
+          </fieldset>
+
+          {/* Measurable Fields: Unit & Target Value */}
+          {habitType === 'measurable' && (
+            <div className="p-3.5 rounded-2xl bg-blue-50/50 border border-blue-100 space-y-3.5 animate-in fade-in">
+              {/* Streak recalculation warning if editing */}
+              {habit && (
+                <div className="flex items-start gap-2 p-2.5 rounded-xl bg-amber-50 text-amber-800 border border-amber-200/80 text-[11px] leading-relaxed">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <span>Changing the target will recalculate your streak.</span>
+                </div>
+              )}
+
+              {/* Unit Input & Suggestions */}
+              <div className="space-y-1.5">
+                <label htmlFor="habit-unit" className="block text-xs font-bold text-slate-700">
+                  Unit <span className="text-red-500">*</span>
+                </label>
+                <input
+                  id="habit-unit"
+                  type="text"
+                  required={habitType === 'measurable'}
+                  aria-invalid={!!fieldErrors.unit}
+                  aria-describedby={fieldErrors.unit ? 'habit-unit-error' : undefined}
+                  value={unit}
+                  onChange={(e) => {
+                    setUnit(e.target.value);
+                    if (fieldErrors.unit) {
+                      setFieldErrors((prev) => {
+                        const next = { ...prev };
+                        delete next.unit;
+                        return next;
+                      });
+                    }
+                  }}
+                  placeholder="e.g. glasses, km, pages"
+                  className={`w-full h-10 px-3 rounded-xl border text-base sm:text-sm text-slate-900 bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition ${
+                    fieldErrors.unit ? 'border-red-500 bg-red-50/20' : 'border-slate-200'
+                  }`}
+                />
+                {/* Unit Suggestions */}
+                <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                  <span className="text-[11px] text-slate-500 font-medium">Suggestions:</span>
+                  {COMMON_UNITS.map((u) => (
+                    <button
+                      key={u}
+                      type="button"
+                      onClick={() => {
+                        setUnit(u);
+                        if (fieldErrors.unit) {
+                          setFieldErrors((prev) => {
+                            const next = { ...prev };
+                            delete next.unit;
+                            return next;
+                          });
+                        }
+                      }}
+                      className={`px-2 py-0.5 rounded-lg text-[11px] font-medium border transition ${
+                        unit.toLowerCase() === u.toLowerCase()
+                          ? 'bg-blue-600 text-white border-blue-600'
+                          : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300 active:bg-slate-50'
+                      }`}
+                    >
+                      {u}
+                    </button>
+                  ))}
+                </div>
+                {fieldErrors.unit && (
+                  <p id="habit-unit-error" data-form-error="true" className="text-[11px] font-medium text-red-600 animate-in fade-in">
+                    {fieldErrors.unit}
+                  </p>
+                )}
+              </div>
+
+              {/* Daily Target */}
+              <div className="space-y-1.5">
+                <label htmlFor="habit-target" className="block text-xs font-bold text-slate-700">
+                  Daily Target <span className="text-red-500">*</span>
+                </label>
+                <input
+                  id="habit-target"
+                  type="number"
+                  step="any"
+                  min="0.01"
+                  max="100000"
+                  required={habitType === 'measurable'}
+                  aria-invalid={!!fieldErrors.target_value}
+                  aria-describedby={fieldErrors.target_value ? 'habit-target-error' : undefined}
+                  value={targetValue}
+                  onChange={(e) => {
+                    setTargetValue(e.target.value);
+                    if (fieldErrors.target_value) {
+                      setFieldErrors((prev) => {
+                        const next = { ...prev };
+                        delete next.target_value;
+                        return next;
+                      });
+                    }
+                  }}
+                  placeholder="e.g. 8 or 2.5"
+                  className={`w-full h-10 px-3 rounded-xl border text-base sm:text-sm text-slate-900 bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition ${
+                    fieldErrors.target_value ? 'border-red-500 bg-red-50/20' : 'border-slate-200'
+                  }`}
+                />
+                {fieldErrors.target_value && (
+                  <p id="habit-target-error" data-form-error="true" className="text-[11px] font-medium text-red-600 animate-in fade-in">
+                    {fieldErrors.target_value}
+                  </p>
+                )}
+              </div>
             </div>
           )}
 

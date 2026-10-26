@@ -12,6 +12,9 @@ const mockHabit = (id: number, name: string, isScheduledToday = true): Habit => 
   is_archived: false,
   frequency_type: 'daily',
   frequency_days: [],
+  habit_type: 'boolean',
+  today_value: 0,
+  today_progress: 0,
   current_streak: 5,
   longest_streak: 10,
   is_checked_today: false,
@@ -152,6 +155,40 @@ describe('Habits API Service', () => {
       expect(getSpy).toHaveBeenCalledWith('/habits/15/check-ins/?page=1&from=2026-10-01&to=2026-10-31');
       expect(checkIns).toHaveLength(2);
       expect(checkIns[0].date).toBe('2026-10-01');
+    });
+
+    it('supports checkHabit with value and mode', async () => {
+      const postSpy = vi.spyOn(apiClient, 'post').mockResolvedValueOnce({
+        status: 'checked',
+        habit_id: 15,
+        date: '2026-10-26',
+        today_value: 3.5,
+        today_progress: 70,
+        is_completed: false,
+        current_streak: 2,
+        longest_streak: 5,
+      });
+
+      const res = await checkHabit(15, { value: 1.5, mode: 'add' });
+      expect(postSpy).toHaveBeenCalledWith('/habits/15/check/', { value: 1.5, mode: 'add' });
+      expect(res.today_value).toBe(3.5);
+    });
+
+    it('supports uncheckHabit with value decrement', async () => {
+      const postSpy = vi.spyOn(apiClient, 'post').mockResolvedValueOnce({
+        status: 'updated',
+        habit_id: 15,
+        date: '2026-10-26',
+        today_value: 2.5,
+        today_progress: 50,
+        is_completed: false,
+        current_streak: 2,
+        longest_streak: 5,
+      });
+
+      const res = await uncheckHabit(15, { value: 1 });
+      expect(postSpy).toHaveBeenCalledWith('/habits/15/uncheck/', { value: 1 });
+      expect(res.today_value).toBe(2.5);
     });
   });
 });

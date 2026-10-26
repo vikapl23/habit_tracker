@@ -16,7 +16,7 @@ This checklist tracks the ongoing development progress of the Habit Tracker proj
 | **Phase 5** | Mobile-First React Frontend (Vite) | `[ ]` In Progress | 5 / 6 |
 | **Phase 6** | Docker & PostgreSQL Environment | `[x]` Completed | 4 / 4 |
 | **Phase 7** | Production Deployment (Render.com) | `[x]` Completed | 4 / 4 |
-| **Phase 8** | Measurable Habits with Units | `[ ]` Not Started | 0 / 5 |
+| **Phase 8** | Measurable Habits with Units | `[x]` Completed | 5 / 5 |
 | **Phase 9** | Email Notifications via Mailgun | `[ ]` Not Started | 0 / 5 |
 | **Phase 10** | AI Habit Coach Chatbot via Google Gemini | `[ ]` Not Started | 0 / 5 |
 | **Phase 11** | Webhooks (Pending Mentor Clarification) | `[ ]` Pending | 0 / 4 |
@@ -208,23 +208,26 @@ This checklist tracks the ongoing development progress of the Habit Tracker proj
 ---
 
 ### Phase 8: Measurable Habits with Units
-- [ ] **8.1 Data Model Extensions & Migrations (TDD)**
-  - [ ] Add `habit_type` (`boolean`, `measurable`), `target_value` (`DecimalField`), and `unit` (`CharField`) to `Habit`.
-  - [ ] Update `HabitCheckIn` to record check-in `value` (`DecimalField`) with default 1.0.
-  - [ ] Apply migration with backward compatibility for existing boolean habits.
-- [ ] **8.2 Check-In Accumulation & Threshold Completion (TDD)**
-  - [ ] Support incremental check-in values per day (summing total progress towards target).
-  - [ ] Update completion condition: day is completed when `sum(values) >= target_value`.
-  - [ ] Update undo/decrement action to reduce or clear day's value.
-- [ ] **8.3 Streak Engine & Analytics Adaptation (TDD)**
-  - [ ] Adapt streak calculation engine to check threshold satisfaction via `is_day_completed`.
-  - [ ] Adapt weekly and monthly completion rate calculations for measurable habits.
-- [ ] **8.4 API Serialization & Validation (TDD)**
-  - [ ] Validate `target_value > 0` and non-empty `unit` when `habit_type == 'measurable'`.
-  - [ ] Expose `today_value`, `target_value`, `unit`, and `habit_type` in habit serializers.
-- [ ] **8.5 Frontend Measurable Habit UI**
-  - [ ] Add unit and target fields to Habit Create/Edit drawer.
-  - [ ] Measurable card UI: progress bar (`value / target unit`), quick increment button, completion indicator.
+- [x] **8.1 Data Model Extensions & Migrations (TDD)**
+  - [x] Add `habit_type` (`boolean`, `measurable`), `target_value` (`DecimalField` max 100,000, 2 decimals), and `unit` (`CharField`) to `Habit`.
+  - [x] Update `HabitCheckIn` to record check-in `value` (`DecimalField` default 1.00).
+  - [x] Apply migration with backward compatibility for existing boolean habits.
+- [x] **8.2 Shared Completion Helper & Atomic Check-In Accumulation (TDD)**
+  - [x] Centralize `is_day_completed` in `apps/habits/services/completion.py`.
+  - [x] Atomic check-in accumulation (`mode="add"`, `mode="set"`) protected against race conditions with tests.
+  - [x] Decrement on `uncheck` when `value` provided, reset day when omitted.
+  - [x] Validation: limits <= 100,000, 2 decimals, reject `value` on boolean habits.
+- [x] **8.3 Streak Engine & Analytics Adaptation (TDD)**
+  - [x] Adapt streak calculation and statistics using `is_day_completed`.
+  - [x] Recalculate streaks in service layer when `habit_type` or `target_value` is updated.
+- [x] **8.4 API Serialization & Query Optimization (TDD)**
+  - [x] Return numeric JSON values for `target_value`, `today_value`, `today_progress`, and check-in `value`.
+  - [x] Assert zero N+1 queries on habits list and statistics (`django_assert_num_queries`).
+- [x] **8.5 Frontend Measurable Habit UI & Postman Collection**
+  - [x] Form type toggle, unit suggestions, target input, warning on target change.
+  - [x] Dashboard card with `"5 / 8 glasses"`, progress ring, quick `+`/`−`, tap for exact amount.
+  - [x] Calendar distinct display for partial vs completed days, tap for amount.
+  - [x] Update Postman collection with measurable habit example.
 
 ---
 
