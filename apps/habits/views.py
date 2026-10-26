@@ -120,7 +120,7 @@ class HabitViewSet(viewsets.ModelViewSet):
         context = self.get_serializer_context()
         context["target_date"] = target_date
 
-        # If evaluating for a past/future date, batch load target_date check-ins
+        # Batch load target_date check-ins if not user_today or if list contains measurable habits
         if target_date != user_today:
             habit_ids = [h.id for h in habits_list]
             checkins_map = {
@@ -128,10 +128,37 @@ class HabitViewSet(viewsets.ModelViewSet):
                 for ci in HabitCheckIn.objects.filter(habit_id__in=habit_ids, date=target_date)
             }
             context["checkins_map"] = checkins_map
+        else:
+            measurable_ids = [h.id for h in habits_list if h.habit_type == "measurable"]
+            if measurable_ids:
+                checkins_map = {
+                    ci.habit_id: ci
+                    for ci in HabitCheckIn.objects.filter(
+                        habit_id__in=measurable_ids, date=target_date
+                    )
+                }
+                context["checkins_map"] = checkins_map
 
         serializer = self.get_serializer(habits_list, many=True, context=context)
         if page is not None:
             return self.get_paginated_response(serializer.data)
+        return Response(serializer.data)
+
+    def retrieve(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        """Retrieve a single habit with streak and schedule metadata."""
+        instance = self.get_object()
+        target_date = self._get_target_date()
+        user_today = (
+            self.request.user.get_today()
+            if hasattr(self.request.user, "get_today")
+            else timezone.localdate()
+        )
+        context = self.get_serializer_context()
+        context["target_date"] = target_date
+        if target_date != user_today or instance.habit_type == "measurable":
+            checkin = HabitCheckIn.objects.filter(habit=instance, date=target_date).first()
+            context["checkins_map"] = {instance.id: checkin} if checkin else {}
+        serializer = self.get_serializer(instance, context=context)
         return Response(serializer.data)
 
     def get_queryset(self) -> QuerySet[Habit]:

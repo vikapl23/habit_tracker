@@ -9,10 +9,24 @@ from .models import FrequencyType, Habit, HabitCheckIn, HabitType
 from .services.completion import is_day_completed
 
 
+class HabitDecimalField(serializers.DecimalField):
+    """Decimal field for habit amounts with at most 2 decimal places serialized as float."""
+
+    def __init__(self, **kwargs):
+        kwargs.setdefault("max_digits", 8)
+        kwargs.setdefault("decimal_places", 2)
+        kwargs.setdefault("coerce_to_string", False)
+        super().__init__(**kwargs)
+
+    def to_representation(self, value):
+        val = super().to_representation(value)
+        return float(val) if val is not None else None
+
+
 class HabitCheckInSerializer(serializers.ModelSerializer):
     """Serializer for habit check-in records."""
 
-    value = serializers.FloatField(read_only=True)
+    value = HabitDecimalField(read_only=True)
 
     class Meta:
         model = HabitCheckIn
@@ -35,7 +49,7 @@ class HabitSerializer(serializers.ModelSerializer):
     is_scheduled_today = serializers.SerializerMethodField()
     today_value = serializers.SerializerMethodField()
     today_progress = serializers.SerializerMethodField()
-    target_value = serializers.FloatField(required=False, allow_null=True)
+    target_value = HabitDecimalField(required=False, allow_null=True)
     frequency = serializers.JSONField(required=False, write_only=True)
 
     class Meta:
@@ -229,8 +243,12 @@ class HabitSerializer(serializers.ModelSerializer):
         return self._get_user_today(obj)
 
     def _get_target_checkin(self, obj: Habit) -> HabitCheckIn | None:
+        if hasattr(obj, "_cached_target_checkin"):
+            return obj._cached_target_checkin
         if "checkins_map" in self.context:
-            return self.context["checkins_map"].get(obj.id)
+            ci = self.context["checkins_map"].get(obj.id)
+            obj._cached_target_checkin = ci
+            return ci
         target_date = self._get_target_date(obj)
         if (
             hasattr(obj, "_prefetched_objects_cache")
@@ -238,9 +256,13 @@ class HabitSerializer(serializers.ModelSerializer):
         ):
             for ci in obj.check_ins.all():
                 if ci.date == target_date:
+                    obj._cached_target_checkin = ci
                     return ci
+            obj._cached_target_checkin = None
             return None
-        return obj.check_ins.filter(date=target_date).first()
+        ci = obj.check_ins.filter(date=target_date).first()
+        obj._cached_target_checkin = ci
+        return ci
 
     def get_today_value(self, obj: Habit) -> float:
         target_date = self._get_target_date(obj)
@@ -249,17 +271,11 @@ class HabitSerializer(serializers.ModelSerializer):
             return float(checkin.value) if checkin else 0.0
 
         user_today = self._get_user_today(obj)
-        if target_date == user_today:
+        if obj.habit_type == HabitType.BOOLEAN and target_date == user_today:
             if obj.last_check_in_date == user_today:
                 return float(obj.last_check_in_value)
             return 0.0
 
-        if obj.last_check_in_date is not None and obj.last_check_in_date != target_date:
-            if (
-                not hasattr(obj, "_prefetched_objects_cache")
-                or "check_ins" not in obj._prefetched_objects_cache
-            ):
-                return 0.0
         checkin = self._get_target_checkin(obj)
         return float(checkin.value) if checkin else 0.0
 
@@ -270,20 +286,11 @@ class HabitSerializer(serializers.ModelSerializer):
             val = float(checkin.value) if checkin else 0.0
         else:
             user_today = self._get_user_today(obj)
-            if target_date == user_today:
+            if obj.habit_type == HabitType.BOOLEAN and target_date == user_today:
                 if obj.last_check_in_date == user_today:
                     val = float(obj.last_check_in_value)
                 else:
                     val = 0.0
-            elif obj.last_check_in_date is not None and obj.last_check_in_date != target_date:
-                if (
-                    not hasattr(obj, "_prefetched_objects_cache")
-                    or "check_ins" not in obj._prefetched_objects_cache
-                ):
-                    val = 0.0
-                else:
-                    checkin = self._get_target_checkin(obj)
-                    val = float(checkin.value) if checkin else 0.0
             else:
                 checkin = self._get_target_checkin(obj)
                 val = float(checkin.value) if checkin else 0.0
@@ -343,7 +350,7 @@ class CheckInActionSerializer(serializers.Serializer):
     """Serializer for check-in action payloads."""
 
     date = serializers.DateField(required=False, default=None)
-    value = serializers.FloatField(required=False, default=None, min_value=0, max_value=100000)
+    value = HabitDecimalField(required=False, default=None, min_value=0, max_value=100000)
     mode = serializers.ChoiceField(choices=["add", "set"], required=False, default="add")
 
 
@@ -351,7 +358,7 @@ class UncheckActionSerializer(serializers.Serializer):
     """Serializer for uncheck action payloads."""
 
     date = serializers.DateField(required=False, default=None)
-    value = serializers.FloatField(required=False, default=None, min_value=0, max_value=100000)
+    value = HabitDecimalField(required=False, default=None, min_value=0, max_value=100000)
 
 
 class ArchiveResponseSerializer(serializers.Serializer):
