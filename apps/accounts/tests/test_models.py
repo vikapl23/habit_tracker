@@ -74,6 +74,7 @@ class TestCustomUserModel:
     def test_user_timezone_default_is_kyiv(self):
         user = User.objects.create_user(email="tz@example.com", password="password123")
         assert user.timezone == "Europe/Kyiv"
+        assert user.timezone_auto is True
         assert hasattr(user, "get_today")
 
     def test_user_invalid_timezone_raises_validation_error(self):

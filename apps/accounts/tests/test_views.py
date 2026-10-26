@@ -387,6 +387,28 @@ class TestAuthEndpoints:
         assert res.status_code == status.HTTP_200_OK
         assert res.data["email"] == existing_user.email
         assert res.data["timezone"] == "Europe/Kyiv"
+        assert res.data["timezone_auto"] is True
+
+    def test_profile_endpoint_update_timezone_auto(self, api_client, existing_user):
+        api_client.force_authenticate(user=existing_user)
+        res = api_client.patch(self.profile_url, {"timezone_auto": False})
+        assert res.status_code == status.HTTP_200_OK
+        assert res.data["timezone_auto"] is False
+        existing_user.refresh_from_db()
+        assert existing_user.timezone_auto is False
+
+    def test_profile_endpoint_update_timezone_and_timezone_auto(self, api_client, existing_user):
+        api_client.force_authenticate(user=existing_user)
+        res = api_client.patch(
+            self.profile_url,
+            {"timezone": "America/New_York", "timezone_auto": False},
+        )
+        assert res.status_code == status.HTTP_200_OK
+        assert res.data["timezone"] == "America/New_York"
+        assert res.data["timezone_auto"] is False
+        existing_user.refresh_from_db()
+        assert existing_user.timezone == "America/New_York"
+        assert existing_user.timezone_auto is False
 
     def test_profile_endpoint_update_timezone_success(self, api_client, existing_user):
         api_client.force_authenticate(user=existing_user)

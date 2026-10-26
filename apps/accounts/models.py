@@ -67,6 +67,10 @@ class User(AbstractUser):
         default="Europe/Kyiv",
         validators=[validate_iana_timezone],
     )
+    timezone_auto = models.BooleanField(
+        default=True,
+        help_text="Whether timezone is automatically detected and synced from browser.",
+    )
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = []
