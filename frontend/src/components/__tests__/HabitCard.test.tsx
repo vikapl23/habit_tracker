@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { HabitCard } from '../HabitCard';
-import { Habit } from '../types/habit';
+import { Habit } from '../../types/habit';
 
 const mockNavigate = vi.fn();
 vi.mock('react-router-dom', async () => {

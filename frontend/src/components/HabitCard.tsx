@@ -62,7 +62,6 @@ export const HabitCard: React.FC<HabitCardProps> = ({
   useEffect(() => {
     if (isEditingExact) {
       setExactInput(String(todayValue));
-      setTimeout(() => exactInputRef.current?.select(), 50);
     }
   }, [isEditingExact, todayValue]);
 
@@ -154,6 +153,7 @@ export const HabitCard: React.FC<HabitCardProps> = ({
                 >
                   <input
                     ref={exactInputRef}
+                    autoFocus
                     type="number"
                     step="any"
                     min="0"
@@ -162,6 +162,7 @@ export const HabitCard: React.FC<HabitCardProps> = ({
                     aria-label={`Enter exact amount for ${habit.name}`}
                     value={exactInput}
                     onChange={(e) => setExactInput(e.target.value)}
+                    onFocus={(e) => e.target.select()}
                     onKeyDown={(e) => {
                       e.stopPropagation();
                       if (e.key === 'Enter') {
