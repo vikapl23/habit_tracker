@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { CalendarCheck, Archive, User } from 'lucide-react';
+import { CalendarCheck, BarChart3, Archive, User } from 'lucide-react';
 
 export const BottomNavigation: React.FC = () => {
   const navItems = [
@@ -8,6 +8,11 @@ export const BottomNavigation: React.FC = () => {
       label: 'Today',
       path: '/',
       icon: CalendarCheck,
+    },
+    {
+      label: 'Stats',
+      path: '/stats',
+      icon: BarChart3,
     },
     {
       label: 'Archive',

@@ -12,7 +12,7 @@ This checklist tracks the ongoing development progress of the Habit Tracker proj
 | **Phase 1** | MVP: Core Domain, Streaks & REST API | `[x]` Completed | 7 / 7 |
 | **Phase 2** | JWT Authentication & User Isolation | `[x]` Completed | 5 / 5 |
 | **Phase 3** | Habit Scheduling & Frequency | `[x]` Completed | 4 / 4 |
-| **Phase 4** | Statistics & Analytics | `[ ]` Postponed (after deployment) | 0 / 4 |
+| **Phase 4** | Statistics & Analytics | `[x]` Completed | 4 / 4 |
 | **Phase 5** | Mobile-First React Frontend (Vite) | `[ ]` In Progress | 5 / 6 |
 | **Phase 6** | Docker & PostgreSQL Environment | `[x]` Completed | 4 / 4 |
 | **Phase 7** | Production Deployment (Render.com) | `[x]` Completed | 4 / 4 |
@@ -109,18 +109,24 @@ This checklist tracks the ongoing development progress of the Habit Tracker proj
 
 ---
 
-### Phase 4: Statistics & Analytics (Postponed until after deployment)
-- [ ] **4.1 Analytics Aggregation Service (TDD)** (Postponed)
-  - [ ] **Test & Impl**: Compute weekly completion percentage (`checked / scheduled`).
-  - [ ] Compute monthly completion percentage.
-  - [ ] Compute total lifetime check-ins count.
-- [ ] **4.2 Analytics Endpoints (TDD)** (Postponed)
-  - [ ] Add `GET /api/v1/habits/{id}/statistics/`.
-  - [ ] Add `GET /api/v1/statistics/summary/` for user-wide dashboard overview.
-- [ ] **4.3 Heatmap & Calendar Matrix Endpoint** (Postponed)
-  - [ ] Provide optimized endpoint returning date-checkin pairs for frontend calendar grids.
-- [ ] **4.4 Query Optimization** (Postponed)
-  - [ ] Ensure single-query aggregations with zero N+1 database queries.
+### Phase 4: Statistics & Analytics
+- [x] **4.1 Analytics Aggregation Service (TDD)**
+  - [x] **Test & Impl**: Compute weekly completion percentage (`checked / scheduled`, respecting habit frequency and user timezone; days before creation excluded).
+  - [x] Compute monthly completion percentage.
+  - [x] Compute total lifetime check-ins count, current and longest streak.
+  - [x] Extensible `is_day_completed` helper for future measurable habits.
+- [x] **4.2 Analytics Endpoints (TDD)**
+  - [x] Add `GET /api/v1/habits/{id}/statistics/` with OpenAPI `@extend_schema`.
+  - [x] Add `GET /api/v1/statistics/summary/` for user-wide dashboard overview.
+  - [x] Enforce user isolation (`404` on foreign habit, `401` on unauthenticated).
+- [x] **4.3 Frontend Statistics & UI Integration**
+  - [x] Habit detail screen statistics cards (7-day and 30-day completion %, total check-ins, current and longest streak).
+  - [x] "Stats" tab in bottom navigation with summary (week & month completion %, best habit highlight, active habits count, total check-ins).
+  - [x] Mobile-first loading skeletons, error/retry states, and responsive cards.
+- [x] **4.4 Query Optimization & Postman**
+  - [x] Single-query aggregations with zero N+1 database queries verified via `django_assert_num_queries`.
+  - [x] Deterministic date tests with `freezegun` and Vitest fake timers.
+  - [x] Updated Postman collection with `4. Statistics` requests and assertions.
 
 ---
 

@@ -51,3 +51,29 @@ export interface PaginatedResponse<T> {
   previous: string | null;
   results: T[];
 }
+
+export interface HabitStatistics {
+  habit_id: number;
+  completion_rate_7d: number;
+  completion_rate_30d: number;
+  total_check_ins: number;
+  current_streak: number;
+  longest_streak: number;
+}
+
+export interface BestHabitSummary {
+  id: number;
+  name: string;
+  emoji: string;
+  color: string;
+  completion_rate_30d: number;
+}
+
+export interface StatisticsSummary {
+  overall_completion_rate_week: number;
+  overall_completion_rate_month: number;
+  best_habit: BestHabitSummary | null;
+  total_active_habits: number;
+  total_check_ins: number;
+}
+

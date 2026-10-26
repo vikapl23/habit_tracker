@@ -6,6 +6,8 @@ import {
   CheckInRecord,
   ArchiveResponse,
   PaginatedResponse,
+  HabitStatistics,
+  StatisticsSummary,
 } from '../types/habit';
 
 export const getAllHabits = async (includeArchived = false): Promise<Habit[]> => {
@@ -69,6 +71,14 @@ export const getHabit = async (id: number): Promise<Habit> => {
   return apiClient.get<Habit>(`/habits/${id}/`);
 };
 
+export const getHabitStatistics = async (id: number): Promise<HabitStatistics> => {
+  return apiClient.get<HabitStatistics>(`/habits/${id}/statistics/`);
+};
+
+export const getStatisticsSummary = async (): Promise<StatisticsSummary> => {
+  return apiClient.get<StatisticsSummary>('/statistics/summary/');
+};
+
 export const getHabitCheckIns = async (
   id: number,
   from?: string,
@@ -114,6 +124,8 @@ export const getHabitCheckIns = async (
 export const habitsApi = {
   getAllHabits,
   getHabit,
+  getHabitStatistics,
+  getStatisticsSummary,
   getHabitCheckIns,
   createHabit,
   updateHabit,

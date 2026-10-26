@@ -8,6 +8,7 @@ import { DashboardPage } from './pages/DashboardPage';
 import { ArchivedHabitsPage } from './pages/ArchivedHabitsPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { HabitDetailPage } from './pages/HabitDetailPage';
+import { StatsPage } from './pages/StatsPage';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
 const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -68,6 +69,14 @@ export const AppRoutes: React.FC = () => {
         element={
           <ProtectedRoute>
             <ProfilePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/stats"
+        element={
+          <ProtectedRoute>
+            <StatsPage />
           </ProtectedRoute>
         }
       />

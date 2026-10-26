@@ -688,7 +688,89 @@
       ]
     },
     {
-      "name": "4. Negative cases",
+      "name": "4. Statistics",
+      "description": "Endpoints for habit statistics and overall user summary.",
+      "item": [
+        {
+          "name": "Get Habit Statistics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/habits/{{habit_id}}/statistics/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "habits",
+                "{{habit_id}}",
+                "statistics",
+                ""
+              ]
+            },
+            "description": "Returns completion rate for last 7 and 30 days, total check-ins, current and longest streak."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Has stats fields', () => {",
+                  "    pm.expect(body).to.have.property('completion_rate_7d');",
+                  "    pm.expect(body).to.have.property('completion_rate_30d');",
+                  "    pm.expect(body).to.have.property('total_check_ins');",
+                  "    pm.expect(body).to.have.property('current_streak');",
+                  "    pm.expect(body).to.have.property('longest_streak');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Statistics Summary",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/statistics/summary/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "statistics",
+                "summary",
+                ""
+              ]
+            },
+            "description": "Returns user summary statistics including week and month completion rates, best habit, active habits, and total check-ins."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Has summary fields', () => {",
+                  "    pm.expect(body).to.have.property('overall_completion_rate_week');",
+                  "    pm.expect(body).to.have.property('overall_completion_rate_month');",
+                  "    pm.expect(body).to.have.property('total_active_habits');",
+                  "    pm.expect(body).to.have.property('total_check_ins');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "5. Negative cases",
       "description": "",
       "item": [
         {
@@ -1072,7 +1154,7 @@
       ]
     },
     {
-      "name": "5. User isolation (Bob)",
+      "name": "6. User isolation (Bob)",
       "description": "Другий користувач не має бачити і змінювати звички першого.",
       "item": [
         {
@@ -1349,7 +1431,7 @@
       ]
     },
     {
-      "name": "6. Cleanup",
+      "name": "7. Cleanup",
       "description": "",
       "item": [
         {

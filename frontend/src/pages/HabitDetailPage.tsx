@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, ChevronLeft, ChevronRight, Flame, Trophy, Check, Calendar, AlertCircle, RefreshCw } from 'lucide-react';
-import { Habit } from '../types/habit';
+import { ArrowLeft, ChevronLeft, ChevronRight, Flame, Trophy, Check, Calendar, AlertCircle, RefreshCw, TrendingUp, CheckCircle2 } from 'lucide-react';
+import { Habit, HabitStatistics } from '../types/habit';
 import { habitsApi } from '../api/habits';
 import { ApiError } from '../api/client';
 import { getErrorMessage } from '../utils/errorUtils';
@@ -34,6 +34,9 @@ export const HabitDetailPage: React.FC = () => {
   const [habit, setHabit] = useState<Habit | null>(null);
   const [isLoadingHabit, setIsLoadingHabit] = useState(true);
   const [habitError, setHabitError] = useState<string | null>(null);
+  const [statistics, setStatistics] = useState<HabitStatistics | null>(null);
+  const [isLoadingStats, setIsLoadingStats] = useState(false);
+  const [_statsError, setStatsError] = useState<string | null>(null);
 
   const [currentMonth, setCurrentMonth] = useState<Date>(() => {
     const now = new Date();
@@ -96,6 +99,24 @@ export const HabitDetailPage: React.FC = () => {
   useEffect(() => {
     loadHabit();
   }, [loadHabit]);
+
+  const loadStatistics = useCallback(async () => {
+    if (isNaN(habitId) || habitId <= 0) return;
+    setIsLoadingStats(true);
+    setStatsError(null);
+    try {
+      const statsData = await habitsApi.getHabitStatistics(habitId);
+      setStatistics(statsData);
+    } catch {
+      setStatsError('Unable to load habit statistics.');
+    } finally {
+      setIsLoadingStats(false);
+    }
+  }, [habitId]);
+
+  useEffect(() => {
+    loadStatistics();
+  }, [loadStatistics]);
 
   const [checkInsError, setCheckInsError] = useState<string | null>(null);
 
@@ -182,6 +203,8 @@ export const HabitDetailPage: React.FC = () => {
             }
           : null
       );
+      // Also refresh statistics after toggling check-in
+      loadStatistics();
     } catch (err: unknown) {
       // Revert optimistic update
       setCheckInDates((prev) => {
@@ -300,7 +323,7 @@ export const HabitDetailPage: React.FC = () => {
                 )}
               </div>
 
-              {/* Streak Cards */}
+              {/* Streak & Statistics Cards */}
               <div className="grid grid-cols-2 gap-3">
                 <div
                   aria-label={`Current streak ${habit.current_streak} days`}
@@ -329,7 +352,65 @@ export const HabitDetailPage: React.FC = () => {
                   </p>
                   <p className="text-[10px] text-indigo-700/80 mt-0.5">All-time record</p>
                 </div>
+
+                {/* 7-day completion rate */}
+                <div
+                  aria-label={statistics ? `7-day completion ${Math.round(statistics.completion_rate_7d * 100)}%` : '7-day completion'}
+                  className="p-4 rounded-2xl bg-blue-50/80 border border-blue-200/60 shadow-sm"
+                >
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-blue-800">
+                    <TrendingUp className="w-4 h-4 text-blue-600" />
+                    <span>7-Day Rate</span>
+                  </div>
+                  <p className="mt-2 text-2xl font-extrabold text-blue-950">
+                    {statistics !== null
+                      ? `${Math.round(statistics.completion_rate_7d * 100)}%`
+                      : isLoadingStats
+                      ? '...'
+                      : '—'}
+                  </p>
+                  <p className="text-[10px] text-blue-700/80 mt-0.5">Last 7 scheduled days</p>
+                </div>
+
+                {/* 30-day completion rate */}
+                <div
+                  aria-label={statistics ? `30-day completion ${Math.round(statistics.completion_rate_30d * 100)}%` : '30-day completion'}
+                  className="p-4 rounded-2xl bg-emerald-50/80 border border-emerald-200/60 shadow-sm"
+                >
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-800">
+                    <Calendar className="w-4 h-4 text-emerald-600" />
+                    <span>30-Day Rate</span>
+                  </div>
+                  <p className="mt-2 text-2xl font-extrabold text-emerald-950">
+                    {statistics !== null
+                      ? `${Math.round(statistics.completion_rate_30d * 100)}%`
+                      : isLoadingStats
+                      ? '...'
+                      : '—'}
+                  </p>
+                  <p className="text-[10px] text-emerald-700/80 mt-0.5">Last 30 scheduled days</p>
+                </div>
               </div>
+
+              {/* Total Check-ins Card */}
+              <div
+                aria-label={statistics ? `Total check-ins ${statistics.total_check_ins}` : 'Total check-ins'}
+                className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 shadow-sm flex items-center justify-between"
+              >
+                <div className="flex items-center gap-2">
+                  <div className="w-9 h-9 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-emerald-600">
+                    <CheckCircle2 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-bold text-slate-900">Total Check-ins</h3>
+                    <p className="text-[10px] text-slate-500">Lifetime check-ins recorded</p>
+                  </div>
+                </div>
+                <span className="text-xl font-extrabold text-slate-900">
+                  {statistics !== null ? statistics.total_check_ins : isLoadingStats ? '...' : '—'}
+                </span>
+              </div>
+
 
               {/* Month Calendar Section */}
               <section aria-labelledby="calendar-heading" className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-sm space-y-4">

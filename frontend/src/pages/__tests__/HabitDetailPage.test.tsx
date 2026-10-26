@@ -57,6 +57,14 @@ describe('HabitDetailPage (Step 5.5)', () => {
 
   it('renders habit detail, streak cards, and month calendar with checked days and muted non-scheduled days', async () => {
     vi.spyOn(habitsApi, 'getHabit').mockResolvedValue(mockDetailHabit);
+    vi.spyOn(habitsApi, 'getHabitStatistics').mockResolvedValue({
+      habit_id: 1,
+      completion_rate_7d: 0.7143,
+      completion_rate_30d: 0.8,
+      total_check_ins: 24,
+      current_streak: 5,
+      longest_streak: 12,
+    });
     vi.spyOn(habitsApi, 'getHabitCheckIns').mockResolvedValue([
       { id: 101, date: '2026-10-05', created_at: '2026-10-05T00:00:00Z' },
       { id: 102, date: '2026-10-06', created_at: '2026-10-06T00:00:00Z' },
@@ -71,6 +79,11 @@ describe('HabitDetailPage (Step 5.5)', () => {
 
     expect(screen.getByLabelText(/current streak 5 days/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/longest streak 12 days/i)).toBeInTheDocument();
+
+    // Verify Statistics Cards
+    expect(await screen.findByLabelText(/7-day completion 71%/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/30-day completion 80%/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/total check-ins 24/i)).toBeInTheDocument();
 
     // Verify Month Calendar is rendered
     const calendarHeading = screen.getByRole('heading', { level: 2, name: /2026/i });
