@@ -41,9 +41,11 @@ INSTALLED_APPS = [
     "rest_framework",
     "rest_framework_simplejwt.token_blacklist",
     "drf_spectacular",
+    "anymail",
     # Local apps
     "apps.accounts.apps.AccountsConfig",
     "apps.habits.apps.HabitsConfig",
+    "apps.notifications.apps.NotificationsConfig",
 ]
 
 AUTH_USER_MODEL = "accounts.User"
@@ -148,3 +150,22 @@ SPECTACULAR_SETTINGS = {
         "persistAuthorization": True,
     },
 }
+
+# Email & Notifications Configuration
+MAILGUN_API_KEY = env("MAILGUN_API_KEY", default="")
+MAILGUN_DOMAIN = env("MAILGUN_DOMAIN", default="")
+MAILGUN_API_URL = env("MAILGUN_API_URL", default="https://api.mailgun.net/v3")
+DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="Habit Tracker <noreply@example.com>")
+CRON_TOKEN = env("CRON_TOKEN", default="")
+SITE_URL = env("SITE_URL", default="http://localhost:8000")
+
+if MAILGUN_API_KEY:
+    EMAIL_BACKEND = "anymail.backends.mailgun.EmailBackend"
+    ANYMAIL = {
+        "MAILGUN_API_KEY": MAILGUN_API_KEY,
+        "MAILGUN_SENDER_DOMAIN": MAILGUN_DOMAIN,
+        "MAILGUN_API_URL": MAILGUN_API_URL,
+    }
+else:
+    EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+    ANYMAIL = {}

@@ -17,7 +17,7 @@ This checklist tracks the ongoing development progress of the Habit Tracker proj
 | **Phase 6** | Docker & PostgreSQL Environment | `[x]` Completed | 4 / 4 |
 | **Phase 7** | Production Deployment (Render.com) | `[x]` Completed | 4 / 4 |
 | **Phase 8** | Measurable Habits with Units | `[x]` Completed | 5 / 5 |
-| **Phase 9** | Email Notifications via Mailgun | `[ ]` Not Started | 0 / 5 |
+| **Phase 9** | Email Notifications via Mailgun | `[x]` Completed | 5 / 5 |
 | **Phase 10** | AI Habit Coach Chatbot via Google Gemini | `[ ]` Not Started | 0 / 5 |
 | **Phase 11** | Webhooks (Pending Mentor Clarification) | `[ ]` Pending | 0 / 4 |
 
@@ -232,20 +232,25 @@ This checklist tracks the ongoing development progress of the Habit Tracker proj
 ---
 
 ### Phase 9: Email Notifications via Mailgun
-- [ ] **9.1 User Notification Preferences & Tokens (TDD)**
-  - [ ] Add notification settings to user model (`daily_reminder_enabled`, `daily_reminder_time`, `weekly_summary_enabled`, `unsubscribe_token`).
-  - [ ] Endpoints for retrieving/updating preferences and public one-click unsubscribe via signed token.
-- [ ] **9.2 Mailgun Integration Client & Templates**
-  - [ ] Mailgun client wrapper reading API credentials strictly from environment variables (`MAILGUN_API_KEY`, `MAILGUN_DOMAIN`).
-  - [ ] Clean HTML/text email templates for daily reminders and weekly summaries.
-- [ ] **9.3 Daily Reminder Management Command (TDD)**
-  - [ ] `send_habit_reminders` management command querying users whose local time matches current dispatch window.
-  - [ ] Filter out users with 0 active habits or whose habits are already completed today.
-  - [ ] Idempotency protection to prevent duplicate sends on the same date.
-- [ ] **9.4 Weekly Summary Management Command (TDD)**
-  - [ ] `send_weekly_summaries` command computing week completion rate and top streaks for each opted-in user.
-- [ ] **9.5 Scheduler Wiring & Verification**
-  - [ ] Configure hourly cron runner in Render / deployment environment.
+- [x] **9.1 User Notification Preferences & Tokens (TDD)**
+  - [x] Add notification settings to user model (`daily_reminder_enabled`, `daily_reminder_time`, `weekly_summary_enabled`).
+  - [x] Expose settings in `GET/PATCH /api/v1/auth/profile/` with validation.
+  - [x] Cryptographically signed one-click unsubscribe links with `/api/v1/notifications/unsubscribe/<token>/`.
+- [x] **9.2 Mailgun Integration & Templates**
+  - [x] Configure `django-anymail[mailgun]` with fallback to console backend in local development and `locmem` in tests.
+  - [x] Environment configuration via `.env.example` (`MAILGUN_API_KEY`, `MAILGUN_DOMAIN`, `MAILGUN_API_URL`, `DEFAULT_FROM_EMAIL`, `CRON_TOKEN`).
+  - [x] Text and HTML templates for daily reminders and Monday weekly summaries.
+- [x] **9.3 Daily Reminder & Weekly Summary Dispatch Service (TDD)**
+  - [x] `send_due_notifications` service evaluating user timezone and matching current 15-minute window.
+  - [x] Daily reminders for incomplete scheduled habits (using shared `is_day_completed` helper; no email if all done).
+  - [x] Weekly summary on Mondays calculating last week's completion %, best habit, and current streaks.
+  - [x] Idempotent deduplication via `NotificationLog` model to prevent duplicate sends on the same date/week.
+- [x] **9.4 Protected Internal Endpoint & Management Command (TDD)**
+  - [x] Protected endpoint `POST /api/v1/internal/send-notifications/` authorized with `X-Cron-Token` constant-time comparison.
+  - [x] Management command `send_notifications` with `--force` flag for manual execution and testing.
+- [x] **9.5 Infrastructure & Documentation**
+  - [x] Updated `render.yaml` with notification environment variables (`sync: false`).
+  - [x] Documented notification architecture, usage, and commands in `README.md` and `docs/DECISIONS.md`.
 
 ---
 

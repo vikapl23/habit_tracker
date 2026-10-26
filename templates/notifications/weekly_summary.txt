@@ -1,0 +1,20 @@
+Hello!
+
+Here is your Weekly Habit Summary for last week ({{ last_week_start|date:"M j" }} – {{ last_week_end|date:"M j, Y" }}).
+
+Last Week's Completion Rate: {{ completion_percentage }}%
+
+{% if best_habit %}
+Top Habit: {{ best_habit.emoji }} {{ best_habit.name }} ({{ best_habit.rate_percent }}% completed)
+{% endif %}
+
+Current Streaks:
+{% for s in streaks %}
+- {{ s.emoji }} {{ s.name }}: {{ s.current_streak }} day{{ s.current_streak|pluralize }} streak (Best: {{ s.longest_streak }})
+{% endfor %}
+
+Let's make this week even better!
+
+---
+To unsubscribe from all habit emails, visit:
+{{ unsubscribe_url }}

@@ -233,5 +233,52 @@ Specific requirements dictate:
 7. **Zero N+1 Query Guarantee**:
    - Use annotations and single query aggregations on list views and statistics, tested with `django_assert_num_queries`.
 
+## ADR 008: Email Notifications via Mailgun, Timezone Window Dispatch, and Signed Unsubscribe Tokens
+
+### Date
+2026-10-26
+
+### Context & Problem
+Users need automated reminders to sustain habit consistency and weekly summaries to reflect on progress.
+Key design challenges:
+1. Multi-timezone user base: users are distributed globally; reminder time (e.g. 20:00) must trigger according to each user's local wall clock, not server time.
+2. Deduplication & Idempotency: external schedulers / cron jobs can trigger repeatedly or overlap; reminders must never be sent twice on the same day or week.
+3. No email spam: if a user has already completed all habits scheduled for today (boolean or measurable targets met), daily reminders must be skipped.
+4. Privacy & Unsubscribe: users must be able to unsubscribe instantly from any email without requiring authentication, while preventing unauthorized unsubscriptions.
+5. Environment separation: avoid committing API keys, support Mailgun in production via `django-anymail`, fall back to console backend in local dev, and use `locmem` in automated tests.
+
+### Decision
+1. **Email Backend Architecture (`django-anymail[mailgun]`)**:
+   - Integrated `django-anymail` with Mailgun backend in `config/settings/base.py`.
+   - Dynamic fallback: if `MAILGUN_API_KEY` is not present, local development uses `django.core.mail.backends.console.EmailBackend`.
+   - Test suite strictly uses `django.core.mail.backends.locmem.EmailBackend`.
+   - All credentials (`MAILGUN_API_KEY`, `MAILGUN_DOMAIN`, `MAILGUN_API_URL`, `DEFAULT_FROM_EMAIL`, `CRON_TOKEN`) are configured through environment variables with empty placeholders in `.env.example`.
+2. **User Notification Settings**:
+   - Added `daily_reminder_enabled` (default `False`), `daily_reminder_time` (default `20:00:00`), and `weekly_summary_enabled` (default `False`) to `accounts.User`.
+   - Exposed via `GET /api/v1/auth/profile/` and `PATCH /api/v1/auth/profile/` in `UserProfileSerializer`.
+3. **15-Minute Window & Timezone Resolution**:
+   - The dispatch engine divides each hour into 4 15-minute buckets (`[0, 15)`, `[15, 30)`, `[30, 45)`, `[45, 60)`).
+   - In `send_due_notifications(now, force=False)`, `now` is converted to each candidate user's IANA timezone. A user is selected when their local time bucket matches `daily_reminder_time` (or unconditionally when `force=True`).
+4. **Idempotency via `NotificationLog`**:
+   - Added `NotificationLog` model with database-level `UniqueConstraint(user, notification_type, scheduled_date)`:
+     - Daily reminders are recorded with `scheduled_date=user_today`.
+     - Weekly summaries are recorded with `scheduled_date=start_of_week` (Monday).
+   - Subsequent cron executions within the same day or week detect existing log records and safely skip.
+5. **Shared Completion Logic**:
+   - Daily reminders check habits scheduled for `user_today` using the shared `is_day_completed` helper.
+   - If all scheduled habits are completed, or the user has no active scheduled habits today, no email is dispatched.
+6. **Stateless Signed Unsubscribe Tokens**:
+   - One-click unsubscribe tokens are generated with Django's cryptographic `signing.dumps(user.id, salt=...)`.
+   - Public endpoint `GET /api/v1/notifications/unsubscribe/<token>/` decodes and verifies signature, disabling `daily_reminder_enabled` and `weekly_summary_enabled` without requiring login.
+7. **Protected Internal Endpoint & Management Command**:
+   - `POST /api/v1/internal/send-notifications/` is guarded by `X-Cron-Token` constant-time verification (`secrets.compare_digest`).
+   - Management command `python manage.py send_notifications [--force]` enables CLI and manual execution.
+
+### Trade-offs & Implications
+- **Advantages**:
+  - Zero external task broker dependency (e.g. Celery/Redis) required for scheduled execution; can run on Render Cron Jobs or external webhooks.
+  - Constant-time token verification prevents timing attack vulnerabilities on the internal trigger endpoint.
+  - Zero duplicate email deliveries even under aggressive retry loops.
+
 
 

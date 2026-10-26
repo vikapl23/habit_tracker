@@ -7,4 +7,5 @@ emoji>=2.10.0
 django-cors-headers>=4.4.0
 whitenoise>=6.6.0
 tzdata>=2024.1
+django-anymail[mailgun]>=15.0
 

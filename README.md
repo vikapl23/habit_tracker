@@ -38,6 +38,7 @@ A full-stack, mobile-first habit tracking application with streak monitoring, ha
 - **Secure Authentication**: JWT-based user isolation (`access` and `refresh` tokens) with IP rate limiting.
 - **Interactive Documentation**: Interactive OpenAPI 3.0 / Swagger UI documentation (`/docs/`).
 - **Responsive Mobile-First UI**: Tailwind CSS interface optimized for 375px mobile viewport and desktop.
+- **Email Notifications via Mailgun**: Timezone-aware daily reminders for incomplete habits and Monday weekly summaries with one-click unsubscribe.
 
 ---
 
@@ -46,7 +47,7 @@ A full-stack, mobile-first habit tracking application with streak monitoring, ha
 | Layer | Technologies |
 |---|---|
 | **Frontend** | React 19, TypeScript, Vite, Tailwind CSS, Lucide React |
-| **Backend** | Python 3.12, Django 5.1, Django REST Framework (DRF) 3.15, Gunicorn |
+| **Backend** | Python 3.12, Django 5.1, Django REST Framework (DRF) 3.15, Gunicorn, `django-anymail` (Mailgun) |
 | **Authentication** | `djangorestframework-simplejwt` (JWT access/refresh tokens) |
 | **Database** | PostgreSQL 16 (Production / Docker), SQLite (Local Dev) |
 | **Documentation** | OpenAPI 3.0 via `drf-spectacular`, Swagger UI |
@@ -182,6 +183,9 @@ Base URL: `/api/v1/`
 | `POST` | `/auth/register/` | Register new user account | No |
 | `POST` | `/auth/token/` | Obtain JWT access & refresh tokens | No |
 | `POST` | `/auth/token/refresh/` | Refresh expired access token | No |
+| `GET` / `PATCH` | `/auth/profile/` | Inspect and update user profile & notification settings | Yes |
+| `GET` | `/notifications/unsubscribe/{token}/` | One-click unsubscribe from email notifications | No |
+| `POST` | `/internal/send-notifications/` | Trigger due notification dispatch (`X-Cron-Token` header) | Cron Token |
 | `GET` | `/habits/` | List user habits (`?include_archived=true`, `?date=YYYY-MM-DD`) | Yes |
 | `POST` | `/habits/` | Create a new habit | Yes |
 | `GET` | `/habits/{id}/` | Retrieve habit details with streaks | Yes |
@@ -194,6 +198,44 @@ Base URL: `/api/v1/`
 | `POST` | `/habits/{id}/unarchive/`| Restore archived habit | Yes |
 
 Interactive testing available at `/docs/` (click **Authorize** and input `Bearer <access_token>`).
+
+---
+
+## 📧 Email Notifications & Scheduled Cron Dispatch
+
+The application supports automated transactional and reminder emails powered by `django-anymail` with the **Mailgun** backend.
+
+### Notification Types
+1. **Daily Reminders**: Sent at the user's configured local time (`daily_reminder_time`, default `20:00`). Reminds users about habits scheduled for today that have not yet been completed. If all habits for the day are already satisfied, no email is dispatched.
+2. **Weekly Summary**: Sent every Monday at the user's reminder time. Highlights last week's overall completion percentage, best performing habit, and current streak lengths.
+3. **One-Click Unsubscribe**: Every outgoing email includes a cryptographically signed direct unsubscribe link (`/api/v1/notifications/unsubscribe/<token>/`) requiring no login.
+
+### Environment Configuration
+Configure Mailgun in your `.env`:
+```bash
+MAILGUN_API_KEY=key-xxxxxxxxxxxxxxxxxxxxxxxx
+MAILGUN_DOMAIN=mg.yourdomain.com
+MAILGUN_API_URL=https://api.mailgun.net/v3
+DEFAULT_FROM_EMAIL=Habit Tracker <noreply@yourdomain.com>
+CRON_TOKEN=generate-a-secure-random-cron-token
+```
+> [!NOTE]
+> If `MAILGUN_API_KEY` is not set, Django automatically uses the console email backend (`django.core.mail.backends.console.EmailBackend`) for local development, and `locmem` during automated test runs. API keys are never logged or committed.
+
+### Triggering Notifications
+- **Management Command** (manual testing or worker execution):
+  ```bash
+  python manage.py send_notifications           # Respects 15-minute time window & Monday check
+  python manage.py send_notifications --force   # Bypasses time window & forces sending to opted-in users
+  ```
+- **Protected Internal API Endpoint** (for Render Cron Jobs or external schedulers):
+  ```bash
+  curl -X POST https://your-backend.onrender.com/api/v1/internal/send-notifications/ \
+    -H "X-Cron-Token: your-configured-cron-token" \
+    -H "Content-Type: application/json"
+  ```
+  Authorized using constant-time verification. Returns `403 Forbidden` if missing or incorrect.
+
 
 ---
 

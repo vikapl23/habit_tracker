@@ -14,3 +14,7 @@ REST_FRAMEWORK = {
         "auth": None,
     },
 }
+
+# Tests use locmem email backend and a test cron token
+EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
+CRON_TOKEN = "test-cron-token-secret"

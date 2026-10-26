@@ -62,7 +62,15 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ["id", "email", "timezone", "timezone_auto"]
+        fields = [
+            "id",
+            "email",
+            "timezone",
+            "timezone_auto",
+            "daily_reminder_enabled",
+            "daily_reminder_time",
+            "weekly_summary_enabled",
+        ]
         read_only_fields = ["id", "email"]
 
     def validate_timezone(self, value: str) -> str:

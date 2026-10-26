@@ -12,6 +12,18 @@ class UserAdmin(BaseUserAdmin):
     fieldsets = (
         (None, {"fields": ("email", "password")}),
         (
+            "Preferences & Notifications",
+            {
+                "fields": (
+                    "timezone",
+                    "timezone_auto",
+                    "daily_reminder_enabled",
+                    "daily_reminder_time",
+                    "weekly_summary_enabled",
+                )
+            },
+        ),
+        (
             "Permissions",
             {"fields": ("is_active", "is_staff", "is_superuser", "groups", "user_permissions")},
         ),
