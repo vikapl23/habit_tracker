@@ -129,7 +129,11 @@ class HabitSerializer(serializers.ModelSerializer):
         if habit_type == HabitType.BOOLEAN:
             if "unit" not in attrs and self.instance and self.instance.unit:
                 attrs["unit"] = ""
-            if "target_value" not in attrs and self.instance and self.instance.target_value is not None:
+            if (
+                "target_value" not in attrs
+                and self.instance
+                and self.instance.target_value is not None
+            ):
                 attrs["target_value"] = None
 
         target_value = attrs.get(

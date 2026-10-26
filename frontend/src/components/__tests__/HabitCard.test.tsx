@@ -41,7 +41,7 @@ describe('HabitCard', () => {
     const handleToggle = vi.fn();
     const user = userEvent.setup();
 
-    const { container } = render(<HabitCard habit={measurableHabit} onToggle={handleToggle} />);
+    render(<HabitCard habit={measurableHabit} onToggle={handleToggle} />);
 
     // Verify interactive controls (button/input) are not nested inside role="button"
     const roleButtons = screen.getAllByRole('button');

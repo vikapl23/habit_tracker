@@ -147,6 +147,7 @@ def test_check_in_concurrent_initial_creation_integrity_error_handled(user):
     The service must handle IntegrityError and accumulate/set value correctly.
     """
     from unittest.mock import patch
+
     from django.db import IntegrityError
 
     today = user.get_today()
@@ -178,8 +179,12 @@ def test_check_in_concurrent_initial_creation_integrity_error_handled(user):
         raise IntegrityError("unique constraint failed: unique_habit_checkin_per_date")
 
     with patch.object(HabitCheckIn.objects, "filter", side_effect=mock_filter):
-        with patch("apps.habits.services.checkin.HabitCheckIn.objects.create", side_effect=mock_create):
+        with patch(
+            "apps.habits.services.checkin.HabitCheckIn.objects.create", side_effect=mock_create
+        ):
             # Checking in 3 glasses in 'add' mode should fallback to updating existing 3 -> total 6 glasses
-            res = check_in_habit(habit=habit, target_date=today, value=Decimal("3.00"), mode="add", user=user)
+            res = check_in_habit(
+                habit=habit, target_date=today, value=Decimal("3.00"), mode="add", user=user
+            )
             assert res.today_value == Decimal("6.00")
             assert res.status == "checked"

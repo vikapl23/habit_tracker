@@ -170,7 +170,9 @@ def check_in_habit(
                             )
                             new_value = checkin.value + dec_value
                             if new_value > Decimal("100000.00"):
-                                raise ValidationError({"value": "Daily total cannot exceed 100,000."})
+                                raise ValidationError(
+                                    {"value": "Daily total cannot exceed 100,000."}
+                                ) from None
                             checkin.value = new_value
                             checkin.save(update_fields=["value"])
 

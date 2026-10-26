@@ -330,7 +330,9 @@ def test_data_migration_populates_existing_habits(user):
 @pytest.mark.django_db
 def test_data_migration_backfills_last_check_in_value(user):
     """Item 3: Migration backfills last_check_in_value = 1.00 for habits with last_check_in_date."""
-    migration_0007 = importlib.import_module("apps.habits.migrations.0007_backfill_last_check_in_value")
+    migration_0007 = importlib.import_module(
+        "apps.habits.migrations.0007_backfill_last_check_in_value"
+    )
     backfill_func = migration_0007.backfill_last_check_in_value
 
     habit_checked = Habit.objects.create(
