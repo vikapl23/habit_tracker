@@ -223,3 +223,34 @@ class CheckInResponseSerializer(serializers.Serializer):
     date = serializers.DateField()
     current_streak = serializers.IntegerField()
     longest_streak = serializers.IntegerField()
+
+
+class HabitStatisticsSerializer(serializers.Serializer):
+    """Serializer for individual habit statistics payload."""
+
+    habit_id = serializers.IntegerField()
+    completion_rate_7d = serializers.FloatField()
+    completion_rate_30d = serializers.FloatField()
+    total_check_ins = serializers.IntegerField()
+    current_streak = serializers.IntegerField()
+    longest_streak = serializers.IntegerField()
+
+
+class BestHabitSummarySerializer(serializers.Serializer):
+    """Serializer for the top performing habit summary."""
+
+    id = serializers.IntegerField()
+    name = serializers.CharField()
+    emoji = serializers.CharField()
+    color = serializers.CharField()
+    completion_rate_30d = serializers.FloatField()
+
+
+class UserSummaryStatisticsSerializer(serializers.Serializer):
+    """Serializer for overall user dashboard statistics summary."""
+
+    overall_completion_rate_week = serializers.FloatField()
+    overall_completion_rate_month = serializers.FloatField()
+    best_habit = BestHabitSummarySerializer(allow_null=True)
+    total_active_habits = serializers.IntegerField()
+    total_check_ins = serializers.IntegerField()

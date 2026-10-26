@@ -11,6 +11,7 @@ from rest_framework import permissions, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.request import Request
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from .models import Habit
 from .serializers import (
@@ -20,8 +21,14 @@ from .serializers import (
     CheckInResponseSerializer,
     HabitCheckInSerializer,
     HabitSerializer,
+    HabitStatisticsSerializer,
+    UserSummaryStatisticsSerializer,
 )
 from .services import CheckInResult, check_in_habit, uncheck_habit
+from .services.statistics import (
+    calculate_habit_statistics,
+    calculate_user_summary_statistics,
+)
 
 
 class HabitViewSet(viewsets.ModelViewSet):
@@ -230,4 +237,31 @@ class HabitViewSet(viewsets.ModelViewSet):
             return self.get_paginated_response(serializer.data)
 
         serializer = HabitCheckInSerializer(qs, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        responses={200: HabitStatisticsSerializer},
+        description="Get habit statistics including completion rate for last 7 and 30 days, total check-ins, and streaks.",
+    )
+    @action(detail=True, methods=["get"])
+    def statistics(self, request: Request, pk: str | None = None) -> Response:
+        """Retrieve completion rates and streak analytics for the habit."""
+        habit = self.get_object()
+        stats = calculate_habit_statistics(habit, user=request.user)
+        serializer = HabitStatisticsSerializer(stats)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class StatisticsSummaryView(APIView):
+    """View for retrieving overall user statistics summary."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        responses={200: UserSummaryStatisticsSerializer},
+        description="Retrieve overall completion rate this week and this month, best habit, active habits, and total check-ins.",
+    )
+    def get(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        summary = calculate_user_summary_statistics(request.user)
+        serializer = UserSummaryStatisticsSerializer(summary)
         return Response(serializer.data, status=status.HTTP_200_OK)
