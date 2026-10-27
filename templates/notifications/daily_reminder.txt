@@ -4,7 +4,7 @@ Here is your daily habit check-in for {{ today|date:"l, F j, Y" }}.
 
 You have {{ incomplete_habits|length }} habit{{ incomplete_habits|length|pluralize }} left to complete today:
 {% for item in incomplete_habits %}
-- {{ item.habit.emoji }} {{ item.habit.name }}{% if item.habit.habit_type == "measurable" %} (Progress: {{ item.current_value }} / {{ item.habit.target_value }} {{ item.habit.unit }}){% endif %}
+- {{ item.habit.emoji }} {{ item.habit.name }}{% if item.habit.habit_type == "measurable" %} ({{ item.progress_text }}){% endif %}
 {% endfor %}
 
 Keep your streaks alive! Log in to mark them done.

@@ -257,6 +257,17 @@ This checklist tracks the ongoing development progress of the Habit Tracker proj
   - [x] Add `SITE_URL` to `render.yaml` backend `envVars` (`sync: false`) and document that it must be the backend URL (used for unsubscribe links).
   - [x] Frontend Profile "Notifications" section with toggles for daily reminder and weekly summary and reminder time picker (shown in user's timezone), saved via `PATCH /auth/profile/`.
   - [x] Frontend test suite covering notifications rendering, dirty state, error handling, and profile persistence.
+- [ ] **9.7 Per-Habit Email Reminders (TDD)**
+  - [x] Backend: Add `reminder_enabled` (default False) and `reminder_time` (nullable TimeField, minutes 0/15/30/45) to `Habit` with migrations and validations.
+  - [x] Backend: Replace single daily reminder on `User` with global master switch `notifications_enabled` (default True) and sunset legacy `daily_reminder_enabled`/`time` (ADR 009).
+  - [x] Backend: Update `send_due_notifications` to dispatch consolidated emails for due, incomplete, scheduled habits in current 15-minute window per user timezone.
+  - [x] Backend: Per-habit daily deduplication via `NotificationLog(habit, scheduled_date)` unique constraint.
+  - [x] Backend: Expose `reminder_enabled` and `reminder_time` in Habit API, `notifications_enabled` in profile API.
+  - [x] Backend: Unsubscribe endpoint sets `user.notifications_enabled = False`.
+  - [ ] Frontend: Habit form "Remind me if not done" toggle + 15-min time picker.
+  - [ ] Frontend: Habit card reminder bell icon with time.
+  - [ ] Frontend: Profile master switch "Email notifications" + weekly summary toggle.
+  - [ ] Postman collection update.
 
 ---
 

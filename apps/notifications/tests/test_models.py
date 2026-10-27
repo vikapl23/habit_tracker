@@ -65,3 +65,38 @@ class TestNotificationLogModel:
             recipient_email=user.email,
         )
         assert log1.id != log2.id
+
+    def test_habit_notification_log_uniqueness_per_day(self):
+        from apps.habits.models import Habit
+
+        user = User.objects.create_user(email="user@example.com", password="Password123!")
+        today = datetime.date(2026, 10, 26)
+        h1 = Habit.objects.create(user=user, name="Habit 1")
+        h2 = Habit.objects.create(user=user, name="Habit 2")
+
+        # Two different habits for same user on same day are allowed
+        log1 = NotificationLog.objects.create(
+            user=user,
+            habit=h1,
+            notification_type="daily_reminder",
+            scheduled_date=today,
+            recipient_email=user.email,
+        )
+        log2 = NotificationLog.objects.create(
+            user=user,
+            habit=h2,
+            notification_type="daily_reminder",
+            scheduled_date=today,
+            recipient_email=user.email,
+        )
+        assert log1.id != log2.id
+
+        # Duplicate log for same habit on same day fails
+        with pytest.raises(IntegrityError):
+            NotificationLog.objects.create(
+                user=user,
+                habit=h1,
+                notification_type="daily_reminder",
+                scheduled_date=today,
+                recipient_email=user.email,
+            )

@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, Any
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.mail import EmailMultiAlternatives
-from django.db.models import Q
 from django.template.loader import render_to_string
 from django.utils import timezone
 
@@ -30,6 +29,16 @@ logger = logging.getLogger(__name__)
 User = get_user_model()
 
 
+def format_amount(val: Any) -> str:
+    """Format decimal/float without unnecessary trailing zeros (e.g. 3 instead of 3.00)."""
+    if val is None:
+        return "0"
+    d = Decimal(str(val))
+    if d == d.to_integral():
+        return str(d.to_integral())
+    return f"{d.normalize():f}"
+
+
 def is_reminder_time_in_window(reminder_time: datetime.time, current_time: datetime.time) -> bool:
     """
     Determine if reminder_time falls in the current 15-minute window of current_time.
@@ -40,41 +49,69 @@ def is_reminder_time_in_window(reminder_time: datetime.time, current_time: datet
     )
 
 
-def send_daily_reminder(user: User, user_today: datetime.date) -> bool:
+def send_habit_reminders_for_user(
+    user: User,
+    user_today: datetime.date,
+    user_time: datetime.time,
+    force: bool = False,
+) -> bool:
     """
-    Check if user has incomplete habits scheduled for user_today.
-    Sends daily reminder email if any exist, and records in NotificationLog.
+    Find habits for user with reminder_enabled whose reminder_time falls in current 15-minute window,
+    that are scheduled today and NOT completed (using shared completion helper).
+    Groups all such habits into ONE email.
+    Logs per habit per day in NotificationLog.
     Returns True if an email was sent, False otherwise.
     """
-    if NotificationLog.objects.filter(
-        user=user,
-        notification_type=NotificationLog.NotificationType.DAILY_REMINDER,
-        scheduled_date=user_today,
-    ).exists():
+    candidate_habits = user.habits.filter(is_archived=False, reminder_enabled=True)
+    if not candidate_habits.exists():
         return False
 
-    active_habits = user.habits.filter(is_archived=False)
-    if not active_habits.exists():
+    due_habits: list[Any] = []
+    for habit in candidate_habits:
+        if not force:
+            if not habit.reminder_time or not is_reminder_time_in_window(
+                habit.reminder_time, user_time
+            ):
+                continue
+        if not habit.is_scheduled_on(user_today):
+            continue
+        # Deduplication: each habit reminded at most once per day
+        if NotificationLog.objects.filter(
+            habit=habit,
+            scheduled_date=user_today,
+        ).exists():
+            continue
+        due_habits.append(habit)
+
+    if not due_habits:
         return False
 
-    # Single query to prefetch today's check-ins for active habits
+    # Prefetch today's check-ins for due habits
     today_checkins = {
         checkin.habit_id: checkin
         for checkin in HabitCheckIn.objects.filter(
-            habit__in=active_habits,
+            habit__in=due_habits,
             date=user_today,
         )
     }
 
     incomplete_items: list[dict[str, Any]] = []
-    for habit in active_habits:
-        if not habit.is_scheduled_on(user_today):
-            continue
-
+    for habit in due_habits:
         checkin = today_checkins.get(habit.id)
         if not is_day_completed(habit, checkin):
             val = checkin.value if checkin else Decimal("0.00")
-            incomplete_items.append({"habit": habit, "current_value": val})
+            progress_text = (
+                f"{format_amount(val)} / {format_amount(habit.target_value)} {habit.unit}"
+                if habit.habit_type == "measurable"
+                else ""
+            )
+            incomplete_items.append(
+                {
+                    "habit": habit,
+                    "current_value": val,
+                    "progress_text": progress_text,
+                }
+            )
 
     if not incomplete_items:
         return False
@@ -87,7 +124,8 @@ def send_daily_reminder(user: User, user_today: datetime.date) -> bool:
         "unsubscribe_url": unsubscribe_url,
     }
 
-    subject = f"Habit Reminder: You have {len(incomplete_items)} habit{'s' if len(incomplete_items) > 1 else ''} left today!"
+    count = len(incomplete_items)
+    subject = f"Habit Reminder: You have {count} habit{'s' if count > 1 else ''} left today!"
     text_content = render_to_string("notifications/daily_reminder.txt", context)
     html_content = render_to_string("notifications/daily_reminder.html", context)
 
@@ -100,17 +138,34 @@ def send_daily_reminder(user: User, user_today: datetime.date) -> bool:
     msg.attach_alternative(html_content, "text/html")
     msg.send()
 
-    NotificationLog.objects.create(
-        user=user,
-        notification_type=NotificationLog.NotificationType.DAILY_REMINDER,
-        scheduled_date=user_today,
-        recipient_email=user.email,
-        details={
-            "incomplete_habits_count": len(incomplete_items),
-            "habit_ids": [item["habit"].id for item in incomplete_items],
-        },
-    )
+    # Log per habit per day
+    for item in incomplete_items:
+        h = item["habit"]
+        NotificationLog.objects.create(
+            user=user,
+            habit=h,
+            notification_type=NotificationLog.NotificationType.DAILY_REMINDER,
+            scheduled_date=user_today,
+            recipient_email=user.email,
+            details={
+                "habit_id": h.id,
+                "habit_name": h.name,
+                "current_value": str(item["current_value"]),
+                "progress_text": item["progress_text"],
+            },
+        )
+
     return True
+
+
+def send_daily_reminder(user: User, user_today: datetime.date) -> bool:
+    """Convenience helper to force send due daily reminders for a user."""
+    return send_habit_reminders_for_user(
+        user=user,
+        user_today=user_today,
+        user_time=datetime.time(0, 0),
+        force=True,
+    )
 
 
 def send_weekly_summary(user: User, user_today: datetime.date) -> bool:
@@ -209,6 +264,7 @@ def send_weekly_summary(user: User, user_today: datetime.date) -> bool:
 
     NotificationLog.objects.create(
         user=user,
+        habit=None,
         notification_type=NotificationLog.NotificationType.WEEKLY_SUMMARY,
         scheduled_date=start_of_current_week,
         recipient_email=user.email,
@@ -226,9 +282,13 @@ def send_due_notifications(
 ) -> dict[str, int]:
     """
     Main dispatch service:
-    1. Finds users whose local reminder time matches current 15-minute window (or all if force=True).
-    2. Sends daily reminders and/or weekly summaries (on Mondays).
-    3. Prevents duplicate deliveries using NotificationLog.
+    1. For each user with notifications_enabled=True (respecting their timezone):
+       - Finds habits with reminder_enabled whose reminder_time falls in the current 15-minute window,
+         that are scheduled today and NOT completed.
+       - Groups all such habits of one user into ONE email.
+       - Logs per habit per day in NotificationLog.
+       - No email if the list is empty.
+    2. Sends weekly summaries on Monday (if weekly_summary_enabled=True).
     Returns counts of sent notifications.
     """
     if now is None:
@@ -237,7 +297,7 @@ def send_due_notifications(
     daily_sent_count = 0
     weekly_sent_count = 0
 
-    users = User.objects.filter(Q(daily_reminder_enabled=True) | Q(weekly_summary_enabled=True))
+    users = User.objects.filter(notifications_enabled=True)
 
     for user in users:
         try:
@@ -249,21 +309,22 @@ def send_due_notifications(
         user_time = user_now.time()
         user_today = user_now.date()
 
-        reminder_time = user.daily_reminder_time or datetime.time(20, 0)
-        time_matches = force or is_reminder_time_in_window(reminder_time, user_time)
-
-        # 1. Daily Reminder
-        if user.daily_reminder_enabled and time_matches:
-            try:
-                if send_daily_reminder(user, user_today):
-                    daily_sent_count += 1
-            except Exception as e:
-                logger.exception(f"Failed to send daily reminder to {user.email}: {e}")
+        # 1. Per-habit reminders grouped into one email
+        try:
+            if send_habit_reminders_for_user(
+                user=user,
+                user_today=user_today,
+                user_time=user_time,
+                force=force,
+            ):
+                daily_sent_count += 1
+        except Exception as e:
+            logger.exception(f"Failed to send habit reminders to {user.email}: {e}")
 
         # 2. Weekly Summary (Monday or force)
         is_monday = user_today.weekday() == 0
-        weekly_due = (is_monday and time_matches) or force
-        if user.weekly_summary_enabled and weekly_due:
+        weekly_time_matches = force or is_reminder_time_in_window(datetime.time(9, 0), user_time)
+        if user.weekly_summary_enabled and ((is_monday and weekly_time_matches) or force):
             try:
                 if send_weekly_summary(user, user_today):
                     weekly_sent_count += 1

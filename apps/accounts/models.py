@@ -1,4 +1,3 @@
-import datetime
 import zoneinfo
 
 from django.contrib.auth.models import AbstractUser, BaseUserManager
@@ -72,13 +71,9 @@ class User(AbstractUser):
         default=True,
         help_text="Whether timezone is automatically detected and synced from browser.",
     )
-    daily_reminder_enabled = models.BooleanField(
-        default=False,
-        help_text="Whether to send daily reminder emails for incomplete habits.",
-    )
-    daily_reminder_time = models.TimeField(
-        default=datetime.time(20, 0),
-        help_text="Daily reminder time in user's local timezone.",
+    notifications_enabled = models.BooleanField(
+        default=True,
+        help_text="Master switch for all email notifications.",
     )
     weekly_summary_enabled = models.BooleanField(
         default=False,

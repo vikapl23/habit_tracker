@@ -5,8 +5,18 @@ from .models import Habit, HabitCheckIn
 
 @admin.register(Habit)
 class HabitAdmin(admin.ModelAdmin):
-    list_display = ("id", "name", "emoji", "color", "is_archived", "created_at", "updated_at")
-    list_filter = ("is_archived", "created_at")
+    list_display = (
+        "id",
+        "name",
+        "emoji",
+        "color",
+        "reminder_enabled",
+        "reminder_time",
+        "is_archived",
+        "created_at",
+        "updated_at",
+    )
+    list_filter = ("reminder_enabled", "is_archived", "created_at")
     search_fields = ("name", "description")
     ordering = ("-created_at",)
 

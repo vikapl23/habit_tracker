@@ -5,11 +5,12 @@ from .models import NotificationLog
 
 @admin.register(NotificationLog)
 class NotificationLogAdmin(admin.ModelAdmin):
-    list_display = ("recipient_email", "notification_type", "scheduled_date", "sent_at")
+    list_display = ("recipient_email", "habit", "notification_type", "scheduled_date", "sent_at")
     list_filter = ("notification_type", "scheduled_date")
-    search_fields = ("recipient_email", "user__email")
+    search_fields = ("recipient_email", "user__email", "habit__name")
     readonly_fields = (
         "user",
+        "habit",
         "notification_type",
         "scheduled_date",
         "recipient_email",

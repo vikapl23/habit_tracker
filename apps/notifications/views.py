@@ -87,9 +87,8 @@ class UnsubscribeView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        user.daily_reminder_enabled = False
-        user.weekly_summary_enabled = False
-        user.save(update_fields=["daily_reminder_enabled", "weekly_summary_enabled"])
+        user.notifications_enabled = False
+        user.save(update_fields=["notifications_enabled"])
 
         return Response(
             {

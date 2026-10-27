@@ -50,6 +50,7 @@ class HabitSerializer(serializers.ModelSerializer):
     today_value = serializers.SerializerMethodField()
     today_progress = serializers.SerializerMethodField()
     target_value = HabitDecimalField(required=False, allow_null=True)
+    reminder_time = serializers.TimeField(required=False, allow_null=True)
     frequency = serializers.JSONField(required=False, write_only=True)
 
     class Meta:
@@ -69,6 +70,8 @@ class HabitSerializer(serializers.ModelSerializer):
             "frequency_type",
             "frequency_days",
             "frequency",
+            "reminder_enabled",
+            "reminder_time",
             "current_streak",
             "longest_streak",
             "is_checked_today",
@@ -227,6 +230,25 @@ class HabitSerializer(serializers.ModelSerializer):
                     }
                 )
             attrs["frequency_days"] = []
+
+        reminder_enabled = attrs.get(
+            "reminder_enabled",
+            self.instance.reminder_enabled if self.instance else False,
+        )
+        reminder_time = attrs.get(
+            "reminder_time",
+            self.instance.reminder_time if self.instance else None,
+        )
+
+        if reminder_enabled and reminder_time is None:
+            raise serializers.ValidationError(
+                {"reminder_time": "Reminder time is required when reminder is enabled."}
+            )
+
+        if reminder_time is not None and reminder_time.minute not in (0, 15, 30, 45):
+            raise serializers.ValidationError(
+                {"reminder_time": "Reminder time minutes must be 0, 15, 30, or 45."}
+            )
 
         return attrs
 

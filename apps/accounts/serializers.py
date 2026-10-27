@@ -67,8 +67,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "email",
             "timezone",
             "timezone_auto",
-            "daily_reminder_enabled",
-            "daily_reminder_time",
+            "notifications_enabled",
             "weekly_summary_enabled",
         ]
         read_only_fields = ["id", "email"]

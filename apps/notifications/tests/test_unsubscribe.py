@@ -27,11 +27,11 @@ class TestUnsubscribe:
         assert verify_unsubscribe_token(tampered) is None
         assert verify_unsubscribe_token("completely-invalid") is None
 
-    def test_unsubscribe_endpoint_success(self):
+    def test_unsubscribe_endpoint_turns_off_notifications_enabled(self):
         user = User.objects.create_user(
             email="user@example.com",
             password="Password123!",
-            daily_reminder_enabled=True,
+            notifications_enabled=True,
             weekly_summary_enabled=True,
         )
         token = generate_unsubscribe_token(user)
@@ -43,8 +43,7 @@ class TestUnsubscribe:
         assert data["unsubscribed"] is True
 
         user.refresh_from_db()
-        assert user.daily_reminder_enabled is False
-        assert user.weekly_summary_enabled is False
+        assert user.notifications_enabled is False
 
     def test_unsubscribe_endpoint_invalid_token_returns_400(self):
         client = APIClient()

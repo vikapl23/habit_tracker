@@ -58,6 +58,15 @@ class Habit(models.Model):
         default=list,
         blank=True,
     )
+    reminder_enabled = models.BooleanField(
+        default=False,
+        help_text="Whether email reminder is enabled for this habit.",
+    )
+    reminder_time = models.TimeField(
+        null=True,
+        blank=True,
+        help_text="Reminder time in user's local timezone (minutes must be 0, 15, 30, or 45).",
+    )
     current_streak = models.PositiveIntegerField(default=0)
     longest_streak = models.PositiveIntegerField(default=0)
     last_check_in_date = models.DateField(null=True, blank=True)
@@ -130,6 +139,17 @@ class Habit(models.Model):
         elif self.frequency_type == FrequencyType.DAILY:
             if self.frequency_days:
                 self.frequency_days = []
+
+        if self.reminder_enabled:
+            if self.reminder_time is None:
+                raise ValidationError(
+                    {"reminder_time": "Reminder time is required when reminder is enabled."}
+                )
+        if self.reminder_time is not None:
+            if self.reminder_time.minute not in (0, 15, 30, 45):
+                raise ValidationError(
+                    {"reminder_time": "Reminder time minutes must be 0, 15, 30, or 45."}
+                )
 
     @classmethod
     def from_db(cls, db, field_names, values):

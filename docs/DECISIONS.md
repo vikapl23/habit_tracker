@@ -285,5 +285,42 @@ Key design challenges:
   - Constant-time token verification prevents timing attack vulnerabilities on the internal trigger endpoint.
   - Zero duplicate email deliveries even under aggressive retry loops.
 
+## ADR 009: Per-Habit Email Reminders, User Master Switch, and Sunset of Global Daily Reminder
+
+### Date
+2026-10-27
+
+### Context & Problem
+Previously, notifications featured a single global daily reminder setting on the user model (`daily_reminder_enabled`, `daily_reminder_time`), delivering one evening email for all incomplete habits. In practice, users build routines throughout different parts of the day (e.g., morning meditation at 08:00, workout at 17:30, reading at 21:00). A single daily reminder cannot provide contextual, actionable nudges.
+
+Two architectures were considered to transition away from the single global reminder:
+1. **Option A (Simpler)**: Migrate `daily_reminder_enabled` and `daily_reminder_time` into a single global master switch `notifications_enabled` on the user, moving all reminder scheduling directly onto individual habits (`reminder_enabled`, `reminder_time`).
+2. **Option B**: Maintain `daily_reminder_enabled` as an optional secondary "evening summary" alongside per-habit reminders.
+
+### Decision
+Adopt **Option A**:
+1. **Per-Habit Reminder Configuration**:
+   - Added `reminder_enabled` (boolean, default `False`) and `reminder_time` (TimeField, nullable) to `Habit`.
+   - Strictly validate `reminder_time` in model `clean()` and `HabitSerializer`: `reminder_time` is required when `reminder_enabled` is `True`, and minutes must be one of `[0, 15, 30, 45]`.
+2. **Global Master Switch & Sunset of Legacy Daily Reminder**:
+   - Replaced `daily_reminder_enabled` and `daily_reminder_time` on `User` with a single global master switch `notifications_enabled` (default `True`).
+   - If `notifications_enabled` is `False`, all emails (both habit reminders and weekly summaries) are completely suppressed.
+   - Kept `weekly_summary_enabled` (default `False`), delivered on Mondays.
+3. **15-Minute Window & User-Level Email Grouping**:
+   - `send_due_notifications(now)` evaluates habits for each user with `notifications_enabled=True` in their respective timezone.
+   - For all habits with `reminder_enabled=True` whose `reminder_time` matches the current 15-minute window, that are scheduled today according to frequency and NOT completed (using shared `is_day_completed` helper; measurable habits checked for `today_value < target_value`), all due habits are batched into **ONE** consolidated email per user per window.
+   - If no habits are due or incomplete, no email is sent.
+4. **Per-Habit Daily Deduplication**:
+   - `NotificationLog` includes `habit` ForeignKey and partial unique constraint `(habit, scheduled_date)` where `habit IS NOT NULL`, guaranteeing each habit is reminded at most once per calendar day.
+5. **One-Click Unsubscribe**:
+   - Unsubscribe links contained in notification emails turn off the user's master switch (`notifications_enabled = False`), halting all future emails immediately.
+
+### Trade-offs & Implications
+- **Advantages**:
+  - Eliminates conflicting notifications and redundant emails: habits prompt users at their intended schedule.
+  - Consolidated emails: multiple habits scheduled at the same time slot (e.g., 09:00) produce exactly one email rather than multiple separate emails.
+  - Clean, unbloated user profile: one simple master switch in user settings, with granular control situated directly on each habit.
+
+
 
 
