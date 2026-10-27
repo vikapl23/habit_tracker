@@ -68,14 +68,10 @@ export const ProfilePage: React.FC = () => {
   const [saveSuccess, setSaveSuccess] = useState(false);
 
   // Notification preferences state
-  const defaultDailyReminder = user?.daily_reminder_enabled ?? false;
-  const defaultReminderTime = user?.daily_reminder_time
-    ? user.daily_reminder_time.slice(0, 5)
-    : '20:00';
+  const defaultNotificationsEnabled = user?.notifications_enabled ?? true;
   const defaultWeeklySummary = user?.weekly_summary_enabled ?? false;
 
-  const [dailyReminderEnabled, setDailyReminderEnabled] = useState<boolean>(defaultDailyReminder);
-  const [reminderTime, setReminderTime] = useState<string>(defaultReminderTime);
+  const [notificationsEnabled, setNotificationsEnabled] = useState<boolean>(defaultNotificationsEnabled);
   const [weeklySummaryEnabled, setWeeklySummaryEnabled] = useState<boolean>(defaultWeeklySummary);
   const [isSavingNotifications, setIsSavingNotifications] = useState<boolean>(false);
   const [notificationsSaveSuccess, setNotificationsSaveSuccess] = useState<boolean>(false);
@@ -83,11 +79,8 @@ export const ProfilePage: React.FC = () => {
   // Sync state if user changes / finishes loading
   useEffect(() => {
     if (user) {
-      if (user.daily_reminder_enabled !== undefined) {
-        setDailyReminderEnabled(user.daily_reminder_enabled);
-      }
-      if (user.daily_reminder_time) {
-        setReminderTime(user.daily_reminder_time.slice(0, 5));
+      if (user.notifications_enabled !== undefined) {
+        setNotificationsEnabled(user.notifications_enabled);
       }
       if (user.weekly_summary_enabled !== undefined) {
         setWeeklySummaryEnabled(user.weekly_summary_enabled);
@@ -96,15 +89,12 @@ export const ProfilePage: React.FC = () => {
   }, [user]);
 
   const hasNotificationsChanged = useMemo(() => {
-    if (dailyReminderEnabled !== defaultDailyReminder) return true;
-    if (reminderTime !== defaultReminderTime) return true;
+    if (notificationsEnabled !== defaultNotificationsEnabled) return true;
     if (weeklySummaryEnabled !== defaultWeeklySummary) return true;
     return false;
   }, [
-    dailyReminderEnabled,
-    defaultDailyReminder,
-    reminderTime,
-    defaultReminderTime,
+    notificationsEnabled,
+    defaultNotificationsEnabled,
     weeklySummaryEnabled,
     defaultWeeklySummary,
   ]);
@@ -117,8 +107,7 @@ export const ProfilePage: React.FC = () => {
     setNotificationsSaveSuccess(false);
     try {
       await updateProfile({
-        daily_reminder_enabled: dailyReminderEnabled,
-        daily_reminder_time: reminderTime,
+        notifications_enabled: notificationsEnabled,
         weekly_summary_enabled: weeklySummaryEnabled,
       });
       setNotificationsSaveSuccess(true);
@@ -422,59 +411,36 @@ export const ProfilePage: React.FC = () => {
             </p>
 
             <form onSubmit={handleSaveNotifications} className="space-y-4">
-              {/* Daily Reminder Toggle */}
+              {/* Master Switch: Email notifications */}
               <div className="flex items-center justify-between p-3.5 rounded-xl border border-slate-200 bg-slate-50/60">
                 <div className="min-w-0 flex-1 pr-3">
-                  <span id="daily-reminder-label" className="block text-xs font-semibold text-slate-800">
-                    Daily reminder
+                  <span id="email-notifications-label" className="block text-xs font-semibold text-slate-800">
+                    Email notifications
                   </span>
                   <span className="block text-xs text-slate-500">
-                    Receive an email if you have incomplete scheduled habits for today.
+                    Master switch for all email notifications, including habit reminders and weekly summaries.
                   </span>
                 </div>
                 <button
                   type="button"
                   role="switch"
-                  aria-checked={dailyReminderEnabled}
-                  aria-labelledby="daily-reminder-label"
+                  aria-checked={notificationsEnabled}
+                  aria-labelledby="email-notifications-label"
                   onClick={() => {
-                    setDailyReminderEnabled(!dailyReminderEnabled);
+                    setNotificationsEnabled(!notificationsEnabled);
                     setNotificationsSaveSuccess(false);
                   }}
                   className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                    dailyReminderEnabled ? 'bg-blue-600' : 'bg-slate-300'
+                    notificationsEnabled ? 'bg-blue-600' : 'bg-slate-300'
                   }`}
                 >
                   <span
                     aria-hidden="true"
                     className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
-                      dailyReminderEnabled ? 'translate-x-5' : 'translate-x-0'
+                      notificationsEnabled ? 'translate-x-5' : 'translate-x-0'
                     }`}
                   />
                 </button>
-              </div>
-
-              {/* Reminder Time Picker */}
-              <div className="space-y-1.5 pt-1">
-                <label
-                  htmlFor="daily-reminder-time"
-                  className="block text-xs font-semibold text-slate-700"
-                >
-                  Reminder time
-                </label>
-                <input
-                  id="daily-reminder-time"
-                  type="time"
-                  value={reminderTime}
-                  onChange={(e) => {
-                    setReminderTime(e.target.value);
-                    setNotificationsSaveSuccess(false);
-                  }}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-                />
-                <p className="text-[11px] text-slate-500">
-                  Daily reminder dispatch time in your local timezone ({normalizedUserTimezone || 'UTC'}).
-                </p>
               </div>
 
               {/* Weekly Summary Toggle */}

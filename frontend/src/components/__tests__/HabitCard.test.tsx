@@ -132,4 +132,29 @@ describe('HabitCard', () => {
     expect(handleToggle).not.toHaveBeenCalled();
     expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
   });
+
+  it('renders reminder bell icon with time when reminder is set', () => {
+    const habitWithReminder: Habit = {
+      ...measurableHabit,
+      reminder_enabled: true,
+      reminder_time: '08:15:00',
+    };
+    render(<HabitCard habit={habitWithReminder} onToggle={vi.fn()} />);
+
+    const badge = screen.getByTestId('habit-reminder-badge');
+    expect(badge).toBeInTheDocument();
+    expect(badge).toHaveTextContent('08:15');
+    expect(badge).toHaveAttribute('aria-label', 'Reminder set for 08:15');
+  });
+
+  it('does not render reminder bell icon when reminder is not enabled', () => {
+    const habitWithoutReminder: Habit = {
+      ...measurableHabit,
+      reminder_enabled: false,
+      reminder_time: null,
+    };
+    render(<HabitCard habit={habitWithoutReminder} onToggle={vi.fn()} />);
+
+    expect(screen.queryByTestId('habit-reminder-badge')).not.toBeInTheDocument();
+  });
 });

@@ -13,6 +13,8 @@ export interface Habit {
   habit_type: HabitType;
   unit?: string;
   target_value?: number | null;
+  reminder_enabled?: boolean;
+  reminder_time?: string | null;
   today_value: number;
   today_progress: number;
   current_streak: number;
@@ -33,6 +35,8 @@ export interface HabitFormData {
   habit_type?: HabitType;
   unit?: string;
   target_value?: number | null;
+  reminder_enabled?: boolean;
+  reminder_time?: string | null;
 }
 
 export interface CheckInOptions {

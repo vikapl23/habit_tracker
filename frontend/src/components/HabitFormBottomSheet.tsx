@@ -57,6 +57,8 @@ export const HabitFormBottomSheet: React.FC<HabitFormBottomSheetProps> = ({
   const [habitType, setHabitType] = useState<HabitType>('boolean');
   const [unit, setUnit] = useState('');
   const [targetValue, setTargetValue] = useState('');
+  const [reminderEnabled, setReminderEnabled] = useState(false);
+  const [reminderTime, setReminderTime] = useState('20:00');
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [generalError, setGeneralError] = useState<string | null>(null);
@@ -79,6 +81,8 @@ export const HabitFormBottomSheet: React.FC<HabitFormBottomSheetProps> = ({
         setHabitType(habit.habit_type || 'boolean');
         setUnit(habit.unit || '');
         setTargetValue(habit.target_value !== undefined && habit.target_value !== null ? String(habit.target_value) : '');
+        setReminderEnabled(habit.reminder_enabled ?? false);
+        setReminderTime(habit.reminder_time ? habit.reminder_time.slice(0, 5) : '20:00');
       } else {
         setName('');
         setDescription('');
@@ -89,6 +93,8 @@ export const HabitFormBottomSheet: React.FC<HabitFormBottomSheetProps> = ({
         setHabitType('boolean');
         setUnit('');
         setTargetValue('');
+        setReminderEnabled(false);
+        setReminderTime('20:00');
       }
       setFieldErrors({});
       setGeneralError(null);
@@ -187,6 +193,17 @@ export const HabitFormBottomSheet: React.FC<HabitFormBottomSheetProps> = ({
         errors.target_value = 'Daily target cannot exceed 100,000.';
       }
     }
+    if (reminderEnabled) {
+      if (!reminderTime) {
+        errors.reminder_time = 'Reminder time is required when reminder is enabled.';
+      } else {
+        const parts = reminderTime.split(':');
+        const minute = parseInt(parts[1], 10);
+        if (![0, 15, 30, 45].includes(minute)) {
+          errors.reminder_time = 'Reminder time minutes must be 0, 15, 30, or 45.';
+        }
+      }
+    }
 
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
@@ -213,6 +230,8 @@ export const HabitFormBottomSheet: React.FC<HabitFormBottomSheetProps> = ({
               unit: '',
               target_value: null,
             }),
+        reminder_enabled: reminderEnabled,
+        reminder_time: reminderEnabled ? (reminderTime ? `${reminderTime}:00` : null) : null,
       };
       await onSubmit(payload);
       onClose();
@@ -230,6 +249,8 @@ export const HabitFormBottomSheet: React.FC<HabitFormBottomSheetProps> = ({
           'habit_type',
           'unit',
           'target_value',
+          'reminder_enabled',
+          'reminder_time',
         ]);
 
         for (const [key, val] of Object.entries(err.data)) {
@@ -741,6 +762,88 @@ export const HabitFormBottomSheet: React.FC<HabitFormBottomSheetProps> = ({
               </p>
             )}
           </fieldset>
+
+          {/* Reminder Toggle & Time Picker */}
+          <div className="space-y-3 pb-6">
+            <div className="flex items-center justify-between p-3.5 rounded-xl border border-slate-200 bg-slate-50/60">
+              <div className="min-w-0 flex-1 pr-3">
+                <span id="habit-reminder-label" className="block text-xs font-semibold text-slate-800">
+                  Remind me if not done
+                </span>
+                <span className="block text-[11px] text-slate-500">
+                  Receive an email reminder if this habit isn't completed yet.
+                </span>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={reminderEnabled}
+                aria-labelledby="habit-reminder-label"
+                onClick={() => {
+                  setReminderEnabled(!reminderEnabled);
+                  if (fieldErrors.reminder_time) {
+                    setFieldErrors((prev) => {
+                      const next = { ...prev };
+                      delete next.reminder_time;
+                      return next;
+                    });
+                  }
+                }}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                  reminderEnabled ? 'bg-blue-600' : 'bg-slate-300'
+                }`}
+              >
+                <span
+                  aria-hidden="true"
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                    reminderEnabled ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {reminderEnabled && (
+              <div className="space-y-1.5 animate-in fade-in duration-150">
+                <label
+                  htmlFor="habit-reminder-time"
+                  className="block text-xs font-bold text-slate-700"
+                >
+                  Reminder Time
+                </label>
+                <input
+                  id="habit-reminder-time"
+                  type="time"
+                  step={900}
+                  value={reminderTime}
+                  onChange={(e) => {
+                    setReminderTime(e.target.value);
+                    if (fieldErrors.reminder_time) {
+                      setFieldErrors((prev) => {
+                        const next = { ...prev };
+                        delete next.reminder_time;
+                        return next;
+                      });
+                    }
+                  }}
+                  aria-invalid={!!fieldErrors.reminder_time}
+                  aria-describedby={fieldErrors.reminder_time ? 'habit-reminder-time-error' : undefined}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-base sm:text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+                />
+                <p className="text-[11px] text-slate-500">
+                  Select a time in 15-minute steps (:00, :15, :30, :45).
+                </p>
+                {fieldErrors.reminder_time && (
+                  <p
+                    id="habit-reminder-time-error"
+                    data-form-error="true"
+                    className="text-[11px] font-medium text-red-600 animate-in fade-in"
+                  >
+                    {fieldErrors.reminder_time}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Bottom Actions */}
           <div className="pt-3 pb-[calc(0.5rem+env(safe-area-inset-bottom,0px))] sticky bottom-0 bg-white border-t border-slate-100 flex gap-2.5">

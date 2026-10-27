@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Habit } from '../types/habit';
-import { Check, MoreHorizontal, Edit, Archive, Trash2, Plus, Minus } from 'lucide-react';
+import { Check, MoreHorizontal, Edit, Archive, Trash2, Plus, Minus, Bell } from 'lucide-react';
 
 interface HabitCardProps {
   habit: Habit;
@@ -208,6 +208,16 @@ export const HabitCard: React.FC<HabitCardProps> = ({
             >
               best {habit.longest_streak}d
             </span>
+            {habit.reminder_enabled && habit.reminder_time && (
+              <span
+                data-testid="habit-reminder-badge"
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-medium bg-slate-100 text-slate-600 border border-slate-200/60"
+                aria-label={`Reminder set for ${habit.reminder_time.slice(0, 5)}`}
+              >
+                <Bell className="w-3 h-3 text-slate-500" aria-hidden="true" />
+                <span>{habit.reminder_time.slice(0, 5)}</span>
+              </span>
+            )}
           </div>
         </div>
       </div>
