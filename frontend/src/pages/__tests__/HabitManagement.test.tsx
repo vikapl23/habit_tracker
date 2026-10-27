@@ -555,4 +555,87 @@ describe('Habit Management (Step 5.4)', () => {
       screen.getByText(/changing the target will recalculate your streak/i)
     ).toBeInTheDocument();
   });
+
+  it('toggles reminder time picker visibility and creates habit with reminder', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(habitsApi, 'getAllHabits').mockResolvedValue([]);
+    const createSpy = vi.spyOn(habitsApi, 'createHabit').mockResolvedValue({
+      ...mockHabit,
+      id: 101,
+      name: 'Morning Meditation',
+      reminder_enabled: true,
+      reminder_time: '08:15:00',
+    });
+
+    renderDashboard();
+
+    // Open create sheet
+    const addBtn = await screen.findByRole('button', { name: /create your first habit|new habit/i });
+    await user.click(addBtn);
+
+    expect(await screen.findByRole('dialog', { name: /new habit/i })).toBeInTheDocument();
+
+    // Reminder toggle is initially off, time picker is hidden
+    const reminderToggle = screen.getByRole('switch', { name: /remind me if not done/i });
+    expect(reminderToggle).not.toBeChecked();
+    expect(screen.queryByLabelText(/reminder time/i)).not.toBeInTheDocument();
+
+    // Toggle reminder ON
+    await user.click(reminderToggle);
+    expect(reminderToggle).toBeChecked();
+
+    // Time picker is now visible with 15-minute step
+    const timeInput = screen.getByLabelText(/reminder time/i);
+    expect(timeInput).toBeInTheDocument();
+    expect(timeInput).toHaveAttribute('step', '900');
+
+    // Enter name
+    const nameInput = screen.getByLabelText(/habit name/i);
+    await user.type(nameInput, 'Morning Meditation');
+
+    // Change time to 08:15
+    await user.clear(timeInput);
+    await user.type(timeInput, '08:15');
+
+    // Submit
+    const submitBtn = screen.getByRole('button', { name: /create habit/i });
+    await user.click(submitBtn);
+
+    await waitFor(() => {
+      expect(createSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'Morning Meditation',
+          reminder_enabled: true,
+          reminder_time: '08:15:00',
+        })
+      );
+    });
+  });
+
+  it('validates reminder time minute must be 0, 15, 30, or 45', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(habitsApi, 'getAllHabits').mockResolvedValue([]);
+
+    renderDashboard();
+
+    const addBtn = await screen.findByRole('button', { name: /create your first habit|new habit/i });
+    await user.click(addBtn);
+
+    const nameInput = await screen.findByLabelText(/habit name/i);
+    await user.type(nameInput, 'Yoga');
+
+    const reminderToggle = screen.getByRole('switch', { name: /remind me if not done/i });
+    await user.click(reminderToggle);
+
+    const timeInput = screen.getByLabelText(/reminder time/i);
+    await user.clear(timeInput);
+    await user.type(timeInput, '08:10');
+
+    const submitBtn = screen.getByRole('button', { name: /create habit/i });
+    await user.click(submitBtn);
+
+    expect(
+      await screen.findByText(/reminder time minutes must be 0, 15, 30, or 45/i)
+    ).toBeInTheDocument();
+  });
 });

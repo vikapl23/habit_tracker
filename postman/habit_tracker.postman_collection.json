@@ -207,6 +207,86 @@
               }
             }
           ]
+        },
+        {
+          "name": "Get user profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/auth/profile/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "profile",
+                ""
+              ]
+            },
+            "description": "Отримує профіль користувача з налаштуваннями notifications_enabled та weekly_summary_enabled."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const res = pm.response.json();",
+                  "pm.test(\"Profile has notifications_enabled\", () => pm.expect(res).to.have.property(\"notifications_enabled\"));",
+                  "pm.test(\"Profile has weekly_summary_enabled\", () => pm.expect(res).to.have.property(\"weekly_summary_enabled\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update notification preferences (master switch)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/profile/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "profile",
+                ""
+              ]
+            },
+            "description": "Оновлює глобальний master switch email-сповіщень та weekly summary.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notifications_enabled\": true,\n  \"weekly_summary_enabled\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const res = pm.response.json();",
+                  "pm.test(\"notifications_enabled updated\", () => pm.expect(res.notifications_enabled).to.eql(true));",
+                  "pm.test(\"weekly_summary_enabled updated\", () => pm.expect(res.weekly_summary_enabled).to.eql(true));"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
@@ -332,6 +412,52 @@
                   "  pm.expect(data.frequency_days).to.eql([0, 1, 2, 3, 4]);",
                   "  pm.expect(data).to.have.property(\"is_scheduled_today\");",
                   "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create habit with reminder",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/habits/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "habits",
+                ""
+              ]
+            },
+            "description": "Створює звичку з налаштованим нагадуванням (reminder_enabled, reminder_time з кроком 15 хв).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"\\u0412\\u0435\\u0447\\u0456\\u0440\\u043d\\u0454 \\u0447\\u0438\\u0442\\u0430\\u043d\\u043d\\u044f\",\n  \"description\": \"20 \\u0441\\u0442\\u043e\\u0440\\u0456\\u043d\\u043e\\u043a \\u043a\\u043d\\u0438\\u0433\\u0438 \\u043f\\u0435\\u0440\\u0435\\u0434 \\u0441\\u043d\\u043e\\u043c\",\n  \"color\": \"#8B5CF6\",\n  \"emoji\": \"\\ud83d\\udcda\",\n  \"reminder_enabled\": true,\n  \"reminder_time\": \"21:30:00\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
+                  "const res = pm.response.json();",
+                  "pm.test(\"reminder_enabled is true\", () => pm.expect(res.reminder_enabled).to.eql(true));",
+                  "pm.test(\"reminder_time is 21:30:00\", () => pm.expect(res.reminder_time).to.include(\"21:30\"));"
                 ]
               }
             }
