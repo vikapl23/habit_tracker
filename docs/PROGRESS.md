@@ -17,7 +17,7 @@ This checklist tracks the ongoing development progress of the Habit Tracker proj
 | **Phase 6** | Docker & PostgreSQL Environment | `[x]` Completed | 4 / 4 |
 | **Phase 7** | Production Deployment (Render.com) | `[x]` Completed | 4 / 4 |
 | **Phase 8** | Measurable Habits with Units | `[x]` Completed | 5 / 5 |
-| **Phase 9** | Email Notifications via Mailgun | `[x]` Completed | 5 / 5 |
+| **Phase 9** | Email Notifications via Mailgun | `[x]` Completed | 6 / 6 |
 | **Phase 10** | AI Habit Coach Chatbot via Google Gemini | `[ ]` Not Started | 0 / 5 |
 | **Phase 11** | Webhooks (Pending Mentor Clarification) | `[ ]` Pending | 0 / 4 |
 
@@ -251,6 +251,12 @@ This checklist tracks the ongoing development progress of the Habit Tracker proj
 - [x] **9.5 Infrastructure & Documentation**
   - [x] Updated `render.yaml` with notification environment variables (`sync: false`).
   - [x] Documented notification architecture, usage, and commands in `README.md` and `docs/DECISIONS.md`.
+- [x] **9.6 Recurring Cron Workflow & Frontend Notification Settings**
+  - [x] GitHub Actions workflow `.github/workflows/notifications.yml` scheduled every 15 minutes (`*/15 * * * *`) + `workflow_dispatch` triggering `POST /api/v1/internal/send-notifications/` with `X-Cron-Token: ${{ secrets.CRON_TOKEN }}` and repository variable `BACKEND_URL`.
+  - [x] Resilient retry once after 60s for waking sleeping Render free-tier instances, immediate failure on HTTP 403 Forbidden, and response counts logging.
+  - [x] Add `SITE_URL` to `render.yaml` backend `envVars` (`sync: false`) and document that it must be the backend URL (used for unsubscribe links).
+  - [x] Frontend Profile "Notifications" section with toggles for daily reminder and weekly summary and reminder time picker (shown in user's timezone), saved via `PATCH /auth/profile/`.
+  - [x] Frontend test suite covering notifications rendering, dirty state, error handling, and profile persistence.
 
 ---
 

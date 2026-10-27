@@ -30,6 +30,9 @@ export interface UserProfile {
   email: string;
   timezone: string;
   timezone_auto?: boolean;
+  daily_reminder_enabled?: boolean;
+  daily_reminder_time?: string;
+  weekly_summary_enabled?: boolean;
 }
 
 // In-memory access token storage (C1: never persisted in localStorage)

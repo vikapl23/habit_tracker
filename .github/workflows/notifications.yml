@@ -1,0 +1,103 @@
+name: Notifications Dispatch
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+jobs:
+  dispatch:
+    name: Trigger Due Notifications
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Send Notification Dispatch Request
+        env:
+          BACKEND_URL: ${{ vars.BACKEND_URL }}
+          CRON_TOKEN: ${{ secrets.CRON_TOKEN }}
+        run: |
+          if [ -z "$BACKEND_URL" ]; then
+            echo "::error::BACKEND_URL repository variable is not set."
+            exit 1
+          fi
+
+          if [ -z "$CRON_TOKEN" ]; then
+            echo "::error::CRON_TOKEN repository secret is not set."
+            exit 1
+          fi
+
+          TARGET_URL="${BACKEND_URL%/}/api/v1/internal/send-notifications/"
+          echo "Dispatching notification trigger to: $TARGET_URL"
+
+          print_counts() {
+            local resp="$1"
+            if command -v jq >/dev/null 2>&1; then
+              local daily=$(echo "$resp" | jq -r '.daily_reminders_sent // empty' 2>/dev/null)
+              local weekly=$(echo "$resp" | jq -r '.weekly_summaries_sent // empty' 2>/dev/null)
+              local total=$(echo "$resp" | jq -r '.total_sent // empty' 2>/dev/null)
+              if [ -n "$total" ]; then
+                echo "Response counts -> daily_reminders_sent: $daily, weekly_summaries_sent: $weekly, total_sent: $total"
+                return
+              fi
+            fi
+            echo "Response counts: $resp"
+          }
+
+          # Attempt 1
+          echo "Attempt 1..."
+          RESPONSE_FILE=$(mktemp)
+          HTTP_STATUS=$(curl -s -S -o "$RESPONSE_FILE" -w "%{http_code}" --max-time 90 \
+            -X POST \
+            -H "X-Cron-Token: $CRON_TOKEN" \
+            -H "Content-Length: 0" \
+            "$TARGET_URL") || HTTP_STATUS="000"
+          BODY=$(cat "$RESPONSE_FILE")
+          rm -f "$RESPONSE_FILE"
+
+          echo "Attempt 1 status: HTTP $HTTP_STATUS"
+          echo "Response: $BODY"
+
+          # Fail the job immediately on 403 Forbidden without retry
+          if [ "$HTTP_STATUS" = "403" ]; then
+            echo "::error::Received HTTP 403 Forbidden. Invalid or missing CRON_TOKEN."
+            exit 1
+          fi
+
+          # Succeed if 2xx
+          if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]; then
+            echo "Notifications triggered successfully."
+            print_counts "$BODY"
+            exit 0
+          fi
+
+          # Retry once after 60 seconds on failure (Render free instance may be sleeping)
+          echo "Attempt 1 failed (HTTP $HTTP_STATUS). Free Render instance may be sleeping. Waiting 60 seconds to retry..."
+          sleep 60
+
+          # Attempt 2
+          echo "Attempt 2 (retry)..."
+          RESPONSE_FILE=$(mktemp)
+          HTTP_STATUS=$(curl -s -S -o "$RESPONSE_FILE" -w "%{http_code}" --max-time 90 \
+            -X POST \
+            -H "X-Cron-Token: $CRON_TOKEN" \
+            -H "Content-Length: 0" \
+            "$TARGET_URL") || HTTP_STATUS="000"
+          BODY=$(cat "$RESPONSE_FILE")
+          rm -f "$RESPONSE_FILE"
+
+          echo "Attempt 2 status: HTTP $HTTP_STATUS"
+          echo "Response: $BODY"
+
+          if [ "$HTTP_STATUS" = "403" ]; then
+            echo "::error::Received HTTP 403 Forbidden on retry. Invalid or missing CRON_TOKEN."
+            exit 1
+          fi
+
+          if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]; then
+            echo "Notifications triggered successfully on retry."
+            print_counts "$BODY"
+            exit 0
+          fi
+
+          echo "::error::Notifications trigger failed after retry with HTTP $HTTP_STATUS: $BODY"
+          exit 1

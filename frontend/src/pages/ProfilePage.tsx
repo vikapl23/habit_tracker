@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { User, Globe, LogOut, Check, Search } from 'lucide-react';
+import { User, Globe, Bell, LogOut, Check, Search } from 'lucide-react';
 import { BottomNavigation } from '../components/BottomNavigation';
 import { Toast, ToastMessage } from '../components/Toast';
 import { getErrorMessage } from '../utils/errorUtils';
@@ -66,6 +66,77 @@ export const ProfilePage: React.FC = () => {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Notification preferences state
+  const defaultDailyReminder = user?.daily_reminder_enabled ?? false;
+  const defaultReminderTime = user?.daily_reminder_time
+    ? user.daily_reminder_time.slice(0, 5)
+    : '20:00';
+  const defaultWeeklySummary = user?.weekly_summary_enabled ?? false;
+
+  const [dailyReminderEnabled, setDailyReminderEnabled] = useState<boolean>(defaultDailyReminder);
+  const [reminderTime, setReminderTime] = useState<string>(defaultReminderTime);
+  const [weeklySummaryEnabled, setWeeklySummaryEnabled] = useState<boolean>(defaultWeeklySummary);
+  const [isSavingNotifications, setIsSavingNotifications] = useState<boolean>(false);
+  const [notificationsSaveSuccess, setNotificationsSaveSuccess] = useState<boolean>(false);
+
+  // Sync state if user changes / finishes loading
+  useEffect(() => {
+    if (user) {
+      if (user.daily_reminder_enabled !== undefined) {
+        setDailyReminderEnabled(user.daily_reminder_enabled);
+      }
+      if (user.daily_reminder_time) {
+        setReminderTime(user.daily_reminder_time.slice(0, 5));
+      }
+      if (user.weekly_summary_enabled !== undefined) {
+        setWeeklySummaryEnabled(user.weekly_summary_enabled);
+      }
+    }
+  }, [user]);
+
+  const hasNotificationsChanged = useMemo(() => {
+    if (dailyReminderEnabled !== defaultDailyReminder) return true;
+    if (reminderTime !== defaultReminderTime) return true;
+    if (weeklySummaryEnabled !== defaultWeeklySummary) return true;
+    return false;
+  }, [
+    dailyReminderEnabled,
+    defaultDailyReminder,
+    reminderTime,
+    defaultReminderTime,
+    weeklySummaryEnabled,
+    defaultWeeklySummary,
+  ]);
+
+  const handleSaveNotifications = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (isSavingNotifications || !hasNotificationsChanged) return;
+
+    setIsSavingNotifications(true);
+    setNotificationsSaveSuccess(false);
+    try {
+      await updateProfile({
+        daily_reminder_enabled: dailyReminderEnabled,
+        daily_reminder_time: reminderTime,
+        weekly_summary_enabled: weeklySummaryEnabled,
+      });
+      setNotificationsSaveSuccess(true);
+      setToast({
+        id: String(Date.now()),
+        type: 'success',
+        message: 'Notification preferences updated.',
+      });
+    } catch (err: unknown) {
+      setToast({
+        id: String(Date.now()),
+        type: 'error',
+        message: getErrorMessage(err, 'Failed to update notification preferences.'),
+      });
+    } finally {
+      setIsSavingNotifications(false);
+    }
+  };
 
   // All known timezones with detected placed first
   const allTimezones = useMemo(() => {
@@ -330,6 +401,133 @@ export const ProfilePage: React.FC = () => {
                   </>
                 ) : (
                   <span>Save Timezone</span>
+                )}
+              </button>
+            </form>
+          </section>
+
+          {/* Notifications Settings Form */}
+          <section
+            aria-labelledby="notifications-settings-heading"
+            className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-sm space-y-4"
+          >
+            <div className="flex items-center gap-2">
+              <Bell className="w-4 h-4 text-blue-600" />
+              <h2 id="notifications-settings-heading" className="text-sm font-bold text-slate-900">
+                Notifications
+              </h2>
+            </div>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Configure daily email reminders for incomplete habits and your weekly summary report.
+            </p>
+
+            <form onSubmit={handleSaveNotifications} className="space-y-4">
+              {/* Daily Reminder Toggle */}
+              <div className="flex items-center justify-between p-3.5 rounded-xl border border-slate-200 bg-slate-50/60">
+                <div className="min-w-0 flex-1 pr-3">
+                  <span id="daily-reminder-label" className="block text-xs font-semibold text-slate-800">
+                    Daily reminder
+                  </span>
+                  <span className="block text-xs text-slate-500">
+                    Receive an email if you have incomplete scheduled habits for today.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={dailyReminderEnabled}
+                  aria-labelledby="daily-reminder-label"
+                  onClick={() => {
+                    setDailyReminderEnabled(!dailyReminderEnabled);
+                    setNotificationsSaveSuccess(false);
+                  }}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                    dailyReminderEnabled ? 'bg-blue-600' : 'bg-slate-300'
+                  }`}
+                >
+                  <span
+                    aria-hidden="true"
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                      dailyReminderEnabled ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* Reminder Time Picker */}
+              <div className="space-y-1.5 pt-1">
+                <label
+                  htmlFor="daily-reminder-time"
+                  className="block text-xs font-semibold text-slate-700"
+                >
+                  Reminder time
+                </label>
+                <input
+                  id="daily-reminder-time"
+                  type="time"
+                  value={reminderTime}
+                  onChange={(e) => {
+                    setReminderTime(e.target.value);
+                    setNotificationsSaveSuccess(false);
+                  }}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                />
+                <p className="text-[11px] text-slate-500">
+                  Daily reminder dispatch time in your local timezone ({normalizedUserTimezone || 'UTC'}).
+                </p>
+              </div>
+
+              {/* Weekly Summary Toggle */}
+              <div className="flex items-center justify-between p-3.5 rounded-xl border border-slate-200 bg-slate-50/60">
+                <div className="min-w-0 flex-1 pr-3">
+                  <span id="weekly-summary-label" className="block text-xs font-semibold text-slate-800">
+                    Weekly summary
+                  </span>
+                  <span className="block text-xs text-slate-500">
+                    Receive a summary of your streak and progress every Monday morning.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={weeklySummaryEnabled}
+                  aria-labelledby="weekly-summary-label"
+                  onClick={() => {
+                    setWeeklySummaryEnabled(!weeklySummaryEnabled);
+                    setNotificationsSaveSuccess(false);
+                  }}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                    weeklySummaryEnabled ? 'bg-blue-600' : 'bg-slate-300'
+                  }`}
+                >
+                  <span
+                    aria-hidden="true"
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                      weeklySummaryEnabled ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {notificationsSaveSuccess && (
+                <div className="flex items-center gap-1.5 text-xs font-medium text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-lg p-2.5">
+                  <Check className="w-4 h-4 shrink-0" />
+                  <span>Notification preferences saved successfully!</span>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={isSavingNotifications || !hasNotificationsChanged}
+                className="w-full min-h-[44px] flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 disabled:pointer-events-none text-white text-xs font-semibold shadow-sm transition"
+              >
+                {isSavingNotifications ? (
+                  <>
+                    <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <span>Save Notifications</span>
                 )}
               </button>
             </form>

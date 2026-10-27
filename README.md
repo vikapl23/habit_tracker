@@ -217,10 +217,12 @@ MAILGUN_API_KEY=key-xxxxxxxxxxxxxxxxxxxxxxxx
 MAILGUN_DOMAIN=mg.yourdomain.com
 MAILGUN_API_URL=https://api.mailgun.net/v3
 DEFAULT_FROM_EMAIL=Habit Tracker <noreply@yourdomain.com>
+SITE_URL=https://your-backend.onrender.com # Must be the backend URL (used for unsubscribe links)
 CRON_TOKEN=generate-a-secure-random-cron-token
 ```
 > [!NOTE]
 > If `MAILGUN_API_KEY` is not set, Django automatically uses the console email backend (`django.core.mail.backends.console.EmailBackend`) for local development, and `locmem` during automated test runs. API keys are never logged or committed.
+> `SITE_URL` must point to the backend URL (e.g. `http://localhost:8000` locally or `https://habit-tracker-backend.onrender.com` in production) as it is used to generate one-click unsubscribe links in notification emails.
 
 ### Triggering Notifications
 - **Management Command** (manual testing or worker execution):
@@ -235,6 +237,8 @@ CRON_TOKEN=generate-a-secure-random-cron-token
     -H "Content-Type: application/json"
   ```
   Authorized using constant-time verification. Returns `403 Forbidden` if missing or incorrect.
+- **GitHub Actions Scheduled Workflow**:
+  Automated dispatch runs every 15 minutes via [`.github/workflows/notifications.yml`](.github/workflows/notifications.yml) (`cron: "*/15 * * * *"` + `workflow_dispatch`). Automatically wakes sleeping Render instances by retrying once after 60 seconds on failure, aborts immediately on `403`, and logs dispatch counts.
 
 
 ---
@@ -262,6 +266,30 @@ The project is configured for one-click deployment via **Render Blueprint** ([`r
 1. **Database**: Managed PostgreSQL instance.
 2. **Backend**: Web Service built with `Dockerfile`, running `scripts/entrypoint.sh` for non-interactive migrations, static collection, automatic superuser creation, and Gunicorn.
 3. **Frontend**: Static Site built with Vite (`npm run build`) and SPA rewrite routing rules.
+
+### Render Environment Variables
+Configure the following in the Render dashboard for the services created by the blueprint:
+- **Backend Service** (`habit-tracker-backend`):
+  - `ALLOWED_HOSTS`: e.g. `habit-tracker-backend.onrender.com`
+  - `CORS_ALLOWED_ORIGINS`: e.g. `https://habit-tracker-frontend.onrender.com`
+  - `DJANGO_SUPERUSER_EMAIL`: Superuser email for initial login
+  - `DJANGO_SUPERUSER_PASSWORD`: Superuser password
+  - `MAILGUN_API_KEY`: Mailgun sending API key (e.g. `key-xxxxxxxx`)
+  - `MAILGUN_DOMAIN`: Mailgun sending domain (e.g. `mg.yourdomain.com`)
+  - `MAILGUN_API_URL`: Mailgun API URL (`https://api.mailgun.net/v3`)
+  - `DEFAULT_FROM_EMAIL`: Sender email header (e.g. `Habit Tracker <noreply@yourdomain.com>`)
+  - `CRON_TOKEN`: Secret token for authorizing `/api/v1/internal/send-notifications/`
+  - `SITE_URL`: **Must be the backend URL** (e.g. `https://habit-tracker-backend.onrender.com`), used for generating one-click unsubscribe links in emails
+- **Frontend Service** (`habit-tracker-frontend`):
+  - `VITE_API_URL`: Backend API endpoint URL (e.g. `https://habit-tracker-backend.onrender.com/api/v1`)
+
+### GitHub Actions Scheduled Notifications Setup
+Configure the following in **GitHub Repository Settings > Secrets and variables > Actions**:
+- **Repository Secrets**:
+  - `CRON_TOKEN`: The same secret token configured in the backend's `CRON_TOKEN` environment variable on Render.
+- **Repository Variables**:
+  - `BACKEND_URL`: The root URL of the deployed backend (e.g. `https://habit-tracker-backend.onrender.com`).
+
 
 ---
 

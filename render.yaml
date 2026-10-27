@@ -45,6 +45,8 @@ services:
         sync: false
       - key: CRON_TOKEN
         sync: false
+      - key: SITE_URL
+        sync: false # Must be the backend URL (e.g. https://habit-tracker-backend.onrender.com), used for unsubscribe links
 
   # Frontend Static Site (React + Vite)
   - type: web
@@ -72,4 +74,3 @@ services:
       - path: /*
         name: Referrer-Policy
         value: strict-origin-when-cross-origin
-

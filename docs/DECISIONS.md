@@ -273,6 +273,11 @@ Key design challenges:
 7. **Protected Internal Endpoint & Management Command**:
    - `POST /api/v1/internal/send-notifications/` is guarded by `X-Cron-Token` constant-time verification (`secrets.compare_digest`).
    - Management command `python manage.py send_notifications [--force]` enables CLI and manual execution.
+8. **GitHub Actions Cron Dispatch & Sleeping Render Instance Resilience**:
+   - Automated cron dispatch runs every 15 minutes via `.github/workflows/notifications.yml` (`cron: "*/15 * * * *"` + `workflow_dispatch`), triggering `POST $BACKEND_URL/api/v1/internal/send-notifications/` with `X-Cron-Token: ${{ secrets.CRON_TOKEN }}`.
+   - Render free tier instances spin down after inactivity; the workflow catches non-2xx status codes (such as cold boot delays or gateway timeouts) and retries once after 60 seconds, allowing the free tier instance to wake up and finish execution cleanly.
+   - If `403 Forbidden` is returned, the workflow aborts immediately without retry to avoid hammering with bad credentials.
+   - `SITE_URL` is configured in `render.yaml` (`sync: false`) and must point to the backend URL to generate correct, valid one-click unsubscribe links in notification emails.
 
 ### Trade-offs & Implications
 - **Advantages**:
