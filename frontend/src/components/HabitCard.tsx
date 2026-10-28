@@ -111,17 +111,10 @@ export const HabitCard: React.FC<HabitCardProps> = ({
       <div className="flex items-center gap-3 min-w-0 flex-1">
         {/* Emoji tile: fixed 40x40, never overlapped */}
         <div
-          role="button"
-          tabIndex={0}
+          tabIndex={-1}
+          aria-hidden="true"
           onClick={handleInfoClick}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              handleInfoClick(e);
-            }
-          }}
-          aria-label={`View details for ${habit.name}`}
-          className="w-10 h-10 min-w-[40px] rounded-xl flex items-center justify-center text-xl shrink-0 transition-transform cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          className="w-10 h-10 min-w-[40px] rounded-xl flex items-center justify-center text-xl shrink-0 transition-transform cursor-pointer"
           style={{
             backgroundColor: `${accentColor}18`,
           }}
