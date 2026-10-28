@@ -107,8 +107,9 @@ export const HabitCard: React.FC<HabitCardProps> = ({
         borderLeftColor: accentColor,
       }}
     >
-      {/* Left side: Emoji & Habit Information (Tap to view habit details) */}
+      {/* Left side: Emoji & Habit Information */}
       <div className="flex items-center gap-3 min-w-0 flex-1">
+        {/* Emoji tile: fixed 40x40, never overlapped */}
         <div
           role="button"
           tabIndex={0}
@@ -120,19 +121,30 @@ export const HabitCard: React.FC<HabitCardProps> = ({
             }
           }}
           aria-label={`View details for ${habit.name}`}
-          className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg p-1 -m-1"
+          className="w-10 h-10 min-w-[40px] rounded-xl flex items-center justify-center text-xl shrink-0 transition-transform cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          style={{
+            backgroundColor: `${accentColor}18`,
+          }}
         >
-          <div
-            className="w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0 transition-transform"
-            style={{
-              backgroundColor: `${accentColor}18`,
-            }}
-            aria-hidden="true"
-          >
-            {habit.emoji || '🎯'}
-          </div>
+          {habit.emoji || '🎯'}
+        </div>
 
-          <div className="min-w-0 flex-1">
+        {/* Column: name (truncate, 1 line) on top; below it meta row */}
+        <div className="min-w-0 flex-1 flex flex-col justify-center">
+          {/* Detail navigation button (name) */}
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={handleInfoClick}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                handleInfoClick(e);
+              }
+            }}
+            aria-label={`View details for ${habit.name}`}
+            className="min-w-0 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded text-left"
+          >
             <h3
               className={`text-sm font-semibold truncate transition-colors ${
                 isChecked ? 'line-through text-slate-500' : 'text-slate-900'
@@ -141,83 +153,83 @@ export const HabitCard: React.FC<HabitCardProps> = ({
               {habit.name}
             </h3>
           </div>
-        </div>
 
-        {/* Measurable Progress display & Streaks (Adjacent sibling to details button) */}
-        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-          {isMeasurable ? (
-            isEditingExact ? (
-              <form
-                onSubmit={handleExactSubmit}
-                onClick={(e) => e.stopPropagation()}
-                className="flex items-center gap-1.5"
-              >
-                <input
-                  ref={exactInputRef}
-                  autoFocus
-                  type="number"
-                  step="any"
-                  min="0"
-                  max="100000"
-                  inputMode="decimal"
-                  aria-label={`Enter exact amount for ${habit.name}`}
-                  value={exactInput}
-                  onChange={(e) => setExactInput(e.target.value)}
-                  onFocus={(e) => e.target.select()}
-                  onKeyDown={(e) => {
+          {/* Meta row: amount button (measurable only) + 🔥 streak + best + 🔔 time, wrapping if needed */}
+          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+            {isMeasurable ? (
+              isEditingExact ? (
+                <form
+                  onSubmit={handleExactSubmit}
+                  onClick={(e) => e.stopPropagation()}
+                  className="flex items-center gap-1.5"
+                >
+                  <input
+                    ref={exactInputRef}
+                    autoFocus
+                    type="number"
+                    step="any"
+                    min="0"
+                    max="100000"
+                    inputMode="decimal"
+                    aria-label={`Enter exact amount for ${habit.name}`}
+                    value={exactInput}
+                    onChange={(e) => setExactInput(e.target.value)}
+                    onFocus={(e) => e.target.select()}
+                    onKeyDown={(e) => {
+                      e.stopPropagation();
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        saveExact();
+                      } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        setIsEditingExact(false);
+                      }
+                    }}
+                    onBlur={() => saveExact()}
+                    className="w-20 h-6 px-1.5 text-xs font-bold rounded border border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white select-text"
+                  />
+                  <span className="text-[11px] text-slate-500">/ {target} {habit.unit}</span>
+                </form>
+              ) : (
+                <button
+                  type="button"
+                  onClick={(e) => {
                     e.stopPropagation();
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      saveExact();
-                    } else if (e.key === 'Escape') {
-                      e.preventDefault();
-                      setIsEditingExact(false);
-                    }
+                    setIsEditingExact(true);
                   }}
-                  onBlur={() => saveExact()}
-                  className="w-20 h-6 px-1.5 text-xs font-bold rounded border border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white select-text"
-                />
-                <span className="text-[11px] text-slate-500">/ {target} {habit.unit}</span>
-              </form>
-            ) : (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsEditingExact(true);
-                }}
-                aria-label={`Current amount ${todayValue} of ${target} ${habit.unit}. Tap to enter exact amount`}
-                className="text-xs font-bold text-blue-600 hover:text-blue-800 transition py-0.5 px-1 -mx-1 rounded hover:bg-blue-50 min-h-[28px] inline-flex items-center"
-              >
-                {todayValue} / {target} {habit.unit}
-              </button>
-            )
-          ) : null}
+                  aria-label={`Current amount ${todayValue} of ${target} ${habit.unit}. Tap to enter exact amount`}
+                  className="text-xs font-bold text-blue-600 hover:text-blue-800 transition py-0.5 px-1 -mx-1 rounded hover:bg-blue-50 min-h-[28px] inline-flex items-center"
+                >
+                  {todayValue} / {target} {habit.unit}
+                </button>
+              )
+            ) : null}
 
-          {/* Streaks Badges */}
-          <div className="flex items-center gap-1.5">
-            <span
-              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200/60"
-              aria-label={`Current streak ${habit.current_streak} days`}
-            >
-              🔥 {habit.current_streak}
-            </span>
-            <span
-              className="text-[11px] font-medium text-slate-500"
-              aria-label={`Longest streak ${habit.longest_streak} days`}
-            >
-              best {habit.longest_streak}d
-            </span>
-            {habit.reminder_enabled && habit.reminder_time && (
+            {/* Streaks Badges */}
+            <div className="flex items-center gap-1.5">
               <span
-                data-testid="habit-reminder-badge"
-                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-medium bg-slate-100 text-slate-600 border border-slate-200/60"
-                aria-label={`Reminder set for ${habit.reminder_time.slice(0, 5)}`}
+                className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200/60"
+                aria-label={`Current streak ${habit.current_streak} days`}
               >
-                <Bell className="w-3 h-3 text-slate-500" aria-hidden="true" />
-                <span>{habit.reminder_time.slice(0, 5)}</span>
+                🔥 {habit.current_streak}
               </span>
-            )}
+              <span
+                className="text-[11px] font-medium text-slate-500"
+                aria-label={`Longest streak ${habit.longest_streak} days`}
+              >
+                best {habit.longest_streak}d
+              </span>
+              {habit.reminder_enabled && habit.reminder_time && (
+                <span
+                  data-testid="habit-reminder-badge"
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-medium bg-slate-100 text-slate-600 border border-slate-200/60"
+                  aria-label={`Reminder set for ${habit.reminder_time.slice(0, 5)}`}
+                >
+                  <Bell className="w-3 h-3 text-slate-500" aria-hidden="true" />
+                  <span>{habit.reminder_time.slice(0, 5)}</span>
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -231,13 +243,13 @@ export const HabitCard: React.FC<HabitCardProps> = ({
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                if (!disabled) {
+                if (!disabled && todayValue > 0) {
                   onToggle(habit, { value: 1, action: 'uncheck' });
                 }
               }}
               aria-label={`Decrease ${habit.name}`}
               disabled={disabled || todayValue <= 0}
-              className="min-w-[44px] min-h-[44px] flex items-center justify-center -m-1.5 disabled:opacity-40 disabled:cursor-not-allowed group focus:outline-none"
+              className="w-11 h-11 min-w-[44px] min-h-[44px] flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed group focus:outline-none"
             >
               <div className="w-7 h-7 rounded-full flex items-center justify-center text-slate-600 group-hover:text-slate-900 bg-slate-100 group-hover:bg-slate-200 active:scale-95 transition pointer-events-none">
                 <Minus className="w-3.5 h-3.5" />
@@ -245,8 +257,8 @@ export const HabitCard: React.FC<HabitCardProps> = ({
             </button>
 
             {/* Progress Ring with (+) button or tap to check */}
-            <div className="relative w-8 h-8 flex items-center justify-center">
-              <svg className="w-8 h-8 -rotate-90 pointer-events-none" viewBox="0 0 36 36">
+            <div className="relative w-11 h-11 min-w-[44px] min-h-[44px] flex items-center justify-center">
+              <svg className="absolute w-8 h-8 -rotate-90 pointer-events-none" viewBox="0 0 36 36">
                 <circle
                   cx="18"
                   cy="18"
@@ -279,7 +291,7 @@ export const HabitCard: React.FC<HabitCardProps> = ({
                 }}
                 disabled={disabled}
                 aria-label={`Add 1 ${habit.unit || ''} to ${habit.name}`}
-                className="absolute inset-0 m-auto min-w-[44px] min-h-[44px] -m-2 flex items-center justify-center group focus:outline-none"
+                className="w-11 h-11 min-w-[44px] min-h-[44px] flex items-center justify-center group focus:outline-none"
               >
                 <div className="w-6 h-6 rounded-full flex items-center justify-center text-slate-700 group-hover:text-blue-600 active:scale-95 transition pointer-events-none">
                   {isChecked ? (
@@ -303,7 +315,7 @@ export const HabitCard: React.FC<HabitCardProps> = ({
             aria-disabled={disabled}
             aria-label={`Toggle ${habit.name}, currently ${isChecked ? 'completed' : 'incomplete'}`}
             aria-pressed={isChecked}
-            className={`min-w-[44px] min-h-[44px] -m-2 flex items-center justify-center rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
+            className={`w-11 h-11 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
               disabled ? 'opacity-60 cursor-not-allowed' : ''
             }`}
           >
@@ -328,7 +340,7 @@ export const HabitCard: React.FC<HabitCardProps> = ({
               aria-label={`More options for ${habit.name}`}
               aria-haspopup="menu"
               aria-expanded={isMenuOpen}
-              className="min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition"
+              className="w-11 h-11 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition"
             >
               <MoreHorizontal className="w-5 h-5" />
             </button>

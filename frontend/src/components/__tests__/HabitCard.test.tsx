@@ -157,4 +157,51 @@ describe('HabitCard', () => {
 
     expect(screen.queryByTestId('habit-reminder-badge')).not.toBeInTheDocument();
   });
+
+  it('renders habit name for measurable habits', () => {
+    render(<HabitCard habit={measurableHabit} onToggle={vi.fn()} />);
+    expect(screen.getByRole('heading', { level: 3, name: 'Read Pages' })).toBeInTheDocument();
+  });
+
+  it('truncates long habit name and displays long units without breaking structure', () => {
+    const longHabit: Habit = {
+      ...measurableHabit,
+      name: 'Read 20 pages of a book every evening',
+      unit: 'kilometers',
+      today_value: 0,
+      target_value: 5,
+    };
+    render(<HabitCard habit={longHabit} onToggle={vi.fn()} />);
+
+    const heading = screen.getByRole('heading', { level: 3, name: 'Read 20 pages of a book every evening' });
+    expect(heading).toBeInTheDocument();
+    expect(heading.className).toContain('truncate');
+
+    expect(screen.getByText(/0 \/ 5 kilometers/i)).toBeInTheDocument();
+  });
+
+  it('disables quick decrement button when value is 0', async () => {
+    const handleToggle = vi.fn();
+    const user = userEvent.setup();
+    const zeroHabit: Habit = {
+      ...measurableHabit,
+      today_value: 0,
+    };
+    render(<HabitCard habit={zeroHabit} onToggle={handleToggle} />);
+
+    const decButton = screen.getByRole('button', { name: /Decrease Read Pages/i });
+    expect(decButton).toBeDisabled();
+
+    await user.click(decButton);
+    expect(handleToggle).not.toHaveBeenCalled();
+  });
+
+  it('aligns "+" button as a normal 44x44 tap target without -m-2', () => {
+    render(<HabitCard habit={measurableHabit} onToggle={vi.fn()} />);
+
+    const incButton = screen.getByRole('button', { name: /Add 1 pages to Read Pages/i });
+    expect(incButton.className).toMatch(/min-w-\[44px\]/);
+    expect(incButton.className).toMatch(/min-h-\[44px\]/);
+    expect(incButton.className).not.toMatch(/-m-2/);
+  });
 });
