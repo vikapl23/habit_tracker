@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     "apps.accounts.apps.AccountsConfig",
     "apps.habits.apps.HabitsConfig",
     "apps.notifications.apps.NotificationsConfig",
+    "apps.coach.apps.CoachConfig",
 ]
 
 AUTH_USER_MODEL = "accounts.User"
@@ -169,3 +170,10 @@ if MAILGUN_API_KEY:
 else:
     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
     ANYMAIL = {}
+
+# Google Cloud Vertex AI & AI Coach Configuration
+GOOGLE_CLOUD_PROJECT = env("GOOGLE_CLOUD_PROJECT", default="")
+GOOGLE_CLOUD_LOCATION = env("GOOGLE_CLOUD_LOCATION", default="us-central1")
+GEMINI_MODEL = env("GEMINI_MODEL", default="gemini-2.5-flash")
+GOOGLE_APPLICATION_CREDENTIALS = env("GOOGLE_APPLICATION_CREDENTIALS", default="")
+COACH_DAILY_MESSAGE_LIMIT = env.int("COACH_DAILY_MESSAGE_LIMIT", default=20)

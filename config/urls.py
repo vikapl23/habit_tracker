@@ -12,4 +12,5 @@ urlpatterns = [
     path("api/v1/auth/", include("apps.accounts.urls")),
     path("api/v1/", include("apps.notifications.urls")),
     path("api/v1/", include("apps.habits.urls")),
+    path("api/v1/coach/", include("apps.coach.urls")),
 ]

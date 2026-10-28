@@ -272,17 +272,17 @@ This checklist tracks the ongoing development progress of the Habit Tracker proj
 ---
 
 ### Phase 10: AI Habit Coach Chatbot via Google Gemini
-- [ ] **10.1 App Scaffolding, Data Models & Migrations (`apps.coach`) (TDD)**
-  - [ ] Create `apps.coach` app with `ChatMessage` and `PendingAction` models.
-  - [ ] Configure `PendingAction` status (`pending`, `confirmed`, `cancelled`, `expired`) and 15-minute expiration.
-  - [ ] Migration and Django admin registration.
-- [ ] **10.2 Backend Advisor Service, Daily Quota & Messages Endpoints (TDD)**
-  - [ ] Google Cloud Vertex AI client using official `google-genai` SDK (`vertexai=True`).
-  - [ ] Configuration: `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION`, `GEMINI_MODEL`, `GOOGLE_APPLICATION_CREDENTIALS` (fallback to 503 if unconfigured).
-  - [ ] Compact context builder: active habits (name, type, unit/target, frequency, streaks, 7/30d %, today's progress, reminder) + last 10 messages.
-  - [ ] Automatic language detection and prompt injection defenses (delimiters, system instruction boundaries).
-  - [ ] Rate limits: 1,000 characters per message (400), 20 messages per user per day (429), client timeout and upstream error handling (502 without saving assistant message).
-  - [ ] Endpoints: `GET /api/v1/coach/messages/`, `POST /api/v1/coach/messages/`, `DELETE /api/v1/coach/messages/`.
+- [x] **10.1 App Scaffolding, Data Models & Migrations (`apps.coach`) (TDD)**
+  - [x] Create `apps.coach` app with `ChatMessage` and `PendingAction` models.
+  - [x] Configure `PendingAction` status (`pending`, `confirmed`, `cancelled`, `expired`) and 15-minute expiration.
+  - [x] Migration and Django admin registration.
+- [x] **10.2 Backend Advisor Service, Daily Quota & Messages Endpoints (TDD)**
+  - [x] Google Cloud Vertex AI client using official `google-genai` SDK (`vertexai=True`).
+  - [x] Configuration: `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION`, `GEMINI_MODEL`, `GOOGLE_APPLICATION_CREDENTIALS` (fallback to 503 if unconfigured).
+  - [x] Compact context builder: active habits (name, type, unit/target, frequency, streaks, 7/30d %, today's progress, reminder) + last 10 messages.
+  - [x] Automatic language detection and prompt injection defenses (delimiters, system instruction boundaries).
+  - [x] Rate limits: 1,000 characters per message (400), 20 messages per user per day (429), client timeout and upstream error handling (502 without saving assistant message).
+  - [x] Endpoints: `GET /api/v1/coach/messages/`, `POST /api/v1/coach/messages/`, `DELETE /api/v1/coach/messages/`.
 - [ ] **10.3 Extensible Action Registry & Confirmation Endpoints (TDD)**
   - [ ] Pluggable `ActionRegistry` architecture (`BaseCoachAction` interface) supporting future Phase 12 subscription actions.
   - [ ] Gemini tool declarations: `create_habit`, `update_habit`, `archive_habit`.
