@@ -290,12 +290,12 @@ This checklist tracks the ongoing development progress of the Habit Tracker proj
   - [x] Endpoints: `POST /api/v1/coach/actions/{id}/confirm/` and `POST /api/v1/coach/actions/{id}/cancel/`.
   - [x] Domain service execution on confirmation (habit create, streak recalculation on update, archive).
   - [x] Single-use enforcement, ownership checks, and expiration validation.
-- [ ] **10.4 Frontend Coach Tab & Chat UI**
-  - [ ] Add "Coach" tab to `BottomNavigation.tsx` and configure route in `App.tsx`.
-  - [ ] Mobile-first `CoachPage.tsx` with auto-scrolling message bubbles.
-  - [ ] Suggested starter questions chips.
-  - [ ] Typing indicator, remaining messages counter (`18 / 20 left`), character limit indicator (`120 / 1000`).
-  - [ ] "Clear chat" confirmation dialog.
+- [x] **10.4 Frontend Coach Tab & Chat UI**
+  - [x] Add "Coach" tab to `BottomNavigation.tsx` and configure route in `App.tsx`.
+  - [x] Mobile-first `CoachPage.tsx` with auto-scrolling message bubbles.
+  - [x] Suggested starter questions chips.
+  - [x] Typing indicator, remaining messages counter (`18 / 20 left`), character limit indicator (`120 / 1000`).
+  - [x] "Clear chat" confirmation dialog.
 - [ ] **10.5 Frontend Action Cards & Confirmation Flow**
   - [ ] Interactive `ActionCard` component in chat message stream.
   - [ ] `[Confirm]` and `[Cancel]` buttons with loading spinners.
