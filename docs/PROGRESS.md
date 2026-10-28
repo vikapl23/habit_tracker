@@ -296,11 +296,11 @@ This checklist tracks the ongoing development progress of the Habit Tracker proj
   - [x] Suggested starter questions chips.
   - [x] Typing indicator, remaining messages counter (`18 / 20 left`), character limit indicator (`120 / 1000`).
   - [x] "Clear chat" confirmation dialog.
-- [ ] **10.5 Frontend Action Cards & Confirmation Flow**
-  - [ ] Interactive `ActionCard` component in chat message stream.
-  - [ ] `[Confirm]` and `[Cancel]` buttons with loading spinners.
-  - [ ] Action card status badges (pending, confirmed, cancelled, expired).
-  - [ ] Cache invalidation / dashboard refresh upon action confirmation.
+- [x] **10.5 Frontend Action Cards & Confirmation Flow**
+  - [x] Interactive `ActionCard` component in chat message stream.
+  - [x] `[Confirm]` and `[Cancel]` buttons with loading spinners.
+  - [x] Action card status badges (pending, confirmed, cancelled, expired).
+  - [x] Cache invalidation / dashboard refresh upon action confirmation.
 
 ---
 

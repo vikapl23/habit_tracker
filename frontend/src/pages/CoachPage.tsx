@@ -9,6 +9,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { BottomNavigation } from '../components/BottomNavigation';
+import { ActionCard } from '../components/ActionCard';
 import { coachApi } from '../api/coach';
 import { ChatMessage } from '../types/coach';
 import { ApiError } from '../api/client';
@@ -104,6 +105,40 @@ export const CoachPage: React.FC = () => {
     } finally {
       setIsSending(false);
     }
+  };
+
+  const handleConfirmAction = async (actionId: number) => {
+    await coachApi.confirmAction(actionId);
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.pending_action && m.pending_action.id === actionId
+          ? {
+              ...m,
+              pending_action: {
+                ...m.pending_action,
+                status: 'confirmed',
+              },
+            }
+          : m
+      )
+    );
+  };
+
+  const handleCancelAction = async (actionId: number) => {
+    await coachApi.cancelAction(actionId);
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.pending_action && m.pending_action.id === actionId
+          ? {
+              ...m,
+              pending_action: {
+                ...m.pending_action,
+                status: 'cancelled',
+              },
+            }
+          : m
+      )
+    );
   };
 
   const handleClearChat = async () => {
@@ -241,6 +276,13 @@ export const CoachPage: React.FC = () => {
                     }`}
                   >
                     <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+                    {msg.pending_action && (
+                      <ActionCard
+                        action={msg.pending_action}
+                        onConfirm={handleConfirmAction}
+                        onCancel={handleCancelAction}
+                      />
+                    )}
                   </div>
                   <span className="text-[10px] text-slate-400 px-1 mt-1">
                     {formatMessageTime(msg.created_at)}

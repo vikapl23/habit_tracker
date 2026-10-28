@@ -215,4 +215,99 @@ describe('CoachPage (Step 10.4)', () => {
       expect(screen.queryByText('How do I start running?')).not.toBeInTheDocument();
     });
   });
+
+  describe('Action Cards (Step 10.5)', () => {
+    const mockActionResponse: CoachMessagesResponse = {
+      remaining_messages: 17,
+      daily_limit: 20,
+      results: [
+        {
+          id: 1,
+          role: 'user',
+          content: 'Create a meditation habit for me',
+          created_at: '2026-10-28T09:00:00Z',
+        },
+        {
+          id: 2,
+          role: 'assistant',
+          content: "I've proposed a daily meditation habit for you. Please confirm below!",
+          pending_action: {
+            id: 10,
+            action_type: 'create_habit',
+            summary: 'Create habit: Meditation, 5 minutes, daily, reminder 08:00',
+            status: 'pending',
+            expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+          },
+          created_at: '2026-10-28T09:00:03Z',
+        },
+      ],
+    };
+
+    it('renders pending action card inside assistant message', async () => {
+      vi.spyOn(coachApi, 'getMessages').mockResolvedValue(mockActionResponse);
+
+      renderCoachPage();
+
+      await waitFor(() => {
+        expect(
+          screen.getByText('Create habit: Meditation, 5 minutes, daily, reminder 08:00')
+        ).toBeInTheDocument();
+      });
+
+      expect(screen.getByRole('button', { name: /confirm/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /cancel/i })).toBeInTheDocument();
+    });
+
+    it('confirms action and updates status to confirmed', async () => {
+      const user = userEvent.setup();
+      vi.spyOn(coachApi, 'getMessages').mockResolvedValue(mockActionResponse);
+      const confirmSpy = vi.spyOn(coachApi, 'confirmAction').mockResolvedValue({
+        status: 'confirmed',
+        action_id: 10,
+        action_type: 'create_habit',
+        result: { habit_id: 42, name: 'Meditation' },
+      });
+
+      renderCoachPage();
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /confirm/i })).toBeInTheDocument();
+      });
+
+      const confirmBtn = screen.getByRole('button', { name: /confirm/i });
+      await user.click(confirmBtn);
+
+      expect(confirmSpy).toHaveBeenCalledWith(10);
+
+      await waitFor(() => {
+        expect(screen.queryByRole('button', { name: /confirm/i })).not.toBeInTheDocument();
+        expect(screen.getByText(/confirmed/i)).toBeInTheDocument();
+      });
+    });
+
+    it('cancels action and updates status to cancelled', async () => {
+      const user = userEvent.setup();
+      vi.spyOn(coachApi, 'getMessages').mockResolvedValue(mockActionResponse);
+      const cancelSpy = vi.spyOn(coachApi, 'cancelAction').mockResolvedValue({
+        status: 'cancelled',
+        action_id: 10,
+      });
+
+      renderCoachPage();
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /cancel/i })).toBeInTheDocument();
+      });
+
+      const cancelBtn = screen.getByRole('button', { name: /cancel/i });
+      await user.click(cancelBtn);
+
+      expect(cancelSpy).toHaveBeenCalledWith(10);
+
+      await waitFor(() => {
+        expect(screen.queryByRole('button', { name: /cancel/i })).not.toBeInTheDocument();
+        expect(screen.getByText(/cancelled/i)).toBeInTheDocument();
+      });
+    });
+  });
 });
