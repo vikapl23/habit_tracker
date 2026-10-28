@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import os
 import zoneinfo
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from typing import TYPE_CHECKING, Any
 
 from django.conf import settings
@@ -11,7 +11,8 @@ from django.utils import timezone
 from google import genai
 from google.genai import types
 
-from apps.coach.models import ChatMessage
+from apps.coach.models import ChatMessage, PendingAction
+from apps.coach.services.actions import default_action_registry
 from apps.coach.services.context import build_coach_context, format_conversation_history
 
 if TYPE_CHECKING:
@@ -112,7 +113,7 @@ class GeminiCoachService:
         user: User,
         user_message: str,
         tools: list[Any] | None = None,
-    ) -> str:
+    ) -> tuple[str, PendingAction | None]:
         if not self.is_configured():
             raise CoachUnavailableError(
                 "AI Habit Coach is not configured or currently unavailable."
@@ -142,13 +143,15 @@ class GeminiCoachService:
             )
         )
 
+        active_tools = tools if tools is not None else default_action_registry.get_tools()
+
         config_kwargs: dict[str, Any] = {
             "system_instruction": SYSTEM_INSTRUCTION,
             "temperature": 0.7,
             "max_output_tokens": 1000,
         }
-        if tools:
-            config_kwargs["tools"] = tools
+        if active_tools:
+            config_kwargs["tools"] = active_tools
 
         config = types.GenerateContentConfig(**config_kwargs)
 
@@ -159,7 +162,44 @@ class GeminiCoachService:
                 contents=contents,
                 config=config,
             )
-            return response.text or ""
         except Exception as e:
             logger.error("Vertex AI call failed: %s", e)
             raise CoachUpstreamError(f"Vertex AI call failed: {e}") from e
+
+        pending_action = None
+        assistant_text = ""
+        try:
+            assistant_text = response.text or ""
+        except Exception:
+            assistant_text = ""
+
+        function_calls = getattr(response, "function_calls", None)
+        if function_calls:
+            fc = function_calls[0]
+            action_handler = default_action_registry.get(fc.name)
+            if action_handler:
+                try:
+                    cleaned_payload = action_handler.validate(user, fc.args or {})
+                    summary = action_handler.get_summary(cleaned_payload)
+                    pending_action = PendingAction.objects.create(
+                        user=user,
+                        action_type=fc.name,
+                        payload=cleaned_payload,
+                        summary=summary,
+                        status=PendingAction.STATUS_PENDING,
+                        expires_at=timezone.now() + timedelta(minutes=15),
+                    )
+                    if not assistant_text:
+                        assistant_text = (
+                            f"I've proposed the following action for you: {summary}. "
+                            "Please confirm or cancel below!"
+                        )
+                except Exception as val_err:
+                    logger.warning("Action proposal validation failed: %s", val_err)
+                    if not assistant_text:
+                        assistant_text = (
+                            "I tried to prepare an action for you, but some parameters "
+                            "were invalid. Could you clarify your request?"
+                        )
+
+        return assistant_text, pending_action

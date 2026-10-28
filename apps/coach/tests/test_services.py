@@ -53,9 +53,10 @@ class TestCoachServices:
         mock_client.models.generate_content.return_value = mock_response
 
         service = GeminiCoachService()
-        reply = service.generate_reply(user, "How is my progress?")
+        reply, pending_action = service.generate_reply(user, "How is my progress?")
 
         assert reply == "Great job on your water habit! Keep it up."
+        assert pending_action is None
         mock_client.models.generate_content.assert_called_once()
         call_kwargs = mock_client.models.generate_content.call_args.kwargs
         assert call_kwargs["model"] == settings.GEMINI_MODEL
@@ -65,6 +66,35 @@ class TestCoachServices:
         assert "<user_context>" in last_content.parts[0].text
         assert "<user_message>" in last_content.parts[0].text
         assert "How is my progress?" in last_content.parts[0].text
+
+    @patch("apps.coach.services.client.genai.Client")
+    def test_generate_reply_with_function_call_creates_pending_action(
+        self, mock_client_cls, user, settings, tmp_path
+    ):
+        creds_file = tmp_path / "gcp-creds.json"
+        creds_file.write_text("{}")
+        settings.GOOGLE_CLOUD_PROJECT = "test-project"
+        settings.GOOGLE_APPLICATION_CREDENTIALS = str(creds_file)
+
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+        mock_response = MagicMock()
+        mock_response.text = ""
+        mock_fc = MagicMock()
+        mock_fc.name = "create_habit"
+        mock_fc.args = {"name": "Evening Stretch", "habit_type": "boolean"}
+        mock_response.function_calls = [mock_fc]
+        mock_client.models.generate_content.return_value = mock_response
+
+        service = GeminiCoachService()
+        reply, pending_action = service.generate_reply(user, "Add a stretch habit")
+
+        assert pending_action is not None
+        assert pending_action.action_type == "create_habit"
+        assert pending_action.status == "pending"
+        assert pending_action.payload["name"] == "Evening Stretch"
+        assert "Create habit: Evening Stretch" in pending_action.summary
+        assert "Evening Stretch" in reply
 
     @patch("apps.coach.services.client.genai.Client")
     def test_generate_reply_upstream_error(self, mock_client_cls, user, settings, tmp_path):

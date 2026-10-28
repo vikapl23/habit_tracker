@@ -283,13 +283,13 @@ This checklist tracks the ongoing development progress of the Habit Tracker proj
   - [x] Automatic language detection and prompt injection defenses (delimiters, system instruction boundaries).
   - [x] Rate limits: 1,000 characters per message (400), 20 messages per user per day (429), client timeout and upstream error handling (502 without saving assistant message).
   - [x] Endpoints: `GET /api/v1/coach/messages/`, `POST /api/v1/coach/messages/`, `DELETE /api/v1/coach/messages/`.
-- [ ] **10.3 Extensible Action Registry & Confirmation Endpoints (TDD)**
-  - [ ] Pluggable `ActionRegistry` architecture (`BaseCoachAction` interface) supporting future Phase 12 subscription actions.
-  - [ ] Gemini tool declarations: `create_habit`, `update_habit`, `archive_habit`.
-  - [ ] Proposal validation and `PendingAction` creation with 15-minute expiry.
-  - [ ] Endpoints: `POST /api/v1/coach/actions/{id}/confirm/` and `POST /api/v1/coach/actions/{id}/cancel/`.
-  - [ ] Domain service execution on confirmation (habit create, streak recalculation on update, archive).
-  - [ ] Single-use enforcement, ownership checks, and expiration validation.
+- [x] **10.3 Extensible Action Registry & Confirmation Endpoints (TDD)**
+  - [x] Pluggable `ActionRegistry` architecture (`BaseCoachAction` interface) supporting future Phase 12 subscription actions.
+  - [x] Gemini tool declarations: `create_habit`, `update_habit`, `archive_habit`.
+  - [x] Proposal validation and `PendingAction` creation with 15-minute expiry.
+  - [x] Endpoints: `POST /api/v1/coach/actions/{id}/confirm/` and `POST /api/v1/coach/actions/{id}/cancel/`.
+  - [x] Domain service execution on confirmation (habit create, streak recalculation on update, archive).
+  - [x] Single-use enforcement, ownership checks, and expiration validation.
 - [ ] **10.4 Frontend Coach Tab & Chat UI**
   - [ ] Add "Coach" tab to `BottomNavigation.tsx` and configure route in `App.tsx`.
   - [ ] Mobile-first `CoachPage.tsx` with auto-scrolling message bubbles.

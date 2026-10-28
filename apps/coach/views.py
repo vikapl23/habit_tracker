@@ -4,6 +4,8 @@ import logging
 
 from django.conf import settings
 from django.db import transaction
+from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -16,6 +18,7 @@ from apps.coach.serializers import (
     ChatMessageSerializer,
     CoachMessageInputSerializer,
 )
+from apps.coach.services.actions import default_action_registry
 from apps.coach.services.client import (
     CoachUnavailableError,
     CoachUpstreamError,
@@ -88,7 +91,7 @@ class CoachMessagesView(APIView):
             )
 
         try:
-            assistant_reply = coach_service.generate_reply(request.user, content)
+            assistant_reply, pending_action = coach_service.generate_reply(request.user, content)
         except CoachUnavailableError as e:
             return Response(
                 {"detail": str(e)},
@@ -120,6 +123,7 @@ class CoachMessagesView(APIView):
                 user=request.user,
                 role=ChatMessage.ROLE_ASSISTANT,
                 content=assistant_reply,
+                pending_action=pending_action,
             )
 
         new_remaining = get_remaining_daily_quota(request.user)
@@ -146,3 +150,87 @@ class CoachMessagesView(APIView):
             ).update(status=PendingAction.STATUS_CANCELLED)
 
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class CoachActionConfirmView(APIView):
+    """
+    Confirm and execute a pending coach action.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="Confirm and execute a pending coach action",
+        responses={200: None},
+    )
+    def post(self, request: Request, pk: int) -> Response:
+        action = get_object_or_404(PendingAction, id=pk, user=request.user)
+
+        if action.status != PendingAction.STATUS_PENDING:
+            return Response(
+                {"detail": f"Action cannot be confirmed because it is {action.status}."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if action.is_expired():
+            action.status = PendingAction.STATUS_EXPIRED
+            action.save(update_fields=["status"])
+            return Response(
+                {"detail": "This action has expired (15 minute validity window)."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        handler = default_action_registry.get(action.action_type)
+        if not handler:
+            return Response(
+                {"detail": f"Unknown action type: {action.action_type}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        with transaction.atomic():
+            result = handler.execute(request.user, action.payload)
+            action.status = PendingAction.STATUS_CONFIRMED
+            action.executed_at = timezone.now()
+            action.save(update_fields=["status", "executed_at"])
+
+        return Response(
+            {
+                "status": "confirmed",
+                "action_id": action.id,
+                "action_type": action.action_type,
+                "result": result,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class CoachActionCancelView(APIView):
+    """
+    Cancel a pending coach action.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="Cancel a pending coach action",
+        responses={200: None},
+    )
+    def post(self, request: Request, pk: int) -> Response:
+        action = get_object_or_404(PendingAction, id=pk, user=request.user)
+
+        if action.status != PendingAction.STATUS_PENDING:
+            return Response(
+                {"detail": f"Action cannot be cancelled because it is {action.status}."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        action.status = PendingAction.STATUS_CANCELLED
+        action.save(update_fields=["status"])
+
+        return Response(
+            {
+                "status": "cancelled",
+                "action_id": action.id,
+            },
+            status=status.HTTP_200_OK,
+        )

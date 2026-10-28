@@ -70,7 +70,10 @@ class TestCoachMessagesAPI:
     @patch("apps.coach.views.GeminiCoachService.generate_reply")
     @patch("apps.coach.views.GeminiCoachService.is_configured", return_value=True)
     def test_post_message_success(self, mock_is_configured, mock_generate_reply, api_client, user):
-        mock_generate_reply.return_value = "Great question! Start with 5 minutes."
+        mock_generate_reply.return_value = (
+            "Great question! Start with 5 minutes.",
+            None,
+        )
 
         response = api_client.post(self.url, {"content": "How do I build a habit?"})
         assert response.status_code == status.HTTP_201_CREATED
@@ -80,10 +83,37 @@ class TestCoachMessagesAPI:
             response.data["assistant_message"]["content"] == "Great question! Start with 5 minutes."
         )
         assert response.data["assistant_message"]["role"] == "assistant"
+        assert response.data["assistant_message"]["pending_action"] is None
         assert response.data["remaining_messages"] == 19
 
         # Ensure saved to DB
         assert ChatMessage.objects.filter(user=user).count() == 2
+
+    @patch("apps.coach.views.GeminiCoachService.generate_reply")
+    @patch("apps.coach.views.GeminiCoachService.is_configured", return_value=True)
+    def test_post_message_with_action_proposal(
+        self, mock_is_configured, mock_generate_reply, api_client, user
+    ):
+        pending_action = PendingAction.objects.create(
+            user=user,
+            action_type="create_habit",
+            payload={"name": "Meditation", "habit_type": "boolean"},
+            summary="Create habit: Meditation, daily",
+            expires_at=timezone.now() + timedelta(minutes=15),
+        )
+        mock_generate_reply.return_value = (
+            "I've proposed a new habit for you!",
+            pending_action,
+        )
+
+        response = api_client.post(self.url, {"content": "Create a meditation habit"})
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data["assistant_message"]["pending_action"]["id"] == pending_action.id
+        assert response.data["assistant_message"]["pending_action"]["action_type"] == "create_habit"
+        assert (
+            response.data["assistant_message"]["pending_action"]["summary"]
+            == "Create habit: Meditation, daily"
+        )
 
     @patch("apps.coach.views.GeminiCoachService.generate_reply")
     @patch("apps.coach.views.GeminiCoachService.is_configured", return_value=True)
@@ -130,3 +160,131 @@ class TestCoachMessagesAPI:
         assert ChatMessage.objects.filter(user=user).count() == 0
         action.refresh_from_db()
         assert action.status == PendingAction.STATUS_CANCELLED
+
+
+@pytest.mark.django_db
+class TestCoachActionConfirmAPI:
+    def test_unauthenticated_rejected(self, unauthenticated_client):
+        response = unauthenticated_client.post("/api/v1/coach/actions/1/confirm/")
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_confirm_action_not_found(self, api_client):
+        response = api_client.post("/api/v1/coach/actions/999/confirm/")
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_confirm_other_user_action_returns_404(self, api_client, other_user):
+        action = PendingAction.objects.create(
+            user=other_user,
+            action_type="create_habit",
+            payload={"name": "Secret", "habit_type": "boolean"},
+            summary="Create habit: Secret",
+            expires_at=timezone.now() + timedelta(minutes=15),
+        )
+        response = api_client.post(f"/api/v1/coach/actions/{action.id}/confirm/")
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_confirm_create_habit_action_success(self, api_client, user):
+        from apps.habits.models import Habit
+
+        action = PendingAction.objects.create(
+            user=user,
+            action_type="create_habit",
+            payload={
+                "name": "Evening Journaling",
+                "habit_type": "boolean",
+                "frequency_type": "daily",
+                "reminder_enabled": True,
+                "reminder_time": "22:00",
+            },
+            summary="Create habit: Evening Journaling, daily, reminder 22:00",
+            expires_at=timezone.now() + timedelta(minutes=15),
+        )
+
+        response = api_client.post(f"/api/v1/coach/actions/{action.id}/confirm/")
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["status"] == "confirmed"
+        assert response.data["action_id"] == action.id
+        assert response.data["result"]["name"] == "Evening Journaling"
+
+        action.refresh_from_db()
+        assert action.status == PendingAction.STATUS_CONFIRMED
+        assert action.executed_at is not None
+
+        habit = Habit.objects.get(id=response.data["result"]["habit_id"])
+        assert habit.name == "Evening Journaling"
+        assert habit.user == user
+
+    def test_confirm_already_confirmed_action_fails(self, api_client, user):
+        action = PendingAction.objects.create(
+            user=user,
+            action_type="create_habit",
+            payload={"name": "Reading"},
+            status=PendingAction.STATUS_CONFIRMED,
+            expires_at=timezone.now() + timedelta(minutes=15),
+        )
+        response = api_client.post(f"/api/v1/coach/actions/{action.id}/confirm/")
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "cannot be confirmed" in response.data["detail"]
+
+    def test_confirm_expired_action_fails(self, api_client, user):
+        action = PendingAction.objects.create(
+            user=user,
+            action_type="create_habit",
+            payload={"name": "Reading"},
+            status=PendingAction.STATUS_PENDING,
+            expires_at=timezone.now() - timedelta(minutes=1),
+        )
+        response = api_client.post(f"/api/v1/coach/actions/{action.id}/confirm/")
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "expired" in response.data["detail"].lower()
+
+        action.refresh_from_db()
+        assert action.status == PendingAction.STATUS_EXPIRED
+
+
+@pytest.mark.django_db
+class TestCoachActionCancelAPI:
+    def test_unauthenticated_rejected(self, unauthenticated_client):
+        response = unauthenticated_client.post("/api/v1/coach/actions/1/cancel/")
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_cancel_action_not_found(self, api_client):
+        response = api_client.post("/api/v1/coach/actions/999/cancel/")
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_cancel_other_user_action_returns_404(self, api_client, other_user):
+        action = PendingAction.objects.create(
+            user=other_user,
+            action_type="create_habit",
+            payload={"name": "Other Habit"},
+            expires_at=timezone.now() + timedelta(minutes=15),
+        )
+        response = api_client.post(f"/api/v1/coach/actions/{action.id}/cancel/")
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_cancel_action_success(self, api_client, user):
+        action = PendingAction.objects.create(
+            user=user,
+            action_type="create_habit",
+            payload={"name": "Reading"},
+            expires_at=timezone.now() + timedelta(minutes=15),
+        )
+        response = api_client.post(f"/api/v1/coach/actions/{action.id}/cancel/")
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["status"] == "cancelled"
+        assert response.data["action_id"] == action.id
+
+        action.refresh_from_db()
+        assert action.status == PendingAction.STATUS_CANCELLED
+
+    def test_cancel_non_pending_action_fails(self, api_client, user):
+        action = PendingAction.objects.create(
+            user=user,
+            action_type="create_habit",
+            payload={"name": "Reading"},
+            status=PendingAction.STATUS_CONFIRMED,
+            expires_at=timezone.now() + timedelta(minutes=15),
+        )
+        response = api_client.post(f"/api/v1/coach/actions/{action.id}/cancel/")
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "cannot be cancelled" in response.data["detail"]
