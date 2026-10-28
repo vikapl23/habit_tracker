@@ -375,6 +375,114 @@ Rather than executing synchronous O(N) external network calls in a foreground we
   - Introduces infrastructure dependencies (Redis broker and dedicated background worker processes).
   - Deferred to Phase 2 to avoid premature infrastructure overhead while user scale is covered by bulk database queries and CLI management command execution.
 
+## ADR 011: AI Habit Coach Architecture: Google Cloud Vertex AI, Two-Stage Advisor & Extensible Action Registry with Confirmation
+
+### Date
+2026-10-28
+
+### Context & Problem
+Phase 10 introduces an intelligent AI habit coach chatbot. Habit formation requires personalized feedback, streak recovery advice, habit stacking suggestions, and low-friction habit adjustments. However, integrating an LLM into a multi-tenant habit tracker introduces key architectural and security challenges:
+1. **Data Integrity & Direct Mutation Hazards**: If an LLM directly updates or deletes user habits, hallucinations or ambiguous user messages could silently corrupt user streaks, change targets, or delete historical check-in records.
+2. **Multi-Tenant Privacy & Prompt Injection**: User messages, habit names, and habit descriptions are untrusted inputs. Malicious inputs could attempt prompt injection (jailbreaks), extract other users' data, or force the model to leak internal system instructions.
+3. **Enterprise Model Access & Cloud Credentials**: Google Cloud Vertex AI provides enterprise SLAs, European/US data governance, and Gemini Flash model access via the official `google-genai` SDK (`vertexai=True`). Cloud service account credentials must be safely managed on Render (Secret Files) and local environments without ever being committed or logged. Missing credentials must gracefully degrade without crashing the app.
+4. **Future Extensibility**: In Phase 12, monetization and subscription management will introduce a `"start_subscription"` action (e.g., plan + billing period -> Stripe Checkout session). The action architecture must be cleanly decoupled and extensible without rewriting chat views or database tables.
+5. **Cost, Rate Limiting & Error Isolation**: Unbounded LLM queries risk rapid API credit exhaustion. Network timeouts or Vertex AI 5xx failures must not leave corrupted partial state (such as saving a user message without an assistant reply or deducting quota on failed API calls).
+
+### Decision
+
+#### 1. Google Cloud Vertex AI via Official `google-genai` SDK
+- **Official SDK**: Integrate the modern unified `google-genai` SDK:
+  ```python
+  from google import genai
+  from google.genai import types
+
+  client = genai.Client(
+      vertexai=True,
+      project=settings.GOOGLE_CLOUD_PROJECT,
+      location=settings.GOOGLE_CLOUD_LOCATION,
+  )
+  ```
+- **Configuration & Environment**:
+  - `GOOGLE_CLOUD_PROJECT`: GCP Project ID.
+  - `GOOGLE_CLOUD_LOCATION`: GCP Region (default: `us-central1`).
+  - `GEMINI_MODEL`: Model name (default: fast Gemini Flash model, e.g. `gemini-2.5-flash`).
+  - `GOOGLE_APPLICATION_CREDENTIALS`: Path to the service account JSON file. On Render, mounted via a Secret File at `/etc/secrets/gcp-credentials.json`.
+- **Graceful 503 Fallback & Zero Credential Logging**:
+  - Credentials and service account keys are strictly excluded from git and omitted from log formatters.
+  - If `GOOGLE_APPLICATION_CREDENTIALS` is unset, the file is missing, or `GOOGLE_CLOUD_PROJECT` is not configured, the coach endpoint immediately returns `HTTP 503 Service Unavailable` with:
+    `{"detail": "AI Habit Coach is not configured or currently unavailable."}`.
+
+#### 2. Two-Stage Interaction Pattern (Advisor + Confirmed Actions)
+- **Stage 1: Advisor (Read-Only Insights)**
+  - Answers questions exclusively about the authenticated user's OWN habits and progress.
+  - Context injection is compact and tightly structured:
+    - Active habits only (`is_archived=False`).
+    - Compact habit summary: name, type (`boolean` / `measurable`), unit & target (e.g. `8 glasses`, `5 km`, `N/A`), frequency (`daily` or custom weekdays `[0, 2, 4]`), current streak, longest streak, 7-day and 30-day completion %, today's progress (e.g. `completed` or `3/5 glasses (60%)`), and reminder time (`08:00` or `none`).
+    - Last 10 chat messages of the conversation for conversational continuity without token bloat.
+  - Automatic language matching: the model is instructed to detect the language of the user's message (e.g., English, Ukrainian, Spanish) and respond in the same language.
+  - Tone & Style: concise, supportive, practical, and action-oriented.
+- **Stage 2: Actions with Human-in-the-Loop Confirmation**
+  - The model can **PROPOSE** modifications using Vertex AI function calling / tool use:
+    - `create_habit(...)`
+    - `update_habit(...)`
+    - `archive_habit(...)`
+  - **The model NEVER modifies data directly**:
+    - When Gemini invokes a tool call, the backend validates the parameters against business rules and the current user's data (e.g., habit ownership, target values, reminder time restrictions).
+    - Upon valid proposal, the backend creates a `PendingAction` record (`status='pending'`, `expires_at=now + 15 min`).
+    - The API response returns the assistant's message alongside the pending action metadata.
+    - The frontend renders an interactive Action Card:
+      `"Create habit: Meditation, 5 minutes, daily, reminder 08:00 [Confirm] [Cancel]"`.
+    - Only when the user explicitly clicks `[Confirm]` does the backend execute the change via existing domain services (`HabitSerializer`, `update_habit` service to recalculate streaks, archive action).
+    - Tapping `[Cancel]` marks the action as `cancelled`.
+    - Pending actions expire automatically after 15 minutes and can be confirmed only once by their owner.
+
+#### 3. Extensible Action Registry Pattern (Open-Closed Principle)
+- To prepare for Phase 12 subscription actions (`start_subscription`) without modifying core chatbot logic, action handling is structured via a pluggable `ActionRegistry`:
+  ```python
+  class BaseCoachAction(abc.ABC):
+      action_type: str
+      @abc.abstractmethod
+      def get_tool_declaration(self) -> types.Tool: ...
+      @abc.abstractmethod
+      def validate(self, user, payload: dict) -> dict: ...
+      @abc.abstractmethod
+      def get_summary(self, payload: dict) -> str: ...
+      @abc.abstractmethod
+      def execute(self, user, payload: dict) -> dict: ...
+  ```
+- Built-in Phase 10 actions: `CreateHabitAction`, `UpdateHabitAction`, `ArchiveHabitAction`.
+- Phase 12 readiness: adding `StartSubscriptionAction` (plan + period -> Stripe Checkout URL) requires only registering the class in the registry, leaving models, serializers, and endpoints untouched.
+
+#### 4. Prompt Injection Defense & Multi-Tenant Isolation
+- **Strict Multi-Tenant Scoping**: All database queries for habits, streaks, check-in history, and chat messages strictly filter by `user=request.user`. User A can never inspect or modify User B's habits or history.
+- **Untrusted Input Wrapping**: Habit names, descriptions, and user messages are treated as untrusted data and wrapped with explicit XML-style delimiter tags (`<user_context>`, `<user_message>`).
+- **System Instruction Boundaries**:
+  - Gemini's `system_instruction` configuration explicitly defines persona boundaries.
+  - The model is instructed to strictly refuse off-topic requests (code execution, political discourse, general trivia, roleplay outside habit coaching).
+  - The model is strictly forbidden from revealing its system prompt, operational guidelines, or internal tool schemas under any adversarial prompt injection attempts.
+
+#### 5. Rate Limiting, Request Limits & Atomic Error Recovery
+- **Character Limit**: Input messages are validated to a maximum of 1,000 characters (`400 Bad Request` if exceeded).
+- **Daily Quota**: Users are allotted 20 messages per calendar day, evaluated using the user's local timezone date (`user.get_today()`, adhering to ADR 002). Exceeding this returns `HTTP 429 Too Many Requests`.
+- **Request Timeout & 502 Bad Gateway**:
+  - Vertex AI API calls use an explicit timeout (e.g., 20 seconds).
+  - Network timeouts or Vertex AI upstream errors catch safely and return `HTTP 502 Bad Gateway`.
+  - **No Partial State**: In the event of a 502 error, no assistant message is recorded, and the failed request does not deduct from the user's daily message quota.
+
+### Trade-offs & Implications
+
+- **Advantages**:
+  - **Zero Data Risk**: The AI cannot accidentally delete, update, or corrupt habits; users retain complete authority through explicit confirmations.
+  - **Extensible**: The Action Registry provides a clean extension point for Phase 12 subscriptions and future automation actions.
+  - **Enterprise Security**: Vertex AI provides enterprise privacy guarantees, and service credentials remain strictly isolated from client-facing bundles and git repositories.
+  - **Predictable Costs & Stability**: Daily quota (20/day) and 1,000-character input caps prevent denial-of-wallet and quota exhaustion.
+  - **Clean Error Handling**: 502 responses leave the conversation history intact and uncorrupted.
+
+- **Trade-offs**:
+  - **Action Confirmation Roundtrip**: Creating or updating habits via chat requires an extra user tap on the action card. This trade-off is intentional to prevent hallucination errors.
+  - **GCP Service Account Configuration**: Requires maintaining GCP service account credentials in local development and production (Render Secret Files). Fallback to 503 ensures local development without GCP credentials remains functional for non-coach features.
+
+
 
 
 

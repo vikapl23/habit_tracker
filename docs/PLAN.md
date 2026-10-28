@@ -602,44 +602,314 @@ Each step is independent, test-driven, verifiable, and yields a working, deploya
 
 ---
 
-### Step 10: AI Habit Coach Chatbot via Google Gemini
-- **Scope**:
-  - Dedicated "Coach" / "AI Assistant" chat interface in the frontend app.
-  - Backend proxy endpoint orchestrating conversations with the Google Gemini API (Gemini Flash).
-  - Backend-only API key security (client never has access to the Gemini secret key).
-  - Enriched context injection: prompt includes the user's active habits, current/longest streaks, frequency, and recent 7-day completion rates.
-  - Read-only coaching advice: the AI provides motivation, streak repair strategies, habit-stacking advice, and reflection prompts; it cannot directly alter user data.
-  - Daily rate limits: strictly enforced daily message quota per user (e.g. 10 messages/day) to prevent API credit exhaustion.
-  - Conversation history: persistent chat message history stored in DB.
-  - Security & prompt injection defenses: sanitize user inputs, system prompt system instructions enforcing boundary constraints, and refusal to process non-habit instructions.
-- **Data Model Changes**:
-  - `CoachConversation`:
-    - `id`: `BigAutoField`, PK
-    - `user`: `ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='coach_conversations')`
-    - `created_at`: `DateTimeField(auto_now_add=True)`
-  - `CoachMessage`:
-    - `id`: `BigAutoField`, PK
-    - `conversation`: `ForeignKey(CoachConversation, on_delete=models.CASCADE, related_name='messages')`
-    - `sender`: `CharField(max_length=10, choices=[('user', 'User'), ('assistant', 'Assistant')])`
-    - `content`: `TextField()`
-    - `created_at`: `DateTimeField(auto_now_add=True)`
-  - User daily quota tracker: track message counts per date via Redis or relational `CoachMessage` count for `created_at__date=today`.
-- **Endpoints**:
-  - `GET /api/v1/coach/messages/`: Retrieve user's recent chat history.
-  - `POST /api/v1/coach/chat/`: Send a message to the AI coach. Payload: `{"message": "How can I improve my reading habit?"}`. Returns assistant reply and remaining daily message quota.
-  - `DELETE /api/v1/coach/history/`: Clear conversation history.
-- **Testing Strategy**:
-  - Mock Gemini API client/responses in backend test suite to test response handling without network calls.
-  - Test daily message rate limiting: 11th message returns `429 Too Many Requests`.
-  - Context assembly unit tests: verify prompt serializer correctly aggregates habits, streaks, and completion percentages.
-  - Prompt injection safeguard tests: verify that prompt formatting keeps user input distinct from system instructions.
-- **Risks & Mitigations**:
-  - *Risk*: Excessive API billing or abuse.
-    *Mitigation*: Hard limits on daily message count per user, strict max token output limit, and backend timeout configuration.
-  - *Risk*: AI hallucinating nonexistent user habits or check-in stats.
-    *Mitigation*: Feed clean, structured JSON summaries of current habits and stats directly into the system prompt context.
-  - *Risk*: Prompt injection jailbreaks attempting to bypass habit coach persona.
-    *Mitigation*: Use Gemini system instructions and role separation; strip control characters; enforce clear persona boundaries in the system prompt.
+### Step 10: AI Habit Coach Chatbot via Google Gemini (Vertex AI)
+
+- **System Overview & Architectural Philosophy**:
+  - Integrate Google Cloud Vertex AI using the official unified `google-genai` SDK (`vertexai=True`).
+  - Strict human-in-the-loop safety: the AI coach functions in two distinct stages — **Advisor** (context-aware conversational guidance) and **Actions with Confirmation** (action proposals via tool calling that are strictly staged as pending proposals until the user explicitly confirms them).
+  - The model **never mutates or deletes data directly**.
+  - Action system designed around an extensible `ActionRegistry` pattern to support Phase 12 subscription actions (`start_subscription` -> Stripe Checkout) seamlessly.
+  - Multi-tenant data isolation, strict prompt injection safeguards, zero credential leakage, daily rate limits (20 messages/day), 1,000-character caps, and clean error isolation (502 without saving partial assistant messages).
+
+- **10.1 Google Cloud Vertex AI & Environment Configuration**:
+  - Official SDK: `google-genai` (installed in `requirements/base.txt`).
+  - Vertex AI Initialization:
+    ```python
+    from google import genai
+    from google.genai import types
+
+    client = genai.Client(
+        vertexai=True,
+        project=settings.GOOGLE_CLOUD_PROJECT,
+        location=settings.GOOGLE_CLOUD_LOCATION,
+    )
+    ```
+  - Configuration variables (loaded via `django-environ` in `config/settings/base.py`):
+    - `GOOGLE_CLOUD_PROJECT`: GCP Project ID.
+    - `GOOGLE_CLOUD_LOCATION`: GCP Region (default: `"us-central1"`).
+    - `GEMINI_MODEL`: Model name (default: `"gemini-2.5-flash"`).
+    - `GOOGLE_APPLICATION_CREDENTIALS`: Absolute path to service account JSON file. On Render, mounted via a Secret File at `/etc/secrets/gcp-credentials.json`.
+  - Security & Credential Hygiene:
+    - Service account keys are strictly excluded from git via `.gitignore` and omitted from all logging formatters.
+    - If GCP credentials or `GOOGLE_CLOUD_PROJECT` are unconfigured or the key file is missing, the coach service gracefully returns `HTTP 503 Service Unavailable` with `{"detail": "AI Habit Coach is not configured or currently unavailable."}`.
+
+- **10.2 Stage 1: Advisor Architecture (Context Assembly & Language Adaptation)**:
+  - Scope: Responds exclusively to questions about the user's OWN habits, routines, motivation, and progress.
+  - Compact Context Assembly (`apps.coach.services.context`):
+    - Multi-tenant isolation: queries strictly filter by `user=request.user` and active habits (`is_archived=False`).
+    - Compact format for each habit:
+      - `name`: Habit title.
+      - `habit_type`: `"boolean"` or `"measurable"`.
+      - `target`: Target quantity and unit (e.g. `"8 glasses"`, `"5 km"`, or `"N/A"` for boolean).
+      - `frequency`: Schedule description (e.g. `"daily"` or `"Mon, Wed, Fri"`).
+      - `streaks`: Current streak and longest streak (e.g. `"current: 5 days, longest: 14 days"`).
+      - `completion_rates`: 7-day and 30-day completion percentages (e.g. `"7d: 85%, 30d: 78%"`).
+      - `today_progress`: Today's completion state (e.g. `"completed"` or `"3/8 glasses (37.5%)"`, `"not completed"`).
+      - `reminder`: Configured reminder time (e.g. `"08:00"` or `"none"`).
+    - Conversation History:
+      - Includes the last 10 messages of the conversation for the current user (5 user, 5 assistant) to provide conversational continuity while avoiding token bloat.
+  - User Language Detection:
+    - System instructions direct Gemini to detect the language of the user's prompt (e.g., English, Ukrainian, Spanish, French) and respond in that exact language.
+  - Persona & Tone:
+    - Concise, empathetic, supportive, practical, and action-oriented. No generic lectures.
+
+- **10.3 Stage 2: Actions with Human Confirmation & Extensible Action Registry**:
+  - The model can PROPOSE actions via Gemini function calling / tool declarations:
+    - `create_habit(name, habit_type, target_value, unit, frequency_type, frequency_days, reminder_enabled, reminder_time)`
+    - `update_habit(habit_id, name, target_value, unit, frequency_type, frequency_days, reminder_enabled, reminder_time)`
+    - `archive_habit(habit_id)`
+  - Extensible `ActionRegistry` Pattern (`apps.coach.services.registry`):
+    - `BaseCoachAction` abstract base class defining:
+      - `action_type: str`: Unique action identifier.
+      - `get_tool_declaration() -> types.Tool`: Gemini tool schema.
+      - `validate(user, payload) -> dict`: Validates arguments (verifies habit belongs to user, validates positive target and unit for measurable, validates reminder minutes `0, 15, 30, 45`).
+      - `get_summary(payload) -> str`: Generates human-readable summary for frontend card (e.g. `"Create habit: Meditation, 5 minutes, daily, reminder 08:00"`).
+      - `execute(user, payload) -> dict`: Executes domain logic via existing services (`HabitSerializer`, `update_habit` service to recalculate streaks, `archive`).
+    - Open for Phase 12 Extension:
+      - In Phase 12, adding `"start_subscription"` (plan + billing period -> Stripe Checkout URL) requires only registering `StartSubscriptionAction` in `action_registry` without altering chat orchestrator or database schema.
+  - Human Confirmation Flow:
+    - Model proposes tool call -> Backend validates via `action_registry.get(action_type).validate(user, payload)`.
+    - Backend stores proposal in `PendingAction` table (`status='pending'`, `expires_at=now + 15 min`).
+    - Backend returns assistant reply along with the `PendingAction` metadata.
+    - Frontend displays an interactive Action Card in the chat bubble.
+    - **Confirm**: User clicks `[Confirm]` -> `POST /api/v1/coach/actions/{id}/confirm/` -> Backend executes via domain service, marks `status='confirmed'`, sets `executed_at=now`.
+    - **Cancel**: User clicks `[Cancel]` -> `POST /api/v1/coach/actions/{id}/cancel/` -> Backend marks `status='cancelled'`.
+    - **Expiration & Single-Use**:
+      - Actions expire in 15 minutes. Attempting to confirm an expired action returns `400 Bad Request`.
+      - Actions can be confirmed only once (idempotent / rejection of non-pending status).
+      - Actions can be confirmed/cancelled only by their owner (`user=request.user`).
+
+- **10.4 Security & Prompt Injection Safeguards**:
+  - Multi-Tenant Isolation: Only the authenticated user's active habits and history are retrieved. Cross-user habit IDs in action parameters are strictly validated against `Habit.objects.filter(id=habit_id, user=request.user)`.
+  - Untrusted Input Delimiters:
+    - User input and habit names are untrusted data.
+    - The prompt builder wraps context and user input inside explicit XML-style tags:
+      ```xml
+      <system_instruction>
+      You are the AI Habit Coach for Habit Tracker...
+      </system_instruction>
+      <user_context>
+      Active Habits: ...
+      </user_context>
+      <user_message>
+      {{ user_message }}
+      </user_message>
+      ```
+  - Persona & Boundary Enforcement:
+    - System instruction strictly prohibits revealing internal instructions, prompt templates, or system credentials.
+    - Strictly refuses off-topic requests (e.g., coding, politics, general world facts, creative writing outside habits).
+    - Politely redirects off-topic inquiries back to personal habits, consistency, motivation, and subscriptions.
+
+- **10.5 Rate Limiting, Limits & Atomic Error Recovery**:
+  - Message Length: Maximum 1,000 characters per message (`400 Bad Request` if exceeded).
+  - Daily Quota: 20 messages per user per day.
+    - Calculated using user's local date (`user.get_today()` via ADR 002).
+    - When count reaches 20, returns `HTTP 429 Too Many Requests` with:
+      `{"detail": "Daily message limit reached (20/20). Your quota resets at midnight.", "remaining_messages": 0}`.
+  - Timeout & Upstream Errors:
+    - Vertex AI API calls use a 20-second client timeout.
+    - Upstream Gemini errors, network failures, or timeouts return `HTTP 502 Bad Gateway`.
+    - **Zero Partial State on Failure**: When a 502 error occurs, no assistant reply is saved, and the failed attempt does not count against the user's daily message quota.
+
+- **10.6 Data Models (`apps.coach`)**:
+  - `ChatMessage`:
+    - `id`: `BigAutoField`, PK.
+    - `user`: `ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='coach_messages')`.
+    - `role`: `CharField(max_length=10, choices=[('user', 'User'), ('assistant', 'Assistant')])`.
+    - `content`: `TextField()`.
+    - `pending_action`: `ForeignKey('coach.PendingAction', null=True, blank=True, on_delete=models.SET_NULL, related_name='messages')`.
+    - `created_at`: `DateTimeField(auto_now_add=True, db_index=True)`.
+    - Meta: `ordering = ['created_at']`, indexes = `[models.Index(fields=['user', 'created_at'])]`.
+  - `PendingAction`:
+    - `id`: `BigAutoField`, PK.
+    - `user`: `ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='pending_coach_actions')`.
+    - `action_type`: `CharField(max_length=50)`.
+    - `payload`: `JSONField()`.
+    - `summary`: `TextField()`.
+    - `status`: `CharField(max_length=20, choices=[('pending', 'Pending'), ('confirmed', 'Confirmed'), ('cancelled', 'Cancelled'), ('expired', 'Expired')], default='pending')`.
+    - `created_at`: `DateTimeField(auto_now_add=True)`.
+    - `expires_at`: `DateTimeField(db_index=True)`.
+    - `executed_at`: `DateTimeField(null=True, blank=True)`.
+    - Meta: indexes = `[models.Index(fields=['user', 'status', 'expires_at'])]`.
+
+- **10.7 REST API Endpoints Specification**:
+  - `GET /api/v1/coach/messages/`
+    - Response (`200 OK`):
+      ```json
+      {
+        "remaining_messages": 18,
+        "daily_limit": 20,
+        "results": [
+          {
+            "id": 1,
+            "role": "user",
+            "content": "Can you help me create a morning meditation habit?",
+            "created_at": "2026-10-28T09:00:00Z"
+          },
+          {
+            "id": 2,
+            "role": "assistant",
+            "content": "I would love to help! How about starting with 5 minutes of meditation every morning at 08:00?",
+            "pending_action": {
+              "id": 10,
+              "action_type": "create_habit",
+              "summary": "Create habit: Morning Meditation, 5 minutes, daily, reminder 08:00",
+              "status": "pending",
+              "expires_at": "2026-10-28T09:15:00Z"
+            },
+            "created_at": "2026-10-28T09:00:02Z"
+          }
+        ]
+      }
+      ```
+  - `POST /api/v1/coach/messages/`
+    - Request Body:
+      ```json
+      {
+        "content": "Yes, please set up that meditation habit for 5 minutes at 08:00."
+      }
+      ```
+    - Response (`201 Created`):
+      ```json
+      {
+        "user_message": {
+          "id": 3,
+          "role": "user",
+          "content": "Yes, please set up that meditation habit for 5 minutes at 08:00.",
+          "created_at": "2026-10-28T09:01:00Z"
+        },
+        "assistant_message": {
+          "id": 4,
+          "role": "assistant",
+          "content": "I've proposed a new daily meditation habit for you. Please confirm below!",
+          "pending_action": {
+            "id": 11,
+            "action_type": "create_habit",
+            "summary": "Create habit: Meditation, 5 minutes, daily, reminder 08:00",
+            "status": "pending",
+            "expires_at": "2026-10-28T09:16:00Z"
+          },
+          "created_at": "2026-10-28T09:01:03Z"
+        },
+        "remaining_messages": 17
+      }
+      ```
+    - Error Responses:
+      - `400 Bad Request`: Message exceeds 1,000 characters.
+      - `429 Too Many Requests`: Daily message quota exhausted.
+      - `502 Bad Gateway`: Vertex AI API timeout or failure (no assistant message saved).
+      - `503 Service Unavailable`: Google Cloud Vertex AI credentials not configured.
+  - `DELETE /api/v1/coach/messages/`
+    - Response (`204 No Content`): Clears chat messages for current user and cancels pending actions.
+  - `POST /api/v1/coach/actions/{id}/confirm/`
+    - Response (`200 OK`):
+      ```json
+      {
+        "status": "confirmed",
+        "action_id": 11,
+        "action_type": "create_habit",
+        "result": {
+          "habit_id": 42,
+          "name": "Meditation",
+          "detail": "Habit created successfully."
+        }
+      }
+      ```
+    - Errors:
+      - `400 Bad Request`: Action expired, already confirmed, or cancelled.
+      - `404 Not Found`: Action does not exist or belongs to another user.
+  - `POST /api/v1/coach/actions/{id}/cancel/`
+    - Response (`200 OK`):
+      ```json
+      {
+        "status": "cancelled",
+        "action_id": 11
+      }
+      ```
+
+- **10.8 Frontend Coach Tab & UI Specification**:
+  - Bottom Navigation: Add "Coach" tab to `BottomNavigation.tsx` with `Bot` / `Sparkles` icon from `lucide-react`.
+  - Route `/coach` in `App.tsx` guarded by `ProtectedRoute`.
+  - Mobile-First Layout (`frontend/src/pages/CoachPage.tsx`):
+    - Top App Bar: Coach title, bot badge, remaining messages pill (`"18 / 20 left"`), and "Clear chat" icon button triggering confirmation dialog.
+    - Conversation Area:
+      - Smooth auto-scrolling container.
+      - User message bubbles (right-aligned, brand accent, white text).
+      - Assistant message bubbles (left-aligned, neutral background, coach avatar, dark text).
+      - Typing indicator (animated bouncing dots while awaiting response).
+      - Suggested Starter Questions: Quick action chips rendered when chat is empty or beneath welcome message:
+        - *"How am I doing this week?"*
+        - *"Help me build a morning routine"*
+        - *"Suggest habits for better sleep"*
+        - *"I want to start running 3 times a week"*
+        - Tapping a chip immediately sends the message.
+    - Action Card Component (`frontend/src/components/ActionCard.tsx`):
+      - Embedded directly beneath or inside the proposing assistant message.
+      - Title and formatted parameters (habit name, target, schedule, reminder).
+      - State-driven buttons:
+        - `pending`: `[Confirm]` (primary green button) and `[Cancel]` (subtle slate button).
+        - `loading`: Spinner on confirmation button.
+        - `confirmed`: Green badge `"✓ Confirmed"`. Triggers automatic refresh of habit list/dashboard.
+        - `cancelled`: Slate badge `"Cancelled"`.
+        - `expired`: Muted badge `"Expired"`.
+    - Chat Input Bar:
+      - Mobile-optimized textarea with auto-grow, character counter (`"120 / 1000"`).
+      - Send button with arrow icon, disabled when empty, submitting, or daily quota is 0.
+      - Clear quota exhausted banner when 0 messages remain.
+
+- **10.9 Testing Strategy (100% Mocked Gemini)**:
+  - Backend Tests (`apps/coach/tests/`):
+    - Unit tests for `GeminiCoachService` with mocked `genai.Client` (zero live API calls).
+    - Unconfigured credentials test verifying clean `503 Service Unavailable`.
+    - Vertex AI upstream error test verifying `502 Bad Gateway` and verifying no assistant message is saved.
+    - 1,000-character input rejection test (`400 Bad Request`).
+    - Daily quota enforcement test verifying 21st message returns `429 Too Many Requests`.
+    - Context builder test: validates accurate summary of active habits, streaks, 7/30d %, today's progress, and reminders; verifies archived habits are excluded.
+    - Multi-tenant isolation test: verifies User A context and actions never touch User B data.
+    - Function calling test: verifies tool invocation creates a `PendingAction` expiring in 15 minutes.
+    - Confirm action test: verifies execution creates/updates habit via domain services and recalculates streaks if needed; verifies duplicate confirmation rejection; verifies expired action rejection.
+    - Cancel action test: verifies status is marked cancelled.
+    - Clear chat test: verifies messages are deleted.
+  - Frontend Tests (`frontend/src/pages/__tests__/CoachPage.test.tsx`):
+    - Renders empty state with starter question chips.
+    - Sending a message displays optimistic user bubble and typing indicator.
+    - Renders action cards with Confirm and Cancel buttons; clicking Confirm triggers API call and transitions card to confirmed state.
+    - Displays quota counter and handles quota exhaustion state.
+
+- **10.10 Step-by-Step Implementation Roadmap & Git Commits**:
+  - **Step 10.1: App Scaffolding, Data Models & Migrations (`apps.coach`)**
+    - Create `apps.coach` app with `ChatMessage` and `PendingAction` models.
+    - Add database migrations, admin registration, and model unit tests.
+    - Add settings configuration for GCP Vertex AI in `config/settings/base.py`.
+    - **Commit**: `feat(coach): implement ChatMessage and PendingAction models with migrations`
+  - **Step 10.2: Backend Advisor (Vertex AI Gemini Integration & Rate Limits)**
+    - Implement `google-genai` client wrapper with `vertexai=True`, timeout, and 503/502 error handling.
+    - Implement context builder (`apps/coach/services/context.py`) aggregating active habits, streaks, completion %, today's progress, reminders, and last 10 messages.
+    - Implement daily quota check (20/day) on user timezone date and 1,000-char input validation.
+    - Implement `GET /api/v1/coach/messages/`, `POST /api/v1/coach/messages/`, and `DELETE /api/v1/coach/messages/`.
+    - Full test suite with mocked Vertex AI.
+    - **Commit**: `feat(coach): implement AI advisor endpoint with context injection and daily quota`
+  - **Step 10.3: Backend Extensible Action Registry & Confirmation System**
+    - Implement `ActionRegistry` with `CreateHabitAction`, `UpdateHabitAction`, `ArchiveHabitAction`.
+    - Tool declarations for Gemini function calling.
+    - Proposal validation and `PendingAction` creation with 15-minute expiration.
+    - Implement `POST /api/v1/coach/actions/{id}/confirm/` and `POST /api/v1/coach/actions/{id}/cancel/`.
+    - Integration with habit domain services (habit creation, streak recalculation on target changes, archiving).
+    - Tests covering proposal, confirmation, cancellation, expiration, and multi-tenant security.
+    - **Commit**: `feat(coach): implement extensible action registry and proposal confirmation endpoints`
+  - **Step 10.4: Frontend Coach Chat Tab & Conversation UI**
+    - Add "Coach" tab to `BottomNavigation.tsx` and configure route in `App.tsx`.
+    - Implement `CoachPage.tsx` with mobile-first layout, message bubbles, and auto-scroll.
+    - Implement starter question suggestion chips, typing indicator, remaining messages counter, and clear chat confirmation dialog.
+    - Frontend unit tests for chat UI.
+    - **Commit**: `feat(frontend): implement mobile-first coach chat tab and conversation UI`
+  - **Step 10.5: Frontend Action Cards & Confirmation Flow**
+    - Implement `ActionCard.tsx` component inside chat messages.
+    - Interactive Confirm and Cancel action triggers with loading states.
+    - State badges: pending, confirmed, cancelled, expired.
+    - Invalidate / refresh habit dashboard data upon action confirmation.
+    - Frontend unit and integration tests for action card interactions.
+    - **Commit**: `feat(frontend): implement action cards with confirmation flow and state handling`
 
 ---
 

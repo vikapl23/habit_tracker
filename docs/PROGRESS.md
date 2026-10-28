@@ -272,21 +272,35 @@ This checklist tracks the ongoing development progress of the Habit Tracker proj
 ---
 
 ### Phase 10: AI Habit Coach Chatbot via Google Gemini
-- [ ] **10.1 Chat Conversation & Message Models (TDD)**
-  - [ ] Create `CoachConversation` and `CoachMessage` models with cascade deletion.
-  - [ ] Migration and admin registration.
-- [ ] **10.2 Gemini Client Service & Prompt Builder (TDD)**
-  - [ ] Secure backend-only Gemini API integration (client never receives secret key).
-  - [ ] Context aggregation service: format user's habits, frequencies, streaks, and 7-day completion stats.
-  - [ ] Strict prompt-injection safeguards, system instructions, and read-only coaching persona.
-- [ ] **10.3 Chat API Endpoints & Quota Rate Limiting (TDD)**
-  - [ ] `POST /api/v1/coach/chat/` endpoint with daily message quota enforcement (e.g. 10/day).
-  - [ ] `GET /api/v1/coach/messages/` to load recent chat history and `DELETE /api/v1/coach/history/` to clear history.
+- [ ] **10.1 App Scaffolding, Data Models & Migrations (`apps.coach`) (TDD)**
+  - [ ] Create `apps.coach` app with `ChatMessage` and `PendingAction` models.
+  - [ ] Configure `PendingAction` status (`pending`, `confirmed`, `cancelled`, `expired`) and 15-minute expiration.
+  - [ ] Migration and Django admin registration.
+- [ ] **10.2 Backend Advisor Service, Daily Quota & Messages Endpoints (TDD)**
+  - [ ] Google Cloud Vertex AI client using official `google-genai` SDK (`vertexai=True`).
+  - [ ] Configuration: `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION`, `GEMINI_MODEL`, `GOOGLE_APPLICATION_CREDENTIALS` (fallback to 503 if unconfigured).
+  - [ ] Compact context builder: active habits (name, type, unit/target, frequency, streaks, 7/30d %, today's progress, reminder) + last 10 messages.
+  - [ ] Automatic language detection and prompt injection defenses (delimiters, system instruction boundaries).
+  - [ ] Rate limits: 1,000 characters per message (400), 20 messages per user per day (429), client timeout and upstream error handling (502 without saving assistant message).
+  - [ ] Endpoints: `GET /api/v1/coach/messages/`, `POST /api/v1/coach/messages/`, `DELETE /api/v1/coach/messages/`.
+- [ ] **10.3 Extensible Action Registry & Confirmation Endpoints (TDD)**
+  - [ ] Pluggable `ActionRegistry` architecture (`BaseCoachAction` interface) supporting future Phase 12 subscription actions.
+  - [ ] Gemini tool declarations: `create_habit`, `update_habit`, `archive_habit`.
+  - [ ] Proposal validation and `PendingAction` creation with 15-minute expiry.
+  - [ ] Endpoints: `POST /api/v1/coach/actions/{id}/confirm/` and `POST /api/v1/coach/actions/{id}/cancel/`.
+  - [ ] Domain service execution on confirmation (habit create, streak recalculation on update, archive).
+  - [ ] Single-use enforcement, ownership checks, and expiration validation.
 - [ ] **10.4 Frontend Coach Tab & Chat UI**
-  - [ ] Dedicated "Coach" view in frontend navigation.
-  - [ ] Chat conversation interface: message bubbles, quick prompt suggestions, remaining message counter.
-- [ ] **10.5 Testing & Fallback Handling**
-  - [ ] Mocked Gemini API unit tests, rate limit tests (429), and gracefully handled network timeouts.
+  - [ ] Add "Coach" tab to `BottomNavigation.tsx` and configure route in `App.tsx`.
+  - [ ] Mobile-first `CoachPage.tsx` with auto-scrolling message bubbles.
+  - [ ] Suggested starter questions chips.
+  - [ ] Typing indicator, remaining messages counter (`18 / 20 left`), character limit indicator (`120 / 1000`).
+  - [ ] "Clear chat" confirmation dialog.
+- [ ] **10.5 Frontend Action Cards & Confirmation Flow**
+  - [ ] Interactive `ActionCard` component in chat message stream.
+  - [ ] `[Confirm]` and `[Cancel]` buttons with loading spinners.
+  - [ ] Action card status badges (pending, confirmed, cancelled, expired).
+  - [ ] Cache invalidation / dashboard refresh upon action confirmation.
 
 ---
 
