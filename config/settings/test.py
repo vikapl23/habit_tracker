@@ -1,3 +1,8 @@
+import os
+
+os.environ.setdefault("SECRET_KEY", "ci-secret-key-for-running-tests-only")
+os.environ.setdefault("EMAIL_NOTIFICATIONS_DISABLED", "true")
+
 from .local import *
 
 # Speed up tests by using MD5 hasher instead of default Argon2/PBKDF2

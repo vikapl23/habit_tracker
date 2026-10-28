@@ -47,14 +47,33 @@ def test_anymail_mailgun_backend_selection():
         assert api_key == "test-key-123"
 
 
+CLEAN_ENV_VARS = [
+    "SECRET_KEY",
+    "ALLOWED_HOSTS",
+    "RENDER_EXTERNAL_HOSTNAME",
+    "CORS_ALLOWED_ORIGINS",
+    "CORS_REQUIRE_HTTPS",
+    "AUTH_THROTTLE_RATE",
+    "MAILGUN_API_KEY",
+    "MAILGUN_DOMAIN",
+    "MAILGUN_API_URL",
+    "DEFAULT_FROM_EMAIL",
+    "CRON_TOKEN",
+    "SITE_URL",
+    "EMAIL_NOTIFICATIONS_DISABLED",
+    "SESSION_COOKIE_SECURE",
+    "CSRF_COOKIE_SECURE",
+    "SECURE_SSL_REDIRECT",
+    "SECURE_HSTS_SECONDS",
+    "SECURE_HSTS_INCLUDE_SUBDOMAINS",
+    "SECURE_HSTS_PRELOAD",
+]
+
+
 def _load_production(monkeypatch, env_vars=None):
     monkeypatch.setattr("environ.Env.read_env", lambda *a, **kw: None)
-    monkeypatch.delenv("SECRET_KEY", raising=False)
-    monkeypatch.delenv("ALLOWED_HOSTS", raising=False)
-    monkeypatch.delenv("CORS_ALLOWED_ORIGINS", raising=False)
-    monkeypatch.delenv("MAILGUN_API_KEY", raising=False)
-    monkeypatch.delenv("MAILGUN_DOMAIN", raising=False)
-    monkeypatch.delenv("EMAIL_NOTIFICATIONS_DISABLED", raising=False)
+    for var in CLEAN_ENV_VARS:
+        monkeypatch.delenv(var, raising=False)
 
     default_env = {
         "SECRET_KEY": "valid-production-secret-key-for-test-12345",

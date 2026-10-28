@@ -4,20 +4,40 @@ import sys
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 
+CLEAN_ENV_VARS = [
+    "SECRET_KEY",
+    "ALLOWED_HOSTS",
+    "RENDER_EXTERNAL_HOSTNAME",
+    "CORS_ALLOWED_ORIGINS",
+    "CORS_REQUIRE_HTTPS",
+    "AUTH_THROTTLE_RATE",
+    "MAILGUN_API_KEY",
+    "MAILGUN_DOMAIN",
+    "MAILGUN_API_URL",
+    "DEFAULT_FROM_EMAIL",
+    "CRON_TOKEN",
+    "SITE_URL",
+    "EMAIL_NOTIFICATIONS_DISABLED",
+    "SESSION_COOKIE_SECURE",
+    "CSRF_COOKIE_SECURE",
+    "SECURE_SSL_REDIRECT",
+    "SECURE_HSTS_SECONDS",
+    "SECURE_HSTS_INCLUDE_SUBDOMAINS",
+    "SECURE_HSTS_PRELOAD",
+]
+
 
 def load_production_settings(monkeypatch, env_vars=None):
     """Helper to reload production settings cleanly with specific env vars."""
     monkeypatch.setattr("environ.Env.read_env", lambda *a, **kw: None)
-    monkeypatch.delenv("SECRET_KEY", raising=False)
-    monkeypatch.delenv("ALLOWED_HOSTS", raising=False)
-    monkeypatch.delenv("RENDER_EXTERNAL_HOSTNAME", raising=False)
-    monkeypatch.delenv("CORS_ALLOWED_ORIGINS", raising=False)
-    monkeypatch.delenv("AUTH_THROTTLE_RATE", raising=False)
+    for var in CLEAN_ENV_VARS:
+        monkeypatch.delenv(var, raising=False)
 
     default_env = {
         "SECRET_KEY": "valid-production-secret-key-for-test-12345",
         "ALLOWED_HOSTS": "example.com",
         "CORS_ALLOWED_ORIGINS": "https://app.example.com",
+        "EMAIL_NOTIFICATIONS_DISABLED": "true",
     }
     if env_vars:
         for k, v in env_vars.items():
@@ -371,3 +391,27 @@ def test_production_configurable_security_settings_relaxation(monkeypatch):
     assert prod_settings.SECURE_HSTS_PRELOAD is False
     assert prod_settings.CORS_REQUIRE_HTTPS is False
     assert prod_settings.CORS_ALLOWED_ORIGINS == ["http://localhost:3000"]
+
+
+def test_production_fails_without_mailgun_when_notifications_not_disabled(monkeypatch):
+    with pytest.raises(ImproperlyConfigured, match="MAILGUN"):
+        load_production_settings(
+            monkeypatch,
+            {
+                "EMAIL_NOTIFICATIONS_DISABLED": None,
+                "MAILGUN_API_KEY": None,
+                "MAILGUN_DOMAIN": None,
+            },
+        )
+
+
+def test_production_succeeds_when_email_notifications_disabled(monkeypatch):
+    prod_settings = load_production_settings(
+        monkeypatch,
+        {
+            "EMAIL_NOTIFICATIONS_DISABLED": "true",
+            "MAILGUN_API_KEY": None,
+            "MAILGUN_DOMAIN": None,
+        },
+    )
+    assert prod_settings.EMAIL_NOTIFICATIONS_DISABLED is True

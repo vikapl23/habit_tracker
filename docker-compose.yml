@@ -33,6 +33,13 @@ services:
       CSRF_COOKIE_SECURE: "False"
       SECURE_HSTS_SECONDS: 0
       AUTH_THROTTLE_RATE: ${AUTH_THROTTLE_RATE:-100/minute}
+      MAILGUN_API_KEY: ${MAILGUN_API_KEY:-}
+      MAILGUN_DOMAIN: ${MAILGUN_DOMAIN:-}
+      MAILGUN_API_URL: ${MAILGUN_API_URL:-https://api.mailgun.net/v3}
+      DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-Habit Tracker <noreply@example.com>}
+      SITE_URL: ${SITE_URL:-http://localhost:8000}
+      CRON_TOKEN: ${CRON_TOKEN:-}
+      EMAIL_NOTIFICATIONS_DISABLED: ${EMAIL_NOTIFICATIONS_DISABLED:-${MAILGUN_API_KEY:-true}}
     ports:
       - "8000:8000"
     healthcheck:
