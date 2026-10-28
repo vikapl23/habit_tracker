@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import importlib
+import sys
 from unittest.mock import patch
 
+import pytest
 from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
 from django.core.mail import get_connection
 
 
@@ -41,3 +45,68 @@ def test_anymail_mailgun_backend_selection():
         mock_env.side_effect = side_effect
         api_key = mock_env("MAILGUN_API_KEY", default="")
         assert api_key == "test-key-123"
+
+
+def _load_production(monkeypatch, env_vars=None):
+    monkeypatch.setattr("environ.Env.read_env", lambda *a, **kw: None)
+    monkeypatch.delenv("SECRET_KEY", raising=False)
+    monkeypatch.delenv("ALLOWED_HOSTS", raising=False)
+    monkeypatch.delenv("CORS_ALLOWED_ORIGINS", raising=False)
+    monkeypatch.delenv("MAILGUN_API_KEY", raising=False)
+    monkeypatch.delenv("MAILGUN_DOMAIN", raising=False)
+    monkeypatch.delenv("EMAIL_NOTIFICATIONS_DISABLED", raising=False)
+
+    default_env = {
+        "SECRET_KEY": "valid-production-secret-key-for-test-12345",
+        "ALLOWED_HOSTS": "example.com",
+        "CORS_ALLOWED_ORIGINS": "https://app.example.com",
+    }
+    if env_vars:
+        for k, v in env_vars.items():
+            if v is None:
+                default_env.pop(k, None)
+            else:
+                default_env[k] = v
+
+    for k, v in default_env.items():
+        monkeypatch.setenv(k, v)
+
+    for mod in ["config.settings.production", "config.settings.base"]:
+        if mod in sys.modules:
+            del sys.modules[mod]
+
+    return importlib.import_module("config.settings.production")
+
+
+def test_production_fails_when_mailgun_missing_and_notifications_not_disabled(monkeypatch):
+    with pytest.raises(ImproperlyConfigured, match="MAILGUN"):
+        _load_production(monkeypatch, {"MAILGUN_API_KEY": None, "MAILGUN_DOMAIN": None})
+
+
+def test_production_fails_when_mailgun_domain_missing(monkeypatch):
+    with pytest.raises(ImproperlyConfigured, match="MAILGUN"):
+        _load_production(
+            monkeypatch,
+            {"MAILGUN_API_KEY": "test-key", "MAILGUN_DOMAIN": ""},
+        )
+
+
+def test_production_succeeds_when_mailgun_configured(monkeypatch):
+    mod = _load_production(
+        monkeypatch,
+        {"MAILGUN_API_KEY": "test-key", "MAILGUN_DOMAIN": "mg.example.com"},
+    )
+    assert mod.MAILGUN_API_KEY == "test-key"
+    assert mod.MAILGUN_DOMAIN == "mg.example.com"
+
+
+def test_production_succeeds_without_mailgun_when_notifications_disabled(monkeypatch):
+    mod = _load_production(
+        monkeypatch,
+        {
+            "MAILGUN_API_KEY": None,
+            "MAILGUN_DOMAIN": None,
+            "EMAIL_NOTIFICATIONS_DISABLED": "true",
+        },
+    )
+    assert getattr(mod, "EMAIL_NOTIFICATIONS_DISABLED", False) is True

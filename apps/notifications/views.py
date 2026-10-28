@@ -5,6 +5,8 @@ from typing import Any
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.http import HttpResponse
+from django.shortcuts import render
 from rest_framework import permissions, status
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -59,41 +61,67 @@ class SendNotificationsInternalView(APIView):
 
 class UnsubscribeView(APIView):
     """
-    Public one-click unsubscribe endpoint allowing users to opt out of
+    Public unsubscribe endpoint allowing users to opt out of
     all email notifications via a signed token without logging in.
+    GET: Displays a confirmation page with an Unsubscribe button (safe).
+    POST: Processes the unsubscription and displays the result.
     """
 
     permission_classes = [permissions.AllowAny]
 
-    def get(self, request: Request, token: str, *args: Any, **kwargs: Any) -> Response:
-        return self._process_unsubscribe(token)
-
-    def post(self, request: Request, token: str, *args: Any, **kwargs: Any) -> Response:
-        return self._process_unsubscribe(token)
-
-    def _process_unsubscribe(self, token: str) -> Response:
+    def get(self, request: Request, token: str, *args: Any, **kwargs: Any) -> HttpResponse:
         user_id = verify_unsubscribe_token(token)
         if not user_id:
-            return Response(
-                {"detail": "Invalid or expired unsubscribe link."},
+            return render(
+                request,
+                "notifications/unsubscribe_error.html",
+                {"error_message": "Invalid or expired unsubscribe link."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         try:
             user = User.objects.get(pk=user_id)
         except User.DoesNotExist:
-            return Response(
-                {"detail": "User not found."},
+            return render(
+                request,
+                "notifications/unsubscribe_error.html",
+                {"error_message": "User not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return render(
+            request,
+            "notifications/unsubscribe_confirm.html",
+            {"token": token, "user": user},
+            status=status.HTTP_200_OK,
+        )
+
+    def post(self, request: Request, token: str, *args: Any, **kwargs: Any) -> HttpResponse:
+        user_id = verify_unsubscribe_token(token)
+        if not user_id:
+            return render(
+                request,
+                "notifications/unsubscribe_error.html",
+                {"error_message": "Invalid or expired unsubscribe link."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            user = User.objects.get(pk=user_id)
+        except User.DoesNotExist:
+            return render(
+                request,
+                "notifications/unsubscribe_error.html",
+                {"error_message": "User not found."},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
         user.notifications_enabled = False
         user.save(update_fields=["notifications_enabled"])
 
-        return Response(
-            {
-                "detail": "You have been successfully unsubscribed from all email notifications.",
-                "unsubscribed": True,
-            },
+        return render(
+            request,
+            "notifications/unsubscribed.html",
+            {"user": user},
             status=status.HTTP_200_OK,
         )

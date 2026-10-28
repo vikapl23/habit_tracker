@@ -321,6 +321,61 @@ Adopt **Option A**:
   - Consolidated emails: multiple habits scheduled at the same time slot (e.g., 09:00) produce exactly one email rather than multiple separate emails.
   - Clean, unbloated user profile: one simple master switch in user settings, with granular control situated directly on each habit.
 
+## ADR 010: Notification Dispatch Scaling Plan (Background Workers, Batching, and Asynchronous Processing)
+
+### Date
+2026-10-28
+
+### Context & Problem
+Currently, notification dispatching is triggered via an internal HTTP webhook (`POST /api/v1/internal/send-notifications/`) handled by Gunicorn. The handler executes `send_due_notifications()` synchronously in the foreground request thread, making outbound HTTP calls to the Mailgun API (`msg.send()`) for each recipient.
+
+At ~200–400ms latency per Mailgun network request, sending notifications to 200 users requires 40–80 seconds. As the user base grows, this synchronous processing causes:
+1. **HTTP / Gateway Timeouts**: Exceeding Gunicorn's default worker timeout (30–60s) or GitHub Actions curl timeout (`--max-time 90`), producing HTTP 502/504 errors.
+2. **Worker Starvation**: Blocking web worker processes on external I/O, reducing web API throughput for interactive user requests.
+3. **Retry Storms**: External cron runners observing HTTP 504 trigger automated retries while the previous run may still be partially in flight.
+
+### Scaling Plan & Architecture
+
+Rather than executing synchronous O(N) external network calls in a foreground web request, the system will scale across two phases:
+
+#### Phase 1: CLI Dispatch & Chunked Execution Budget (Near-Term)
+1. **Decouple from Web Process via CLI**:
+   - Transition scheduled cron triggers (e.g. GitHub Actions, Render Cron) from calling the internal HTTP webhook to directly executing the existing management command:
+     ```bash
+     python manage.py send_notifications
+     ```
+   - Management commands run in isolated, one-off CLI processes without Gunicorn request timeouts or web server concurrency limits.
+2. **Deterministic Chunking & Execution Budget**:
+   - Paginate candidate recipients in deterministic batches (e.g., 100 users per batch) using keyset pagination (`id > last_id`).
+   - Implement an execution time budget (e.g., max 10 minutes per cron run): if the time limit approaches, remaining batches gracefully defer to the subsequent cron trigger, safely protected against double-delivery by `NotificationLog` claim transactions.
+
+#### Phase 2: Asynchronous Task Queue & Worker Pool (High Scale)
+1. **Broker & Worker Architecture**:
+   - Introduce an asynchronous distributed task queue (Celery or Django-Q backed by Redis).
+   - The cron scheduler acts strictly as a lightweight dispatcher: it queries due habits in bulk and enqueues individual user notification jobs:
+     ```python
+     dispatch_user_reminders_task.delay(user_id, scheduled_date)
+     ```
+   - Celery worker pools process email rendering and Mailgun delivery concurrently across multiple worker threads/processes.
+2. **Mailgun Batch API**:
+   - For users with similar reminder templates, utilize Mailgun's Batch Sending feature (`recipient-variables` with template interpolation). A single HTTP POST to Mailgun can deliver distinct personalized messages to up to 1,000 recipients at once, dropping external HTTP latency from O(N) to O(N / 1000).
+3. **Resilience & Rate Limiting**:
+   - Configure exponential backoff and jitter on transient Mailgun network/5xx errors (`retry_backoff=True`).
+   - Worker-side rate limiters ensure Mailgun account sending limits and SMTP concurrency caps are respected.
+4. **Dead-Letter Queue (DLQ) & Observability**:
+   - Permanent delivery failures route to a DLQ with alerts.
+   - Dispatch duration, queue depth, and delivery error rates emit as structured metrics to Prometheus / Datadog.
+
+### Trade-offs & Implications
+- **Advantages**:
+  - Web requests remain completely decoupled from outbound email latency and volume.
+  - Workers can be scaled horizontally and independently from the web tier.
+  - Zero risk of Gunicorn worker termination during large notification waves.
+- **Trade-offs**:
+  - Introduces infrastructure dependencies (Redis broker and dedicated background worker processes).
+  - Deferred to Phase 2 to avoid premature infrastructure overhead while user scale is covered by bulk database queries and CLI management command execution.
+
+
 
 
 

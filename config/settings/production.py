@@ -49,6 +49,18 @@ if CORS_REQUIRE_HTTPS:
             )
 
 
+# Production email notifications validation
+EMAIL_NOTIFICATIONS_DISABLED = env.bool("EMAIL_NOTIFICATIONS_DISABLED", default=False)
+if not EMAIL_NOTIFICATIONS_DISABLED:
+    mailgun_api_key = os.environ.get("MAILGUN_API_KEY", "").strip()
+    mailgun_domain = os.environ.get("MAILGUN_DOMAIN", "").strip()
+    if not mailgun_api_key or not mailgun_domain:
+        raise ImproperlyConfigured(
+            "MAILGUN_API_KEY and MAILGUN_DOMAIN environment variables must be set in production "
+            "unless EMAIL_NOTIFICATIONS_DISABLED=true."
+        )
+
+
 # Production security settings (configurable via env, default secure)
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SESSION_COOKIE_SECURE = env.bool("SESSION_COOKIE_SECURE", default=True)
