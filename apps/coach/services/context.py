@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
+from xml.sax.saxutils import escape as xml_escape
 
 from apps.coach.models import ChatMessage
 from apps.habits.models import Habit, HabitCheckIn
@@ -32,7 +33,7 @@ def format_today_progress(habit: Habit, checkin: HabitCheckIn | None) -> str:
 
     val = float(checkin.value) if checkin else 0.0
     target = float(habit.target_value or 0.0)
-    unit = habit.unit or ""
+    unit = xml_escape(str(habit.unit)[:30]) if habit.unit else ""
     pct = round((val / target * 100), 1) if target > 0 else 0.0
 
     if target > 0 and val >= target:
@@ -74,8 +75,11 @@ def build_coach_context(user: User) -> str:
         checkin = today_checkins.get(habit.id)
         today_str = format_today_progress(habit, checkin)
 
+        clean_name = xml_escape(str(habit.name)[:200])
+        clean_unit = xml_escape(str(habit.unit)[:30]) if habit.unit else ""
+
         if habit.habit_type == "measurable" and habit.target_value:
-            target_str = f"{float(habit.target_value):.1f} {habit.unit}".strip()
+            target_str = f"{float(habit.target_value):.1f} {clean_unit}".strip()
         else:
             target_str = "N/A"
 
@@ -86,7 +90,7 @@ def build_coach_context(user: User) -> str:
         )
 
         habit_line = (
-            f"- Habit: {habit.name} | "
+            f"- Habit: {clean_name} | "
             f"Type: {habit.habit_type} | "
             f"Target: {target_str} | "
             f"Frequency: {freq_str} | "
@@ -101,10 +105,16 @@ def build_coach_context(user: User) -> str:
     return "\n".join(lines)
 
 
-def format_conversation_history(user: User, limit: int = 10) -> list[dict[str, Any]]:
+def format_conversation_history(
+    user: User, limit: int = 10, exclude_id: int | None = None
+) -> list[dict[str, Any]]:
     """
-    Fetch and format the last `limit` messages in chronological order.
+    Fetch and format the last `limit` messages in chronological order,
+    optionally excluding a specific message ID (such as the reserved user message).
     """
-    recent_messages = list(ChatMessage.objects.filter(user=user).order_by("-created_at")[:limit])
+    qs = ChatMessage.objects.filter(user=user)
+    if exclude_id is not None:
+        qs = qs.exclude(id=exclude_id)
+    recent_messages = list(qs.order_by("-created_at")[:limit])
     recent_messages.reverse()
     return [{"role": msg.role, "content": msg.content} for msg in recent_messages]

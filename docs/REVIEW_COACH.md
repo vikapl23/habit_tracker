@@ -6,7 +6,7 @@ A prioritized code review of the Phase 10 AI Habit Coach system (`apps/coach` an
 
 ## 1. Critical
 
-### 1. Double Confirm Race Condition Leading to Duplicate Habit Creation & Multi-Execution
+### 1. [FIXED] Double Confirm Race Condition Leading to Duplicate Habit Creation & Multi-Execution
 - **File & Line**: `apps/coach/views.py:166-204` (`CoachActionConfirmView.post`)
 - **Issue**: `CoachActionConfirmView.post` retrieves the pending action using `action = get_object_or_404(PendingAction, id=pk, user=request.user)`. The status check (`action.status != PendingAction.STATUS_PENDING`) occurs outside and before any database row lock. If a user double-taps "Confirm" on mobile or network retries trigger concurrent requests:
   1. Both requests read `action.status == 'pending'`.
@@ -32,7 +32,7 @@ A prioritized code review of the Phase 10 AI Habit Coach system (`apps/coach` an
       action.save(update_fields=["status", "executed_at"])
   ```
 
-### 2. Daily Message Quota Bypass and Unbounded Vertex AI Cost Drain via Concurrent Requests
+### 2. [FIXED] Daily Message Quota Bypass and Unbounded Vertex AI Cost Drain via Concurrent Requests
 - **File & Line**: `apps/coach/views.py:74-128` (`CoachMessagesView.post`) and `apps/coach/services/client.py:50-74` (`get_remaining_daily_quota`)
 - **Issue**: `remaining = get_remaining_daily_quota(request.user)` counts existing `ChatMessage` rows with `role='user'` for the current day. However, the expensive external call `coach_service.generate_reply(request.user, content)` is executed *before* `ChatMessage.objects.create()` is called. If an automated script or rapid client submits 20 concurrent requests simultaneously:
   1. All 20 requests run `get_remaining_daily_quota()` concurrently before any records are written.
@@ -40,7 +40,7 @@ A prioritized code review of the Phase 10 AI Habit Coach system (`apps/coach` an
   3. All 20 invoke Google Cloud Vertex AI simultaneously, bypassing the 20-message quota and generating unexpected LLM API billing costs.
 - **Fix**: Atomically reserve quota or insert a pending `ChatMessage` before calling Vertex AI. If the quota check fails, reject immediately with HTTP 429. If the Vertex AI request fails or times out, roll back or delete the pending user message record to refund the quota.
 
-### 3. Unhandled Domain Exceptions in Action Execution Cause HTTP 500 and Indefinitely Stuck Pending Actions
+### 3. [FIXED] Unhandled Domain Exceptions in Action Execution Cause HTTP 500 and Indefinitely Stuck Pending Actions
 - **File & Line**: `apps/coach/views.py:190-195` and `apps/coach/services/actions.py:374, 449`
 - **Issue**: In `CoachActionConfirmView.post`, `handler.execute(request.user, action.payload)` runs inside `transaction.atomic()` without any `try...except` handling for domain errors. If the target habit was deleted by the user during the 15-minute pending window:
   - `UpdateHabitAction.execute` and `ArchiveHabitAction.execute` call `Habit.objects.get(id=payload["habit_id"], user=user)`, which raises an unhandled `Habit.DoesNotExist`.
@@ -48,7 +48,7 @@ A prioritized code review of the Phase 10 AI Habit Coach system (`apps/coach` an
   The request crashes with HTTP 500, the transaction rolls back, and `action.status` remains `'pending'` in the database. The user's frontend is left with a permanently broken action card that produces 500 errors on every subsequent retry.
 - **Fix**: Catch `(Habit.DoesNotExist, ValidationError, Exception)` inside `CoachActionConfirmView.post`. If execution fails because the entity no longer exists or parameters are invalid, mark the action as `cancelled` or a dedicated `failed` state with `action.save()`, and return HTTP 400 Bad Request with a descriptive error message.
 
-### 4. Direct and Indirect Prompt Injection Delimiter Breaking
+### 4. [FIXED] Direct and Indirect Prompt Injection Delimiter Breaking
 - **File & Line**: `apps/coach/services/client.py:135-144` and `apps/coach/services/context.py:88-101`
 - **Issue**: User messages and habit context are interpolated directly into structural XML tags:
   ```python

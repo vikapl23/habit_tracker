@@ -5,15 +5,19 @@ from django.utils import timezone
 
 class PendingAction(models.Model):
     STATUS_PENDING = "pending"
+    STATUS_EXECUTING = "executing"
     STATUS_CONFIRMED = "confirmed"
     STATUS_CANCELLED = "cancelled"
     STATUS_EXPIRED = "expired"
+    STATUS_FAILED = "failed"
 
     STATUS_CHOICES = (
         (STATUS_PENDING, "Pending"),
+        (STATUS_EXECUTING, "Executing"),
         (STATUS_CONFIRMED, "Confirmed"),
         (STATUS_CANCELLED, "Cancelled"),
         (STATUS_EXPIRED, "Expired"),
+        (STATUS_FAILED, "Failed"),
     )
 
     user = models.ForeignKey(

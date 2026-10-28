@@ -143,6 +143,34 @@ class TestCoachMessagesAPI:
         assert response.data["remaining_messages"] == 0
         assert "limit reached" in response.data["detail"].lower()
 
+    @patch("apps.coach.views.GeminiCoachService.generate_reply")
+    @patch("apps.coach.views.GeminiCoachService.is_configured", return_value=True)
+    def test_post_message_reserves_quota_before_gemini_call(
+        self, mock_is_configured, mock_generate_reply, api_client, user
+    ):
+        def check_reserved(u, content, **kwargs):
+            assert ChatMessage.objects.filter(user=u, role=ChatMessage.ROLE_USER).count() == 1
+            return "Reserved reply", None
+
+        mock_generate_reply.side_effect = check_reserved
+        response = api_client.post(self.url, {"content": "Checking reservation"})
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data["remaining_messages"] == 19
+        assert ChatMessage.objects.filter(user=user).count() == 2
+
+    @patch("apps.coach.views.GeminiCoachService.generate_reply")
+    @patch("apps.coach.views.GeminiCoachService.is_configured", return_value=True)
+    def test_post_message_refunds_quota_on_error(
+        self, mock_is_configured, mock_generate_reply, api_client, user
+    ):
+        mock_generate_reply.side_effect = CoachUpstreamError("Timeout")
+        response = api_client.post(self.url, {"content": "Should refund"})
+        assert response.status_code == status.HTTP_502_BAD_GATEWAY
+        assert ChatMessage.objects.filter(user=user).count() == 0
+        from apps.coach.services.client import get_remaining_daily_quota
+
+        assert get_remaining_daily_quota(user) == 20
+
     def test_delete_messages(self, api_client, user):
         action = PendingAction.objects.create(
             user=user,
@@ -240,6 +268,63 @@ class TestCoachActionConfirmAPI:
 
         action.refresh_from_db()
         assert action.status == PendingAction.STATUS_EXPIRED
+
+    def test_confirm_action_already_executing_fails(self, api_client, user):
+        action = PendingAction.objects.create(
+            user=user,
+            action_type="create_habit",
+            payload={"name": "Running"},
+            status=getattr(PendingAction, "STATUS_EXECUTING", "executing"),
+            expires_at=timezone.now() + timedelta(minutes=15),
+        )
+        response = api_client.post(f"/api/v1/coach/actions/{action.id}/confirm/")
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert (
+            "cannot be confirmed" in response.data["detail"]
+            or "executing" in response.data["detail"]
+        )
+
+    def test_confirm_action_concurrent_double_submit_only_one_succeeds(self, api_client, user):
+        from apps.habits.models import Habit
+
+        action = PendingAction.objects.create(
+            user=user,
+            action_type="create_habit",
+            payload={
+                "name": "Unique Test Habit",
+                "habit_type": "boolean",
+                "frequency_type": "daily",
+            },
+            status=PendingAction.STATUS_PENDING,
+            expires_at=timezone.now() + timedelta(minutes=15),
+        )
+
+        res1 = api_client.post(f"/api/v1/coach/actions/{action.id}/confirm/")
+        res2 = api_client.post(f"/api/v1/coach/actions/{action.id}/confirm/")
+
+        assert res1.status_code == status.HTTP_200_OK
+        assert res2.status_code == status.HTTP_400_BAD_REQUEST
+        assert Habit.objects.filter(user=user, name="Unique Test Habit").count() == 1
+
+    def test_confirm_action_deleted_habit_returns_400_and_marks_failed(self, api_client, user):
+        from apps.habits.models import Habit
+
+        habit = Habit.objects.create(user=user, name="To be deleted")
+        action = PendingAction.objects.create(
+            user=user,
+            action_type="archive_habit",
+            payload={"habit_id": habit.id},
+            status=PendingAction.STATUS_PENDING,
+            expires_at=timezone.now() + timedelta(minutes=15),
+        )
+        habit.delete()
+
+        response = api_client.post(f"/api/v1/coach/actions/{action.id}/confirm/")
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "detail" in response.data
+
+        action.refresh_from_db()
+        assert action.status == getattr(PendingAction, "STATUS_FAILED", "failed")
 
 
 @pytest.mark.django_db

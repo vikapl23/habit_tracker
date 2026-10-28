@@ -4,7 +4,6 @@ import logging
 
 from django.conf import settings
 from django.db import transaction
-from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
@@ -71,16 +70,6 @@ class CoachMessagesView(APIView):
         serializer.is_valid(raise_exception=True)
         content = serializer.validated_data["content"]
 
-        remaining = get_remaining_daily_quota(request.user)
-        if remaining <= 0:
-            return Response(
-                {
-                    "detail": "Daily message limit reached (20/20). Your quota resets at midnight.",
-                    "remaining_messages": 0,
-                },
-                status=status.HTTP_429_TOO_MANY_REQUESTS,
-            )
-
         coach_service = GeminiCoachService()
         if not coach_service.is_configured():
             return Response(
@@ -90,14 +79,36 @@ class CoachMessagesView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
+        with transaction.atomic():
+            User = request.user.__class__
+            User.objects.select_for_update().get(id=request.user.id)
+            remaining = get_remaining_daily_quota(request.user)
+            if remaining <= 0:
+                return Response(
+                    {
+                        "detail": "Daily message limit reached (20/20). Your quota resets at midnight.",
+                        "remaining_messages": 0,
+                    },
+                    status=status.HTTP_429_TOO_MANY_REQUESTS,
+                )
+            user_msg = ChatMessage.objects.create(
+                user=request.user,
+                role=ChatMessage.ROLE_USER,
+                content=content,
+            )
+
         try:
-            assistant_reply, pending_action = coach_service.generate_reply(request.user, content)
+            assistant_reply, pending_action = coach_service.generate_reply(
+                request.user, content, exclude_message_id=user_msg.id
+            )
         except CoachUnavailableError as e:
+            user_msg.delete()
             return Response(
                 {"detail": str(e)},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
         except CoachUpstreamError:
+            user_msg.delete()
             return Response(
                 {
                     "detail": "AI Coach service is temporarily unavailable. Please try again shortly.",
@@ -106,6 +117,7 @@ class CoachMessagesView(APIView):
             )
         except Exception as e:
             logger.error("Unexpected error in coach view: %s", e)
+            user_msg.delete()
             return Response(
                 {
                     "detail": "AI Coach service is temporarily unavailable. Please try again shortly.",
@@ -113,18 +125,12 @@ class CoachMessagesView(APIView):
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
-        with transaction.atomic():
-            user_msg = ChatMessage.objects.create(
-                user=request.user,
-                role=ChatMessage.ROLE_USER,
-                content=content,
-            )
-            assistant_msg = ChatMessage.objects.create(
-                user=request.user,
-                role=ChatMessage.ROLE_ASSISTANT,
-                content=assistant_reply,
-                pending_action=pending_action,
-            )
+        assistant_msg = ChatMessage.objects.create(
+            user=request.user,
+            role=ChatMessage.ROLE_ASSISTANT,
+            content=assistant_reply,
+            pending_action=pending_action,
+        )
 
         new_remaining = get_remaining_daily_quota(request.user)
 
@@ -164,31 +170,67 @@ class CoachActionConfirmView(APIView):
         responses={200: None},
     )
     def post(self, request: Request, pk: int) -> Response:
-        action = get_object_or_404(PendingAction, id=pk, user=request.user)
-
-        if action.status != PendingAction.STATUS_PENDING:
-            return Response(
-                {"detail": f"Action cannot be confirmed because it is {action.status}."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if action.is_expired():
-            action.status = PendingAction.STATUS_EXPIRED
-            action.save(update_fields=["status"])
-            return Response(
-                {"detail": "This action has expired (15 minute validity window)."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        handler = default_action_registry.get(action.action_type)
-        if not handler:
-            return Response(
-                {"detail": f"Unknown action type: {action.action_type}"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
         with transaction.atomic():
-            result = handler.execute(request.user, action.payload)
+            action = (
+                PendingAction.objects.select_for_update().filter(id=pk, user=request.user).first()
+            )
+            if not action:
+                return Response(
+                    {"detail": "Not found."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            if action.status != PendingAction.STATUS_PENDING:
+                return Response(
+                    {"detail": f"Action cannot be confirmed because it is {action.status}."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if action.is_expired():
+                action.status = PendingAction.STATUS_EXPIRED
+                action.save(update_fields=["status"])
+                return Response(
+                    {"detail": "This action has expired (15 minute validity window)."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # Atomic conditional transition: pending -> executing
+            updated = PendingAction.objects.filter(
+                id=action.id,
+                user=request.user,
+                status=PendingAction.STATUS_PENDING,
+            ).update(status=PendingAction.STATUS_EXECUTING)
+            if not updated:
+                return Response(
+                    {"detail": "Action cannot be confirmed because it is executing."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            action.status = PendingAction.STATUS_EXECUTING
+
+            handler = default_action_registry.get(action.action_type)
+            if not handler:
+                action.status = PendingAction.STATUS_FAILED
+                action.save(update_fields=["status"])
+                return Response(
+                    {"detail": f"Unknown action type: {action.action_type}"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            try:
+                with transaction.atomic():
+                    result = handler.execute(request.user, action.payload)
+            except Exception as exc:
+                action.status = PendingAction.STATUS_FAILED
+                action.save(update_fields=["status"])
+                logger.warning("Action execution failed: %s", exc)
+                err_msg = getattr(exc, "detail", None) or str(exc)
+                if isinstance(err_msg, dict):
+                    err_msg = "; ".join(f"{k}: {v}" for k, v in err_msg.items())
+                return Response(
+                    {"detail": f"Action execution failed: {err_msg}"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
             action.status = PendingAction.STATUS_CONFIRMED
             action.executed_at = timezone.now()
             action.save(update_fields=["status", "executed_at"])
@@ -216,16 +258,24 @@ class CoachActionCancelView(APIView):
         responses={200: None},
     )
     def post(self, request: Request, pk: int) -> Response:
-        action = get_object_or_404(PendingAction, id=pk, user=request.user)
-
-        if action.status != PendingAction.STATUS_PENDING:
-            return Response(
-                {"detail": f"Action cannot be cancelled because it is {action.status}."},
-                status=status.HTTP_400_BAD_REQUEST,
+        with transaction.atomic():
+            action = (
+                PendingAction.objects.select_for_update().filter(id=pk, user=request.user).first()
             )
+            if not action:
+                return Response(
+                    {"detail": "Not found."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
 
-        action.status = PendingAction.STATUS_CANCELLED
-        action.save(update_fields=["status"])
+            if action.status != PendingAction.STATUS_PENDING:
+                return Response(
+                    {"detail": f"Action cannot be cancelled because it is {action.status}."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            action.status = PendingAction.STATUS_CANCELLED
+            action.save(update_fields=["status"])
 
         return Response(
             {
